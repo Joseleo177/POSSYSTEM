@@ -49,7 +49,7 @@ const tenantModels = [
   'CashAdvance', 'DiningArea', 'DiningTable', 'KitchenTicket',
   'ModifierGroup', 'ModifierOption', 'ProductModifierGroup', 'RecipeSheet',
   'PreparationItem', 'ProductionBatch', 'ProductionBatchItem', 'TableOrder',
-  'DeliveryZone', 'PaymentReport',
+  'PaymentReport',
 ];
 
 const applyTenantFilter = (modelName, options) => {

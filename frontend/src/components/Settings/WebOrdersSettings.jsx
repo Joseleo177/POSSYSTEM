@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { Button } from "../ui/Button";
-import CustomSelect from "../ui/CustomSelect";
-import ConfirmModal from "../ui/ConfirmModal";
+import MapPicker from "../PublicCatalog/MapPicker";
+import { sheetSkin } from "../PublicCatalog/CatalogSheet";
+import { toNameCase } from "../../helpers";
 import Check from "../ui/Check";
 import { useApp } from "../../context/AppContext";
 
@@ -68,24 +69,26 @@ function Interruptor({ titulo, detalle, checked, onChange }) {
     );
 }
 
-const ZONA_VACIA = { name: "", price: "", warehouse_id: "" };
+// Los cuatro números de la tarifa, como texto mientras se editan.
+const tarifaTexto = (t) => Object.fromEntries(["base", "per_km", "min", "max_km"].map(k => [k, t?.[k] ? String(t[k]) : ""]));
+const numero = (v) => Math.max(0, parseFloat(String(v || "").replace(",", ".")) || 0);
 
 export default function WebOrdersSettings({ notify }) {
     const { triggerAction, can } = useApp();
     // Los métodos de cada cuenta se definen en su diario: desde aquí solo se publican.
     const irADiarios = can("journals.view") ? () => triggerAction("Contabilidad", "contabilidad:Diarios") : null;
     const [cfg, setCfg] = useState(null);
-    const [warehouses, setWarehouses] = useState([]);
-    const [zona, setZona] = useState(null);       // la que se edita; sin id = nueva
-    const [borrar, setBorrar] = useState(null);
+    const [tarifa, setTarifa] = useState(tarifaTexto(null));
+    // Sucursal cuya ubicación se está marcando en el mapa.
+    const [ubicando, setUbicando] = useState(null);
     // Borradores de cada método: { "9:pago_movil": { catalog_visible, catalog_info } }.
     const [metodos, setMetodos] = useState({});
 
     const load = async () => {
         try {
-            const [r, w] = await Promise.all([api.catalogCheckout.get(), api.warehouses.getAll()]);
+            const r = await api.catalogCheckout.get();
             setCfg(r.data);
-            setWarehouses((w.data || []).filter(x => x.sells !== false));
+            setTarifa(tarifaTexto(r.data.settings.tarifa));
             const m = {};
             for (const a of r.data.accounts) for (const x of a.methods) {
                 m[`${a.journal_id}:${x.method_code}`] = {
@@ -110,25 +113,32 @@ export default function WebOrdersSettings({ notify }) {
         } catch (e) { notify(e.message, "err"); }
     };
 
-    // ── Zonas ──
-    const guardarZona = async () => {
-        const body = { name: zona.name, price: zona.price || 0, warehouse_id: zona.warehouse_id || null };
+    // ── Tarifa y sucursales ──
+    const guardada = tarifaTexto(s.tarifa);
+    const tarifaSucia = JSON.stringify(tarifa) !== JSON.stringify(guardada);
+    const guardarTarifa = async () => {
         try {
-            if (zona.id) await api.catalogCheckout.updateZone(zona.id, body);
-            else await api.catalogCheckout.createZone(body);
-            setZona(null);
-            await load();
-            notify("Zona guardada");
+            const r = await api.catalogCheckout.saveSettings({ tarifa: Object.fromEntries(Object.entries(tarifa).map(([k, v]) => [k, numero(v)])) });
+            setCfg(p => ({ ...p, settings: r.data }));
+            setTarifa(tarifaTexto(r.data.tarifa));
+            notify("Tarifa del delivery guardada");
         } catch (e) { notify(e.message, "err"); }
     };
-    const alternarZona = async (z) => {
-        try { await api.catalogCheckout.updateZone(z.id, { active: !z.active }); await load(); }
-        catch (e) { notify(e.message, "err"); }
+    // Ejemplo con la tarifa en pantalla, para que se entienda qué pagará el cliente.
+    const ejemplo = (km) => {
+        const t = Object.fromEntries(Object.entries(tarifa).map(([k, v]) => [k, numero(v)]));
+        if (t.max_km > 0 && km > t.max_km) return "No llega";
+        return `Ref. ${Math.max(t.min, t.base + km * t.per_km).toFixed(2)}`;
     };
-    const eliminarZona = async () => {
-        try { await api.catalogCheckout.removeZone(borrar.id); setBorrar(null); await load(); notify("Zona eliminada"); }
-        catch (e) { notify(e.message, "err"); }
+    const guardarUbicacion = async (w, punto) => {
+        try {
+            await api.catalogCheckout.saveWarehouseLocation(w.id, punto ? { lat: punto.lat, lng: punto.lng } : { lat: null, lng: null });
+            setUbicando(null);
+            await load();
+            notify(punto ? `Ubicación de ${toNameCase(w.name)} guardada` : `Ubicación de ${toNameCase(w.name)} quitada`);
+        } catch (e) { notify(e.message, "err"); }
     };
+    const sinUbicacion = (cfg.warehouses || []).filter(w => w.lat == null).length;
 
     // ── Métodos ──
     const setMetodo = (key, patch) => setMetodos(p => ({ ...p, [key]: { ...p[key], ...patch } }));
@@ -143,7 +153,6 @@ export default function WebOrdersSettings({ notify }) {
         } catch (e) { notify(e.message, "err"); }
     };
 
-    const opcionesSucursal = [{ value: "", label: "Todas las sucursales" }, ...warehouses.map(w => ({ value: String(w.id), label: w.name }))];
     const cuentas = cfg.accounts
         .map(a => ({ ...a, metodosTodos: a.methods.map(m => m.method_code), methods: a.methods.filter(m => !PRESENCIALES.includes(m.method_code)) }))
         .filter(a => a.methods.length);
@@ -156,74 +165,83 @@ export default function WebOrdersSettings({ notify }) {
                     <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                         <Interruptor titulo="Retiro en tienda" detalle="El cliente lo busca en la sucursal donde pidió."
                             checked={s.pickup} onChange={() => cambiarAjuste("pickup")} />
-                        <Interruptor titulo="Delivery" detalle="El cliente escribe su dirección y puede compartir su ubicación. El costo de la zona se suma al pedido."
+                        <Interruptor titulo="Delivery" detalle="El cliente marca en el mapa dónde entregar y el costo se calcula por la distancia desde la sucursal."
                             checked={s.delivery} onChange={() => cambiarAjuste("delivery")} />
                     </div>
                 </Seccion>
 
                 {s.delivery && (
-                    <Seccion titulo="Zonas de delivery" detalle="Cada zona con su precio en Ref. Sin zonas, el delivery no tiene costo.">
-                        {cfg.zones.length > 0 && (
-                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06] mb-3">
-                                {cfg.zones.map(z => (
-                                    <div key={z.id} className="px-4 py-3 flex items-center gap-3">
-                                        <Check checked={z.active} onChange={() => alternarZona(z)} title={z.active ? "Ocultar zona" : "Ofrecer zona"} />
-                                        <div className="min-w-0 flex-1">
-                                            <div className={`text-[13px] font-medium truncate ${z.active ? "text-content dark:text-white" : "text-content-subtle line-through"}`}>{z.name}</div>
-                                            <div className="text-[12px] text-content-subtle truncate">{z.warehouse_name || "Todas las sucursales"}</div>
-                                        </div>
-                                        <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums whitespace-nowrap">
-                                            {z.price > 0 ? `Ref. ${z.price.toFixed(2)}` : "Sin costo"}
-                                        </span>
-                                        <button type="button" onClick={() => setZona({ ...z, price: String(z.price), warehouse_id: z.warehouse_id ? String(z.warehouse_id) : "" })}
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/[0.06]" title="Editar" aria-label={`Editar ${z.name}`}>
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15.2 5.2l3.6 3.6M4 20l4.2-1 10.3-10.3a1.5 1.5 0 000-2.1l-1.1-1.1a1.5 1.5 0 00-2.1 0L5 15.8 4 20z" /></svg>
-                                        </button>
-                                        <button type="button" onClick={() => setBorrar(z)}
-                                            className="w-8 h-8 rounded-lg flex items-center justify-center text-content-subtle hover:text-red-600 hover:bg-red-500/10" title="Eliminar" aria-label={`Eliminar ${z.name}`}>
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V4h6v3" /></svg>
-                                        </button>
+                    <Seccion titulo="Tarifa del delivery" detalle={`Se mide en línea recta desde la sucursal y se multiplica por ${String(cfg.street_factor || 1.3).replace(".", ",")} por las vueltas de las calles.`}>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                ["base", "Base", "Ref.", "Lo que cuesta salir"],
+                                ["per_km", "Por km", "Ref.", "Se suma por cada km"],
+                                ["min", "Mínimo", "Ref.", "Nunca menos de esto"],
+                                ["max_km", "Hasta", "km", "Vacío = sin límite"],
+                            ].map(([k, rotulo, prefijo, ayuda]) => (
+                                <label key={k} className="block min-w-0">
+                                    <span className={LABEL}>{rotulo}</span>
+                                    <div className="relative mt-1.5">
+                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{prefijo}</span>
+                                        <input value={tarifa[k]} onChange={e => setTarifa(p => ({ ...p, [k]: e.target.value.replace(/[^\d.,]/g, "") }))}
+                                            inputMode="decimal" placeholder={k === "max_km" ? "" : "0.00"} autoComplete="off" className={`${INPUT} ${prefijo === "km" ? "pl-10" : "pl-11"} tabular-nums`} />
                                     </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {zona ? (
-                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] p-4 space-y-3">
-                                <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_140px] gap-3">
-                                    <label className="block min-w-0">
-                                        <span className={LABEL}>Nombre</span>
-                                        <input value={zona.name} onChange={e => setZona(p => ({ ...p, name: e.target.value }))} maxLength={80}
-                                            placeholder="Ej. Centro, Los Palos Grandes" className={`${INPUT} mt-1.5`} autoComplete="off" />
-                                    </label>
-                                    <label className="block min-w-0">
-                                        <span className={LABEL}>Precio</span>
-                                        <div className="relative mt-1.5">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">Ref.</span>
-                                            <input value={zona.price} onChange={e => setZona(p => ({ ...p, price: e.target.value.replace(/[^\d.,]/g, "") }))}
-                                                inputMode="decimal" placeholder="0.00" className={`${INPUT} pl-11 tabular-nums`} autoComplete="off" />
-                                        </div>
-                                    </label>
+                                    <span className="block mt-1 text-[11px] text-content-subtle">{ayuda}</span>
+                                </label>
+                            ))}
+                        </div>
+                        {/* Cuánto pagaría el cliente a distintas distancias, con lo que hay en pantalla. */}
+                        <div className="mt-3 rounded-xl bg-surface-2 dark:bg-white/[0.04] px-4 py-3 grid grid-cols-4 gap-2 text-center">
+                            {[1, 3, 5, 10].map(km => (
+                                <div key={km} className="min-w-0">
+                                    <div className="text-[11px] text-content-subtle">A {km} km</div>
+                                    <div className="text-[13px] font-semibold text-content dark:text-white tabular-nums truncate">{ejemplo(km)}</div>
                                 </div>
-                                {warehouses.length > 1 && (
-                                    <div>
-                                        <span className={LABEL}>Sucursal que la ofrece</span>
-                                        <CustomSelect value={zona.warehouse_id} onChange={v => setZona(p => ({ ...p, warehouse_id: v }))} options={opcionesSucursal} className="mt-1.5" />
-                                    </div>
-                                )}
-                                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                                    <Button variant="ghost" className="h-12 sm:h-9" onClick={() => setZona(null)}>Cancelar</Button>
-                                    <Button className="h-12 sm:h-9" onClick={guardarZona}>{zona.id ? "Guardar zona" : "Agregar zona"}</Button>
-                                </div>
+                            ))}
+                        </div>
+                        {tarifaSucia && (
+                            <div className="mt-3 flex justify-end">
+                                <Button className="h-12 sm:h-9 w-full sm:w-auto" onClick={guardarTarifa}>Guardar tarifa</Button>
                             </div>
-                        ) : (
-                            <button type="button" onClick={() => setZona({ ...ZONA_VACIA })}
-                                className="w-full h-10 rounded-lg border border-dashed border-border dark:border-white/15 text-[13px] font-medium text-content-muted dark:text-white/70 hover:text-content dark:hover:text-white hover:bg-surface-2/60 dark:hover:bg-white/[0.03] inline-flex items-center justify-center gap-2">
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14" /></svg>
-                                Agregar zona
-                            </button>
                         )}
                     </Seccion>
+                )}
+
+                {s.delivery && (
+                    <Seccion titulo="Ubicación de las sucursales" detalle="Desde aquí se mide la distancia. Una sucursal sin ubicación no ofrece delivery.">
+                        <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
+                            {(cfg.warehouses || []).map(w => {
+                                const marcada = w.lat != null && w.lng != null;
+                                return (
+                                    <div key={w.id} className={`px-4 py-3 flex items-center gap-3 ${marcada ? "" : "shadow-[inset_3px_0_0_#f59e0b]"}`}>
+                                        <svg className={`w-5 h-5 shrink-0 ${marcada ? "text-emerald-600 dark:text-emerald-400" : "text-content-subtle"}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 21s-7-6.2-7-11.5a7 7 0 1114 0C19 14.8 12 21 12 21z" /><circle cx="12" cy="9.5" r="2.5" strokeWidth={1.8} /></svg>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-[13px] font-medium text-content dark:text-white truncate">{toNameCase(w.name)}</div>
+                                            <div className={`text-[12px] ${marcada ? "text-content-subtle" : "text-amber-700 dark:text-amber-400"}`}>
+                                                {marcada ? "Ubicación marcada" : "Sin ubicación: no ofrece delivery"}
+                                            </div>
+                                        </div>
+                                        {marcada && (
+                                            <a href={`https://www.google.com/maps?q=${w.lat},${w.lng}`} target="_blank" rel="noopener noreferrer"
+                                                className="hidden sm:inline text-[12px] font-medium text-content-subtle hover:text-content dark:hover:text-white">Ver</a>
+                                        )}
+                                        <Button variant="ghost" className="h-10 sm:h-8 shrink-0" onClick={() => setUbicando(w)}>
+                                            {marcada ? "Cambiar" : "Marcar en el mapa"}
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        {sinUbicacion > 0 && (cfg.warehouses || []).length > sinUbicacion && (
+                            <p className="mt-2 text-[12px] text-content-subtle">Los clientes de las sucursales sin ubicación solo pueden retirar.</p>
+                        )}
+                    </Seccion>
+                )}
+
+                {ubicando && (
+                    <MapPicker skin={sheetSkin(null)} initial={ubicando.lat != null ? { lat: ubicando.lat, lng: ubicando.lng } : null}
+                        titulo={`Ubicación de ${toNameCase(ubicando.name)}`} ayuda="Mueve el mapa hasta que el pin quede en la puerta de la sucursal" accion="Guardar ubicación"
+                        onClose={() => setUbicando(null)} onPick={(p) => guardarUbicacion(ubicando, p)} />
                 )}
 
                 <Seccion titulo="Cobro" detalle="Si el cliente puede enviar el pedido sin pagar en línea.">
@@ -331,15 +349,6 @@ export default function WebOrdersSettings({ notify }) {
                     </div>
                 )}
             </Seccion>
-
-            <ConfirmModal
-                isOpen={!!borrar}
-                title="Eliminar zona"
-                message={borrar ? `La zona "${borrar.name}" deja de ofrecerse. Los pedidos que ya la usaron no cambian.` : ""}
-                confirmText="Eliminar"
-                onConfirm={eliminarZona}
-                onCancel={() => setBorrar(null)}
-            />
         </div>
     );
 }

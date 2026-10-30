@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import CustomSelect from "../ui/CustomSelect";
+import { publicApi } from "../../services/api";
 import Money from "../ui/Money";
 import { Spinner } from "../ui/Spinner";
 import PaymentFields, { OptionCard, pagoVacio, faltaEnPago } from "./PaymentFields";
@@ -7,7 +7,8 @@ import CatalogSheet, { SheetHeader, sheetSkin } from "./CatalogSheet";
 import MapPicker, { direccionDePunto } from "./MapPicker";
 import { toNameCase } from "../../helpers";
 
-// Paso final del pedido: cómo lo recibe (retiro o delivery con su zona, dirección y punto GPS)
+// Paso final del pedido: cómo lo recibe (retiro, o delivery con su dirección y su punto en el
+// mapa, que es de donde sale el costo: se cobra por distancia desde la sucursal)
 // y cómo paga (reporta el pago o paga al recibir). Va fuera del tema, como el selector de tallas:
 // los tres temas abren este mismo paso desde su carrito.
 //
@@ -37,7 +38,9 @@ export default function CheckoutSheet({
 }) {
     const soloUna = checkout ? (checkout.pickup !== checkout.delivery) : true;
     const [modo, setModo] = useState(null);
-    const [zona, setZona] = useState("");
+    // Lo que cuesta el delivery al punto marcado: { loading } mientras se calcula, o lo que
+    // responde el servidor ({ ok, km, fee, reason }). Es la misma cuenta que hace al enviar.
+    const [cotiza, setCotiza] = useState(null);
     const [direccion, setDireccion] = useState("");
     const [referencia, setReferencia] = useState("");
     const [punto, setPunto] = useState(null);
@@ -69,13 +72,24 @@ export default function CheckoutSheet({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, punto?.lat, punto?.lng]);
 
+    // El delivery se cobra por distancia: con el punto marcado se pregunta cuánto cuesta.
+    useEffect(() => {
+        if (!open || modo !== "delivery" || !punto) { setCotiza(null); return; }
+        let vivo = true;
+        setCotiza({ loading: true });
+        publicApi.deliveryQuote(token, { warehouse_id: branch?.id || "", lat: punto.lat, lng: punto.lng })
+            .then(r => { if (vivo) setCotiza(r.data); })
+            .catch(e => { if (vivo) setCotiza({ ok: false, reason: e.message || "No se pudo calcular el delivery. Intenta de nuevo." }); });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, modo, punto?.lat, punto?.lng, branch?.id]);
+
     // Al abrir: la única forma de entrega si solo hay una, y la última dirección usada.
     useEffect(() => {
         if (!open || !checkout) return;
         setModo(soloUna ? (checkout.delivery ? "delivery" : "retiro") : null);
         const d = leerDireccion(token);
         if (d) {
-            if (checkout.zones.some(z => String(z.id) === String(d.zone))) setZona(String(d.zone));
             setDireccion(d.address || "");
             setReferencia(d.reference || "");
             setPunto(d.point || null);
@@ -91,8 +105,10 @@ export default function CheckoutSheet({
     const skin = sheetSkin(panel);
 
     const opciones = checkout.payment_options || [];
-    const zonaSel = checkout.zones.find(z => String(z.id) === String(zona)) || null;
-    const recargo = modo === "delivery" && zonaSel ? zonaSel.price : 0;
+    const cotizado = modo === "delivery" && cotiza?.ok ? cotiza : null;
+    const recargo = cotizado ? cotizado.fee : 0;
+    // Lo mínimo que puede costar, para la tarjeta de Delivery antes de marcar el punto.
+    const desde = checkout.delivery_rate ? Math.max(checkout.delivery_rate.min, checkout.delivery_rate.base) : 0;
     const total = Math.round((cartTotal + recargo) * 100) / 100;
     const puedeDespues = checkout.pay_later;
     const etiquetaDespues = modo === "delivery" ? "Pagar al recibir" : "Pagar al retirar";
@@ -116,7 +132,9 @@ export default function CheckoutSheet({
     const validar = () => {
         if (!modo) return "Elige cómo recibes tu pedido";
         if (modo === "delivery") {
-            if (checkout.zones.length && !zonaSel) return "Elige la zona de entrega";
+            if (!punto) return "Marca en el mapa dónde entregamos el pedido";
+            if (cotiza?.loading) return "Calculando el delivery...";
+            if (cotiza && !cotiza.ok) return cotiza.reason;
             if (direccion.trim().length < 5) return "Escribe la dirección de entrega";
         }
         if (opciones.length && !alRecibir) {
@@ -132,13 +150,13 @@ export default function CheckoutSheet({
         if (f) return;
         if (modo === "delivery") {
             try {
-                localStorage.setItem(`catalog_address_${token}`, JSON.stringify({ zone: zona, address: direccion.trim(), reference: referencia.trim(), point: punto }));
+                localStorage.setItem(`catalog_address_${token}`, JSON.stringify({ address: direccion.trim(), reference: referencia.trim(), point: punto }));
             } catch { /* modo privado */ }
         }
         onSend({
             fulfillment: modo,
             delivery: modo === "delivery"
-                ? { zone_id: zonaSel?.id || null, address: direccion.trim(), reference: referencia.trim() || null, lat: punto?.lat ?? null, lng: punto?.lng ?? null }
+                ? { address: direccion.trim(), reference: referencia.trim() || null, lat: punto?.lat ?? null, lng: punto?.lng ?? null }
                 : null,
             payment: opciones.length && !alRecibir && pago.option_id
                 ? { ...pago, amount: String(pago.amount).replace(",", ".") }
@@ -173,22 +191,12 @@ export default function CheckoutSheet({
                                 } title="Retiro en tienda" subtitle={branch?.name || "Sin costo"} skin={skin} />
                                 <OptionCard selected={modo === "delivery"} onClick={() => setModo("delivery")} letter={
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 7h11v9H3zM14 10h4l3 3v3h-7M7.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM17.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z" /></svg>
-                                } title="Delivery" subtitle={checkout.zones.length
-                                    ? `Desde ${fmt(Math.min(...checkout.zones.map(z => z.price)), baseCur)}`
-                                    : "A tu dirección"} skin={skin} />
+                                } title="Delivery" subtitle={desde > 0 ? `Desde ${fmt(desde, baseCur)}, según la distancia` : "Según la distancia"} skin={skin} />
                             </div>
                         )}
 
                         {modo === "delivery" && (
                             <div className="space-y-3 pt-1">
-                                {checkout.zones.length > 0 && (
-                                    <div>
-                                        <span className={skin.label}>Zona</span>
-                                        <CustomSelect value={zona} onChange={setZona} className="mt-1.5" height={skin.carta ? "h-12" : "h-11"}
-                                            boxClassName={`text-[16px] sm:text-[14px] ${skin.carta ? "rounded-2xl bg-white border-black/10" : "rounded-xl"}`} placeholder="Elige tu zona"
-                                            options={checkout.zones.map(z => ({ value: String(z.id), label: `${z.name} · ${z.price > 0 ? fmt(z.price, baseCur) : "Sin costo"}` }))} />
-                                    </div>
-                                )}
                                 <label className="block">
                                     <span className={skin.label}>Dirección</span>
                                     <textarea value={direccion} onChange={e => { setDireccion(e.target.value.slice(0, 300)); setDirOrigen(null); }} rows={2}
@@ -237,6 +245,21 @@ export default function CheckoutSheet({
                                         </button>
                                     </div>
                                 )}
+                                {/* Lo que cuesta llevarlo hasta ese punto, apenas se marca. */}
+                                {punto && cotiza && (
+                                    cotiza.loading ? (
+                                        <p className={`text-[13px] ${skin.subtle} inline-flex items-center gap-2`}><Spinner /> Calculando el delivery...</p>
+                                    ) : cotiza.ok ? (
+                                        <div className={`flex items-center justify-between gap-3 px-3.5 py-2.5 ${skin.soft}`}>
+                                            <span className={`text-[13px] ${skin.muted} min-w-0`}>
+                                                A {cotiza.km.toFixed(1).replace(".", ",")} km{cotiza.from ? ` de ${toNameCase(cotiza.from)}` : ""}
+                                            </span>
+                                            <Money value={cotiza.fee > 0 ? fmt(cotiza.fee, baseCur) : "Sin costo"} className={`text-[15px] font-semibold ${skin.ink} shrink-0`} />
+                                        </div>
+                                    ) : (
+                                        <p className="text-[13px] text-red-600 dark:text-red-400 leading-snug">{cotiza.reason}</p>
+                                    )
+                                )}
                                 {mapa && (
                                     <MapPicker skin={skin} initial={punto} onClose={() => setMapa(false)}
                                         onPick={(p) => { setPunto(p); setMapa(false); setGeo({ loading: false, error: null }); }} />
@@ -275,10 +298,10 @@ export default function CheckoutSheet({
                         </div>
                         {modo === "delivery" && (
                             <div className="flex justify-between gap-3">
-                                <dt className={skin.subtle}>Delivery{zonaSel ? ` · ${zonaSel.name}` : ""}</dt>
-                                <dd>{zonaSel || !checkout.zones.length
+                                <dt className={skin.subtle}>Delivery{cotizado ? ` · ${cotizado.km.toFixed(1).replace(".", ",")} km` : ""}</dt>
+                                <dd>{cotizado
                                     ? <Money value={recargo > 0 ? fmt(recargo, baseCur) : "Sin costo"} className={skin.ink} />
-                                    : <span className={skin.subtle}>Elige la zona</span>}</dd>
+                                    : <span className={skin.subtle}>Marca el punto</span>}</dd>
                             </div>
                         )}
                         <div className="flex justify-between items-baseline gap-3 pt-1">

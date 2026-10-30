@@ -1049,7 +1049,7 @@ async function getMyOrders(token, document) {
 // desde la caja (ver services/sales/acceptWebOrder.js).
 // Entrega del pedido según lo que ofrece la tienda (ver services/catalogCheckout.js). Devuelve
 // los campos de la venta y el recargo del delivery, que va en service_charge como en la caja.
-function leerEntrega(checkout, fulfillment, delivery) {
+async function leerEntrega(checkout, fulfillment, delivery, { companyId, warehouseId }) {
   const bad = (m) => { const e = new Error(m); e.status = 400; return e; };
   // Una tienda sin nada configurado sigue como antes: el pedido no dice cómo se entrega.
   if (!checkout?.enabled) return { campos: {}, recargo: 0, label: null };
@@ -1063,28 +1063,38 @@ function leerEntrega(checkout, fulfillment, delivery) {
   if (modo === "retiro" && !checkout.pickup) throw bad("Esta tienda solo entrega por delivery.");
   if (modo === "retiro") return { campos: { fulfillment: "retiro" }, recargo: 0, label: null };
 
+  // El delivery se cobra por distancia: el punto en el mapa es obligatorio y el monto lo
+  // calcula el servidor, no el navegador (ver catalogCheckout.calcularDelivery).
   const d = delivery || {};
-  let zona = null;
-  if (checkout.zones.length) {
-    zona = checkout.zones.find((z) => z.id === parseInt(d.zone_id, 10));
-    if (!zona) throw bad("Elige la zona de entrega.");
-  }
   const address = String(d.address || "").replace(/\s+/g, " ").trim().slice(0, 300);
   if (address.length < 5) throw bad("Escribe la dirección de entrega.");
-  const lat = parseFloat(d.lat), lng = parseFloat(d.lng);
-  const conPunto = Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat || lng);
+  const cotizacion = await catalogCheckout.calcularDelivery({ companyId, warehouseId, lat: d.lat, lng: d.lng });
+  if (!cotizacion.ok) throw bad(cotizacion.reason);
+  const kmTexto = cotizacion.km.toFixed(1).replace(".", ",");
   return {
     campos: {
       fulfillment: "delivery",
-      delivery_zone_id: zona ? zona.id : null,
+      delivery_km: cotizacion.km,
       delivery_address: address,
       delivery_reference: String(d.reference || "").replace(/\s+/g, " ").trim().slice(0, 200) || null,
-      delivery_lat: conPunto ? Math.round(lat * 1e6) / 1e6 : null,
-      delivery_lng: conPunto ? Math.round(lng * 1e6) / 1e6 : null,
+      delivery_lat: Math.round(parseFloat(d.lat) * 1e6) / 1e6,
+      delivery_lng: Math.round(parseFloat(d.lng) * 1e6) / 1e6,
     },
-    recargo: zona ? zona.price : 0,
-    label: zona && zona.price > 0 ? `Delivery · ${zona.name}`.slice(0, 40) : null,
+    recargo: cotizacion.fee,
+    label: cotizacion.fee > 0 ? `Delivery · ${kmTexto} km` : null,
   };
+}
+
+// Lo que costaría el delivery a un punto, para mostrárselo al cliente apenas lo marca. Es la
+// misma cuenta que hace createOrder al enviar: lo que ve es lo que se le cobra.
+async function deliveryQuote(token, { warehouse_id, lat, lng }) {
+  const company_id = await resolveCompanyId(token);
+  if (!company_id) return null;
+  return tenantStorage.run({ company_id }, async () => {
+    const checkout = await catalogCheckout.configPublica(company_id, parseInt(warehouse_id, 10) || null);
+    if (!checkout.delivery) return { ok: false, reason: "Esta tienda no hace delivery desde esta sucursal." };
+    return catalogCheckout.calcularDelivery({ companyId: company_id, warehouseId: parseInt(warehouse_id, 10) || null, lat, lng });
+  });
 }
 
 async function createOrder(token, { items, customer_name, customer_phone, customer_document, note, idempotency_key, warehouse_id, fulfillment, delivery, payment }) {
@@ -1254,7 +1264,7 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
 
     // Cómo lo recibe y si paga ahora. El delivery entra al total como recargo.
     const checkout = await catalogCheckout.configPublica(company_id, tienda ? tienda.id : null);
-    const entrega = leerEntrega(checkout, fulfillment, delivery);
+    const entrega = await leerEntrega(checkout, fulfillment, delivery, { companyId: company_id, warehouseId: tienda ? tienda.id : null });
     // Sin el extra de pedidos web (checkout apagado) un pago que llegue en el cuerpo se ignora.
     const pagaAhora = checkout.enabled && !!payment?.option_id;
     if (checkout.enabled && !checkout.pay_later && !pagaAhora) {
@@ -1392,6 +1402,6 @@ async function reportPayment(token, saleId, body = {}) {
 }
 
 module.exports = {
-  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder, reportPayment,
+  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };

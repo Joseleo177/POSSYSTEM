@@ -492,14 +492,12 @@ export const api = {
   },
   // Carrusel de la vitrina pública. Los banners llevan archivos, así que van por multipart:
   // `fields` son los datos y `files` las imágenes que se hayan cambiado en esta edición.
-  // Configuración → Pedidos web: entrega (retiro, delivery por zonas) y métodos publicados.
+  // Configuración → Pedidos web: entrega (retiro, delivery por distancia) y métodos publicados.
   catalogCheckout: {
     get:          ()                      => request("/catalog-checkout"),
     saveSettings: (body)                  => request("/catalog-checkout/settings", { method: "PUT", body: JSON.stringify(body) }),
     saveMethod:   (journalId, code, body) => request(`/catalog-checkout/methods/${journalId}/${encodeURIComponent(code)}`, { method: "PUT", body: JSON.stringify(body) }),
-    createZone:   (body)                  => request("/catalog-checkout/zones", { method: "POST", body: JSON.stringify(body) }),
-    updateZone:   (id, body)              => request(`/catalog-checkout/zones/${id}`, { method: "PUT", body: JSON.stringify(body) }),
-    removeZone:   (id)                    => request(`/catalog-checkout/zones/${id}`, { method: "DELETE" }),
+    saveWarehouseLocation: (id, body)     => request(`/catalog-checkout/warehouses/${id}/location`, { method: "PUT", body: JSON.stringify(body) }),
   },
   // Módulo Pedidos: la bandeja de los pedidos del catálogo.
   webOrders: {
@@ -853,6 +851,9 @@ export const publicApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  // Lo que cuesta el delivery al punto marcado (se cobra por distancia desde la sucursal).
+  deliveryQuote: (token, params) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/delivery-quote?` + new URLSearchParams(params)),
   // Pago de un pedido ya enviado (desde "Mis pedidos"). La cédula prueba que es suyo.
   reportPayment: (token, orderId, body) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/orders/${encodeURIComponent(orderId)}/payments`, {

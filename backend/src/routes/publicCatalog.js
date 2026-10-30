@@ -63,6 +63,20 @@ router.get("/:slug/products/:id", publicLimiter, async (req, res) => {
   }
 });
 
+// Cuánto cuesta el delivery al punto que marcó el cliente (se cobra por distancia). Solo hace
+// una cuenta con datos de la tienda; va con el límite de la navegación.
+router.get("/:slug/delivery-quote", publicLimiter, async (req, res) => {
+  try {
+    const { warehouse_id, lat, lng } = req.query;
+    const data = await svc.deliveryQuote(req.params.slug, { warehouse_id, lat, lng });
+    if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error("[public-catalog:delivery]", err.message);
+    res.status(500).json({ ok: false, message: "No se pudo calcular el delivery" });
+  }
+});
+
 // Esta ruta confirma si una cédula tiene ficha y devuelve el nombre. El límite es lo que
 // separa "un cliente escribiendo su documento" de "alguien recorriendo cédulas ajenas":
 // 20 intentos por cuarto de hora sobran para lo primero y no alcanzan para lo segundo.

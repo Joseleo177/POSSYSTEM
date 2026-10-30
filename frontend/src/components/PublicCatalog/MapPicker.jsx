@@ -35,7 +35,10 @@ export async function direccionDePunto(lat, lng) {
     }
 }
 
-export default function MapPicker({ skin, initial = null, onClose, onPick }) {
+export default function MapPicker({
+    skin, initial = null, onClose, onPick,
+    titulo = "Punto de entrega", ayuda = "Mueve el mapa hasta que el pin quede en la puerta", accion = "Entregar en este punto",
+}) {
     const boxRef = useRef(null);
     const mapRef = useRef(null);
     const [centro, setCentro] = useState(initial);
@@ -115,7 +118,7 @@ export default function MapPicker({ skin, initial = null, onClose, onPick }) {
 
     return (
         <CatalogSheet skin={skin} onClose={onClose} label="Elegir en el mapa" z="z-[80]">
-            <SheetHeader skin={skin} title="Punto de entrega" subtitle="Mueve el mapa hasta que el pin quede en la puerta" onClose={onClose} />
+            <SheetHeader skin={skin} title={titulo} subtitle={ayuda} onClose={onClose} />
 
             <form onSubmit={buscar} className="px-5 pb-3 flex gap-2 shrink-0">
                 <input value={q} onChange={e => setQ(e.target.value)} autoComplete="off" enterKeyHint="search"
@@ -176,7 +179,7 @@ export default function MapPicker({ skin, initial = null, onClose, onPick }) {
             <div className="shrink-0 px-5 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 <button type="button" onClick={() => centro && onPick(centro)} disabled={!centro || cargando || !!error}
                     className={`w-full h-12 inline-flex items-center justify-center gap-2 active:scale-[0.99] transition disabled:opacity-50 ${skin.primary}`}>
-                    Entregar en este punto
+                    {accion}
                 </button>
             </div>
         </CatalogSheet>

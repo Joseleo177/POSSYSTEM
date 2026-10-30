@@ -14,12 +14,11 @@
  */
 
 const {
-  sequelize, Sequelize, Sale, SaleItem, Serie, DeliveryZone, PaymentReport, Payment,
+  sequelize, Sequelize, Sale, SaleItem, Serie, PaymentReport, Payment,
 } = require("../models");
 const { visibleWarehouseIds, assertWarehouseAccess, isAdmin } = require("../middleware/auth");
 const acceptWebOrder = require("./sales/acceptWebOrder");
 const paymentReports = require("./paymentReports");
-const { zonasDe } = require("./catalogCheckout");
 const { imageUrl } = require("../utils/imageStorage");
 
 const QT = Sequelize.QueryTypes;
@@ -129,11 +128,10 @@ async function detail(req, id) {
     paymentReports.list(req, { sale_id: sale.id }),
     sequelize.query(`
       SELECT c.name AS customer_name, c.rif AS customer_rif, c.phone AS customer_phone,
-             w.name AS requested_warehouse_name, z.name AS zone_name
+             w.name AS requested_warehouse_name
         FROM sales s
         LEFT JOIN customers c ON c.id = s.customer_id
         LEFT JOIN warehouses w ON w.id = s.requested_warehouse_id
-        LEFT JOIN delivery_zones z ON z.id = s.delivery_zone_id
        WHERE s.id = :id
     `, { replacements: { id: sale.id }, type: QT.SELECT }),
     sequelize.query(`
@@ -161,18 +159,16 @@ async function detail(req, id) {
         subtotal: parseFloat(i.subtotal ?? i.price * i.quantity),
       })),
       payment_reports: reportes.data,
-      // Para ajustar y aceptar: las zonas de su sucursal y las series con que se puede facturar.
-      zones: esNuevo && j.fulfillment === "delivery"
-        ? (await zonasDe(companyId, j.requested_warehouse_id ?? null)).map(z => ({ id: z.id, name: z.name, price: z.price }))
-        : [],
+      delivery_km: j.delivery_km != null ? parseFloat(j.delivery_km) : null,
+      // Para aceptar: las series con que este usuario puede facturar en la sucursal.
       series: esNuevo ? await seriesPara(req, j.requested_warehouse_id) : [],
     },
   };
 }
 
 // Etiqueta del recargo tal como la ve la caja y sale en el ticket (40 caracteres).
-function etiqueta(fee, extra, reason, zoneName) {
-  const delivery = zoneName ? `Delivery · ${zoneName}` : "Delivery";
+function etiqueta(fee, extra, reason, km) {
+  const delivery = km ? `Delivery · ${String(km).replace(".", ",")} km` : "Delivery";
   if (fee > 0 && extra > 0) return `Delivery + ${reason}`.slice(0, 40);
   if (fee > 0) return delivery.slice(0, 40);
   if (extra > 0) return String(reason).slice(0, 40);
@@ -180,25 +176,17 @@ function etiqueta(fee, extra, reason, zoneName) {
 }
 
 /**
- * Ajusta lo que se cobra aparte de los productos antes de aceptar: el delivery (otra zona u
- * otro monto) y un recargo con su motivo. El total se rehace con las líneas guardadas, y lo que
- * el cliente debe por reportar se recalcula solo (se lee del total).
+ * Ajusta lo que se cobra aparte de los productos antes de aceptar: el delivery (lo calculado
+ * por distancia, u otro monto) y un recargo con su motivo. El total se rehace con las líneas
+ * guardadas, y lo que el cliente debe por reportar se recalcula solo (se lee del total).
  */
 async function ajustar(req, id, body = {}) {
   return sequelize.transaction(async (t) => {
     const sale = await cargarVenta(req, id, t);
     if (sale.status !== "pedido") throw fail("Este pedido ya fue aceptado: ajústalo desde la caja");
 
-    let zona = null;
-    if (body.delivery_zone_id !== undefined && body.delivery_zone_id !== null && body.delivery_zone_id !== "") {
-      zona = await DeliveryZone.findOne({ where: { id: parseInt(body.delivery_zone_id, 10) || 0, company_id: sale.company_id }, transaction: t });
-      if (!zona) throw fail("Zona no encontrada");
-    } else if (sale.delivery_zone_id) {
-      zona = await DeliveryZone.findByPk(sale.delivery_zone_id, { transaction: t });
-    }
-
     const fee = sale.fulfillment === "delivery"
-      ? Math.max(0, body.delivery_fee !== undefined ? num(body.delivery_fee) : (zona ? r2(zona.price) : parseFloat(sale.delivery_fee || 0)))
+      ? Math.max(0, body.delivery_fee !== undefined ? num(body.delivery_fee) : parseFloat(sale.delivery_fee || 0))
       : 0;
     const extra = Math.max(0, num(body.extra_charge));
     const reason = String(body.extra_charge_reason || "").replace(/\s+/g, " ").trim().slice(0, 120);
@@ -212,12 +200,11 @@ async function ajustar(req, id, body = {}) {
     const total = r2(parseFloat(productos) - parseFloat(sale.discount_amount || 0) + cargo);
 
     await sale.update({
-      delivery_zone_id: zona ? zona.id : sale.delivery_zone_id,
       delivery_fee: sale.fulfillment === "delivery" ? fee : null,
       extra_charge: extra > 0 ? extra : null,
       extra_charge_reason: extra > 0 ? reason : null,
       service_charge: cargo,
-      service_charge_label: etiqueta(fee, extra, reason, zona?.name),
+      service_charge_label: etiqueta(fee, extra, reason, sale.delivery_km != null ? parseFloat(sale.delivery_km) : null),
       total,
     }, { transaction: t });
     return { data: { total, service_charge: cargo } };

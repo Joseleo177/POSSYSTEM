@@ -18,6 +18,9 @@ module.exports = (sequelize, DataTypes) => {
     // Solo informativo por ahora: ayuda a organizar la estructura.
     parent_warehouse_id: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
     sort_order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    // Ubicación de la sucursal: desde aquí se mide el delivery de los pedidos del catálogo.
+    lat: { type: DataTypes.DECIMAL(9, 6), allowNull: true },
+    lng: { type: DataTypes.DECIMAL(9, 6), allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

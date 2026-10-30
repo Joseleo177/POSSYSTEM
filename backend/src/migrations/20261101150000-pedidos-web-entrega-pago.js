@@ -5,7 +5,8 @@
 // · payment_journal_methods.catalog_visible / catalog_info: qué métodos de cada cuenta publica
 //   la empresa en el catálogo y con qué datos (titular, documento, teléfono del pago móvil,
 //   número de cuenta, correo de Zelle). El cliente elige uno de estos para pagar.
-// · delivery_zones: zonas de reparto con su precio, por sucursal (NULL = todas).
+// · warehouses.lat / lng: la ubicación de cada sucursal, desde donde se mide el delivery. El
+//   delivery se cobra por distancia (base + por km), ver services/catalogCheckout.js.
 // · sales.fulfillment ('retiro' | 'delivery') y la dirección del delivery con su punto GPS. El
 //   costo del delivery va en el recargo de la venta (service_charge), como en la caja.
 // · payment_reports: el pago que el cliente dice haber hecho. Nace 'pendiente'; pasa a
@@ -27,22 +28,12 @@ module.exports = {
       await q(`ALTER TABLE payment_journal_methods ADD COLUMN IF NOT EXISTS catalog_visible BOOLEAN NOT NULL DEFAULT FALSE`);
       await q(`ALTER TABLE payment_journal_methods ADD COLUMN IF NOT EXISTS catalog_info JSONB`);
 
-      await q(`
-        CREATE TABLE IF NOT EXISTS delivery_zones (
-          id            SERIAL PRIMARY KEY,
-          company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-          warehouse_id  INTEGER REFERENCES warehouses(id) ON DELETE CASCADE,
-          name          VARCHAR(80) NOT NULL,
-          price         NUMERIC(14,2) NOT NULL DEFAULT 0,
-          active        BOOLEAN NOT NULL DEFAULT TRUE,
-          sort_order    INTEGER NOT NULL DEFAULT 0,
-          created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-        )
-      `);
-      await q(`CREATE INDEX IF NOT EXISTS delivery_zones_company ON delivery_zones (company_id)`);
 
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS fulfillment VARCHAR(10)`);
-      await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_zone_id INTEGER`);
+      await q(`ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS lat NUMERIC(9,6)`);
+      await q(`ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS lng NUMERIC(9,6)`);
+      // Los km que se cobraron (línea recta por el factor de calles), para la tienda y el cliente.
+      await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_km NUMERIC(6,1)`);
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_address VARCHAR(300)`);
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_reference VARCHAR(200)`);
       await q(`ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC(9,6)`);
@@ -116,9 +107,10 @@ module.exports = {
     await queryInterface.sequelize.transaction(async (transaction) => {
       const q = (sql) => queryInterface.sequelize.query(sql, { transaction });
       await q(`DROP TABLE IF EXISTS payment_reports`);
-      await q(`DROP TABLE IF EXISTS delivery_zones`);
+      await q(`ALTER TABLE warehouses DROP COLUMN IF EXISTS lat`);
+      await q(`ALTER TABLE warehouses DROP COLUMN IF EXISTS lng`);
       await q(`DROP TABLE IF EXISTS web_order_rejections`);
-      for (const c of ["fulfillment", "delivery_zone_id", "delivery_address", "delivery_reference", "delivery_lat", "delivery_lng", "delivery_fee", "extra_charge", "extra_charge_reason"]) {
+      for (const c of ["fulfillment", "delivery_km", "delivery_address", "delivery_reference", "delivery_lat", "delivery_lng", "delivery_fee", "extra_charge", "extra_charge_reason"]) {
         await q(`ALTER TABLE sales DROP COLUMN IF EXISTS ${c}`);
       }
       await q(`ALTER TABLE payment_journal_methods DROP COLUMN IF EXISTS catalog_visible`);

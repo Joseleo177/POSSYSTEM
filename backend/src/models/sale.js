@@ -76,7 +76,8 @@ module.exports = (sequelize, DataTypes) => {
     // dirección de abajo (ver migración 20261101150000-pedidos-web-entrega-pago). El costo del
     // delivery va en service_charge. NULL en las ventas de caja.
     fulfillment:        { type: DataTypes.STRING(10),  allowNull: true },
-    delivery_zone_id:   { type: DataTypes.INTEGER,     allowNull: true },
+    // Km cobrados desde la sucursal (línea recta por el factor de calles, ver catalogCheckout).
+    delivery_km:        { type: DataTypes.DECIMAL(6, 1), allowNull: true },
     delivery_address:   { type: DataTypes.STRING(300), allowNull: true },
     delivery_reference: { type: DataTypes.STRING(200), allowNull: true },
     delivery_lat:       { type: DataTypes.DECIMAL(9, 6), allowNull: true },

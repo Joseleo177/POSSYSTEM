@@ -183,7 +183,7 @@ function Seccion({ titulo, aside = null, children }) {
 function Detalle({ id, onChanged, onClose }) {
     const { notify, activeCurrencies, navigateTo, companyInfo, printerWidth } = useApp();
     const [o, setO] = useState(null);
-    const [cargo, setCargo] = useState({ zone: "", fee: "", extra: "", reason: "" });
+    const [cargo, setCargo] = useState({ fee: "", extra: "", reason: "" });
     const [serie, setSerie] = useState("");
     const [rechazar, setRechazar] = useState(false);
     const [motivo, setMotivo] = useState("");
@@ -194,7 +194,6 @@ function Detalle({ id, onChanged, onClose }) {
             const r = await api.webOrders.get(id);
             setO(r.data);
             setCargo({
-                zone: r.data.delivery_zone_id ? String(r.data.delivery_zone_id) : "",
                 fee: r.data.fulfillment === "delivery" ? r2(r.data.delivery_fee ?? r.data.service_charge).toFixed(2) : "",
                 extra: r.data.extra_charge ? r2(r.data.extra_charge).toFixed(2) : "",
                 reason: r.data.extra_charge_reason || "",
@@ -222,15 +221,13 @@ function Detalle({ id, onChanged, onClose }) {
     const sucio = nuevo && (
         (delivery && fee !== r2(o.delivery_fee ?? o.service_charge)) ||
         extra !== r2(o.extra_charge || 0) ||
-        cargo.reason.trim() !== (o.extra_charge_reason || "") ||
-        (cargo.zone || "") !== (o.delivery_zone_id ? String(o.delivery_zone_id) : "")
+        cargo.reason.trim() !== (o.extra_charge_reason || "")
     );
     const confirmados = (o.payment_reports || []).filter(r => r.status === "confirmado").length;
 
     const guardarCargo = async () => {
         try {
             await api.webOrders.saveCharges(o.id, {
-                delivery_zone_id: cargo.zone || null,
                 delivery_fee: delivery ? fee : undefined,
                 extra_charge: extra,
                 extra_charge_reason: cargo.reason,
@@ -321,7 +318,7 @@ function Detalle({ id, onChanged, onClose }) {
                     <div className={`${CARD} p-4`}>
                         <p className={`${LABEL} flex items-center gap-1.5`}>
                             <IconoEntrega delivery={delivery} className="w-3.5 h-3.5" />
-                            {delivery ? `Delivery${o.zone_name ? ` · ${o.zone_name}` : ""}` : o.fulfillment === "retiro" ? "Retiro en tienda" : "Entrega"}
+                            {delivery ? `Delivery${o.delivery_km != null ? ` · a ${String(o.delivery_km).replace(".", ",")} km` : ""}` : o.fulfillment === "retiro" ? "Retiro en tienda" : "Entrega"}
                         </p>
                         {delivery ? (
                             <>
@@ -371,20 +368,10 @@ function Detalle({ id, onChanged, onClose }) {
                     <Seccion titulo="Cobro aparte">
                         <div className={`${CARD} p-4 space-y-3`}>
                             {delivery && (
-                                <div className={`grid gap-3 ${o.zones?.length ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-1"}`}>
-                                    {o.zones?.length > 0 && (
-                                        <div className="min-w-0">
-                                            <Rotulo>Zona</Rotulo>
-                                            <CustomSelect value={cargo.zone} className="mt-1.5" placeholder="Sin zona"
-                                                onChange={v => {
-                                                    const z = o.zones.find(x => String(x.id) === String(v));
-                                                    setCargo(p => ({ ...p, zone: v, fee: z ? r2(z.price).toFixed(2) : p.fee }));
-                                                }}
-                                                options={o.zones.map(z => ({ value: String(z.id), label: `${z.name} · ${ref(z.price)}` }))} />
-                                        </div>
-                                    )}
+                                <div className="grid gap-3 grid-cols-1">
                                     <label className="block min-w-0">
-                                        <Rotulo>Delivery</Rotulo>
+                                        {/* Lo calculó el catálogo por distancia; aquí se puede corregir. */}
+                                        <Rotulo>{o.delivery_km != null ? `Delivery · calculado a ${String(o.delivery_km).replace(".", ",")} km` : "Delivery"}</Rotulo>
                                         <div className="relative mt-1.5">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">Ref.</span>
                                             <input value={cargo.fee} onChange={e => setCargo(p => ({ ...p, fee: e.target.value.replace(/[^\d.,]/g, "") }))}

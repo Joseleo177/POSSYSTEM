@@ -10,21 +10,10 @@ ALTER TABLE companies ADD COLUMN IF NOT EXISTS pedidos_web_enabled BOOLEAN NOT N
 ALTER TABLE payment_journal_methods ADD COLUMN IF NOT EXISTS catalog_visible BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE payment_journal_methods ADD COLUMN IF NOT EXISTS catalog_info JSONB;
 
-CREATE TABLE IF NOT EXISTS delivery_zones (
-  id            SERIAL PRIMARY KEY,
-  company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-  warehouse_id  INTEGER REFERENCES warehouses(id) ON DELETE CASCADE,
-  name          VARCHAR(80) NOT NULL,
-  price         NUMERIC(14,2) NOT NULL DEFAULT 0,
-  active        BOOLEAN NOT NULL DEFAULT TRUE,
-  sort_order    INTEGER NOT NULL DEFAULT 0,
-  created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE INDEX IF NOT EXISTS delivery_zones_company ON delivery_zones (company_id);
-ALTER TABLE delivery_zones ENABLE ROW LEVEL SECURITY;
-
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS fulfillment VARCHAR(10);
-ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_zone_id INTEGER;
+ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS lat NUMERIC(9,6);
+ALTER TABLE warehouses ADD COLUMN IF NOT EXISTS lng NUMERIC(9,6);
+ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_km NUMERIC(6,1);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_address VARCHAR(300);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_reference VARCHAR(200);
 ALTER TABLE sales ADD COLUMN IF NOT EXISTS delivery_lat NUMERIC(9,6);
@@ -89,7 +78,7 @@ SELECT '20261101150000-pedidos-web-entrega-pago.js'
 
 COMMIT;
 
--- Verificación: tres filas con relrowsecurity = true y nueve columnas nuevas en sales.
-SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('delivery_zones', 'payment_reports', 'web_order_rejections');
+-- Verificación: dos filas con relrowsecurity = true y nueve columnas nuevas en sales.
+SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('payment_reports', 'web_order_rejections');
 SELECT column_name FROM information_schema.columns
- WHERE table_name = 'sales' AND column_name IN ('fulfillment', 'delivery_zone_id', 'delivery_address', 'delivery_reference', 'delivery_lat', 'delivery_lng', 'delivery_fee', 'extra_charge', 'extra_charge_reason');
+ WHERE table_name = 'sales' AND column_name IN ('fulfillment', 'delivery_km', 'delivery_address', 'delivery_reference', 'delivery_lat', 'delivery_lng', 'delivery_fee', 'extra_charge', 'extra_charge_reason');

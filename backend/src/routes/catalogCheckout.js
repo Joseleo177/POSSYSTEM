@@ -2,7 +2,7 @@ const router = require("express").Router();
 const { auth, permit } = require("../middleware/auth");
 const svc = require("../services/catalogCheckout");
 
-// Configuración → Pedidos web: entrega (retiro, delivery por zonas) y qué métodos de cada cuenta
+// Configuración → Pedidos web: entrega (retiro, delivery por distancia) y qué métodos de cada cuenta
 // se publican en el catálogo para pagar. Es configuración de la tienda, como el enlace público.
 const handle = (fn) => async (req, res, next) => {
   try {
@@ -25,8 +25,6 @@ router.use(auth, moduloActivo);
 router.get   ("/",                          permit("config.view"), handle(req => svc.getConfig(req)));
 router.put   ("/settings",                  permit("config.edit"), handle(req => svc.saveSettings(req, req.body)));
 router.put   ("/methods/:journalId/:code",  permit("config.edit"), handle(req => svc.saveMethod(req, req.params.journalId, req.params.code, req.body)));
-router.post  ("/zones",                     permit("config.edit"), handle(req => svc.createZone(req, req.body)));
-router.put   ("/zones/:id",                 permit("config.edit"), handle(req => svc.updateZone(req, req.params.id, req.body)));
-router.delete("/zones/:id",                 permit("config.edit"), handle(req => svc.removeZone(req, req.params.id)));
+router.put   ("/warehouses/:id/location",    permit("config.edit"), handle(req => svc.saveWarehouseLocation(req, req.params.id, req.body)));
 
 module.exports = router;

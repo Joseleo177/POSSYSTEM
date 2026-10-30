@@ -28,7 +28,7 @@ export function usePublicCatalog(token, initialProductId = null) {
     const [features, setFeatures] = useState([]);
     const [menu, setMenu] = useState([]);
     // Entrega y pago que ofrece la tienda (Configuración → Pedidos web). Depende de la sucursal:
-    // cada una tiene sus zonas y sus cuentas, así que se renueva al elegirla.
+    // cada una tiene su ubicación (de ahí se mide el delivery) y sus cuentas: se renueva al elegirla.
     const [checkout, setCheckout] = useState(null);
     const [products, setProducts] = useState([]);
     const [total, setTotal] = useState(0);
