@@ -139,6 +139,54 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 .card-fade  { animation: card-fade .35s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
 .hero-zoom  { animation: hero-zoom 7s ease-out both; }
 .hero-progress { transform-origin: left; animation: hero-progress var(--dur, 6s) linear both; }
+/* Vitrina: carrito, paso final y pagos.
+   - expand-in: lo que se despliega al elegir algo (dirección del delivery, datos de la cuenta).
+   - opt-pick / opt-drive / opt-coin: el ícono de la opción elegida salta / arranca (camión) /
+     gira como moneda ("Pagar al retirar").
+   - opt-check: el círculo de la opción (y el visto de cada paso) se llena con rebote.
+   - pin-drop: el alfiler del punto de entrega cae y rebota.
+   - shake: el aviso de "falta algo" se sacude en cada intento.
+   - plane-fly / send-wait: el avión del botón despega al enviar y entra "Enviando".
+   - ring-pulse / burst-far: onda y segundo anillo de chispas de la celebración.
+   - auto-close: la barra que se vacía hasta que "Pago reportado" se cierra solo.
+   - search-word: la palabra del buscador que cambia sola en el placeholder. */
+@keyframes expand-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes opt-pick  { 0% { transform: scale(1); } 35% { transform: scale(1.22) rotate(-8deg); } 65% { transform: scale(.94) rotate(4deg); } 100% { transform: none; } }
+@keyframes opt-drive {
+  0% { transform: translateX(0); } 20% { transform: translateX(-3px) rotate(-3deg); }
+  45% { transform: translateX(14px); opacity: 0; } 46% { transform: translateX(-14px); opacity: 0; }
+  75% { transform: translateX(2px); opacity: 1; } 100% { transform: none; }
+}
+@keyframes opt-coin  { from { transform: perspective(80px) rotateY(0); } to { transform: perspective(80px) rotateY(360deg); } }
+@keyframes opt-check { 0% { transform: scale(.4); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes pin-drop  { 0% { transform: translateY(-14px); opacity: 0; } 55% { transform: translateY(0); opacity: 1; } 75% { transform: translateY(-4px); } 100% { transform: none; } }
+@keyframes shake     { 0%, 100% { transform: none; } 20% { transform: translateX(-6px); } 40% { transform: translateX(5px); } 60% { transform: translateX(-3px); } 80% { transform: translateX(2px); } }
+@keyframes plane-fly {
+  0% { transform: translate(0, 0) rotate(0); opacity: 1; }
+  30% { transform: translate(-10px, 4px) rotate(-10deg); opacity: 1; }
+  100% { transform: translate(260px, -60px) rotate(12deg) scale(.6); opacity: 0; }
+}
+@keyframes send-wait { 0%, 45% { opacity: 0; transform: translateY(6px); } 100% { opacity: 1; transform: none; } }
+@keyframes ring-pulse { 0% { transform: scale(.6); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes burst-far {
+  0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateY(-78px) scale(.2); opacity: 0; }
+}
+@keyframes auto-close { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.expand-in  { animation: expand-in .32s cubic-bezier(.2, .8, .2, 1) both; }
+.opt-pick   { animation: opt-pick .5s cubic-bezier(.3, .7, .3, 1); }
+.opt-drive  { animation: opt-drive .75s cubic-bezier(.5, 0, .3, 1); }
+.opt-coin   { animation: opt-coin .6s cubic-bezier(.3, .7, .3, 1); }
+.opt-check  { animation: opt-check .4s cubic-bezier(.3, .7, .3, 1.4); }
+.pin-drop   { animation: pin-drop .6s cubic-bezier(.3, .7, .3, 1) both; }
+.shake      { animation: shake .42s ease-in-out; }
+.plane-fly  { animation: plane-fly .8s cubic-bezier(.5, 0, .75, .4) both; }
+.send-wait  { animation: send-wait .7s ease-out both; }
+.ring-pulse { animation: ring-pulse 1s .15s cubic-bezier(.1, .7, .3, 1) both; }
+.burst-far  { animation: burst-far .85s .25s cubic-bezier(.1, .7, .3, 1) both; }
+.auto-close { transform-origin: left; animation: auto-close var(--dur, 2.6s) linear both; }
+@keyframes search-word { from { opacity: 0; transform: translateY(70%); } to { opacity: 1; transform: none; } }
+.search-word { display: inline-block; animation: search-word .4s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes footer-up { 0% { transform: none; } 45% { transform: translateY(-160%); opacity: 0; } 46% { transform: translateY(160%); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes reveal-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 .add-fill  { animation: add-fill 1.47s cubic-bezier(.65, 0, .35, 1) both; }
@@ -181,6 +229,9 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   .word-in, .marquee, .reveal-up, .skeleton { animation: none; }
   .stepper-in, .qty-up, .qty-down, .card-in, .card-fade, .hero-zoom { animation: none; }
   .hero-progress { animation: none; transform: none; }
+  .expand-in, .opt-pick, .opt-drive, .opt-coin, .opt-check, .pin-drop, .shake, .send-wait, .search-word { animation: none; }
+  .plane-fly, .ring-pulse, .burst-far { display: none; }
+  .auto-close { animation: none; }
   .check-draw { animation: none; stroke-dasharray: none; }
   .burst-dot { display: none; }
 }

@@ -79,14 +79,19 @@ function CopyRow({ label, value, strong = false, skin }) {
 }
 
 // Tarjeta de una forma de pago. `logo` es el del banco o, si no tiene, el del método.
-export function OptionCard({ selected, onClick, logo, title, subtitle, letter, skin = sheetSkin(null) }) {
+// `iconAnim`: el gesto del ícono al elegir la opción (ver index.css): el camión del delivery
+// arranca (`opt-drive`), lo demás da un saltito (`opt-pick`, el de siempre). Se repite cada
+// vez que se elige, porque el ícono se vuelve a montar con la selección.
+export function OptionCard({ selected, onClick, logo, title, subtitle, letter, skin = sheetSkin(null), iconAnim = "opt-pick" }) {
     return (
         <button type="button" onClick={onClick} aria-pressed={selected}
-            className={`w-full text-left flex items-center gap-3 px-3.5 py-3 transition-all ${skin.carta ? "rounded-2xl" : "rounded-xl border"} ${selected ? skin.selected : skin.option}`}>
-            <span className={`w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 ${skin.logoBox}`}>
-                {logo
-                    ? <img src={resolveImageUrl(logo)} alt="" className="w-full h-full object-contain p-1" />
-                    : <span className={`text-[15px] font-semibold ${skin.muted}`}>{letter}</span>}
+            className={`group/opt w-full text-left flex items-center gap-3 px-3.5 py-3 transition-[background-color,border-color,box-shadow,transform] duration-300 active:scale-[0.99] ${skin.carta ? "rounded-2xl" : "rounded-xl border"} ${selected ? skin.selected : skin.option}`}>
+            <span className={`w-10 h-10 flex items-center justify-center overflow-hidden shrink-0 transition-colors duration-300 ${skin.logoBox}`}>
+                <span key={selected ? "si" : "no"} className={`flex items-center justify-center w-full h-full ${selected ? iconAnim : ""}`}>
+                    {logo
+                        ? <img src={resolveImageUrl(logo)} alt="" className="w-full h-full object-contain p-1" />
+                        : <span className={`text-[15px] font-semibold transition-colors duration-300 ${selected ? "text-brand-600 dark:text-brand-400" : skin.muted}`}>{letter}</span>}
+                </span>
             </span>
             <span className="min-w-0 flex-1">
                 <span className={`block text-[14px] font-semibold ${skin.ink} leading-snug`}>{title}</span>
@@ -99,8 +104,14 @@ export function OptionCard({ selected, onClick, logo, title, subtitle, letter, s
                     {selected && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                 </span>
             ) : (
-                <span className={`w-5 h-5 rounded-full border-2 shrink-0 flex items-center justify-center ${selected ? "border-brand-500" : "border-content-subtle/40 dark:border-white/25"}`}>
-                    {selected && <span className="w-2.5 h-2.5 rounded-full bg-brand-500" />}
+                // Al elegir: el círculo se llena del color de la tienda con un rebote y el
+                // visto se dibuja adentro.
+                <span className={`w-[22px] h-[22px] rounded-full shrink-0 flex items-center justify-center transition-[background-color,box-shadow] duration-300 ${selected ? "bg-brand-500 text-white opt-check" : "ring-2 ring-inset ring-content-subtle/30 dark:ring-white/25 group-hover/opt:ring-content-subtle/50"}`}>
+                    {selected && (
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path className="add-check" strokeLinecap="round" strokeLinejoin="round" strokeWidth={3.4} d="M5 13l4 4L19 7" />
+                        </svg>
+                    )}
                 </span>
             )}
         </button>
@@ -138,12 +149,14 @@ export default function PaymentFields({ options, value, onChange, owedBase, late
                 ))}
                 {later && (
                     <OptionCard selected={later.selected} onClick={() => { later.onSelect(true); onChange({ ...value, option_id: "" }); }}
-                        letter="$" title={later.label} subtitle="La tienda te cobra al entregarte el pedido" skin={skin} />
+                        letter="$" iconAnim="opt-coin" title={later.label} subtitle="La tienda te cobra al entregarte el pedido" skin={skin} />
                 )}
             </div>
 
+            {/* Los datos de la cuenta se despliegan al elegirla (y otra vez al cambiar de cuenta,
+                por la key): aparecer de golpe debajo empujaba todo sin que se viera de dónde. */}
             {op && !later?.selected && (
-                <>
+                <div key={op.id} className="expand-in space-y-4">
                     <div>
                         <p className={`${skin.section} mb-2`}>Datos para pagar</p>
                         <div className={`${skin.card} divide-y ${skin.divide}`}>
@@ -200,7 +213,7 @@ export default function PaymentFields({ options, value, onChange, owedBase, late
                             </label>
                         </div>
                     </div>
-                </>
+                </div>
             )}
         </div>
     );

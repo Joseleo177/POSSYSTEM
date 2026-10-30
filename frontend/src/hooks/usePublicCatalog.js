@@ -510,7 +510,8 @@ export function usePublicCatalog(token, initialProductId = null) {
     const canReportPayment = !!checkout?.payment_options?.length;
     const sendPaymentReport = async (order, pago) => {
         await publicApi.reportPayment(token, order.id, { ...pago, document: identity.document });
-        setReportOrder(null);
+        // La hoja NO se cierra aquí: muestra "Pago reportado" y se cierra sola después
+        // (ReportPaymentModal), para que el cliente vea que el pago entró.
         // El detalle abierto se refresca con el estado nuevo del pago.
         const r = await publicApi.myOrders(token, identity.document).catch(() => null);
         if (r) {

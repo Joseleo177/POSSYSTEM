@@ -4,6 +4,13 @@ import { freeUnitsFor, lineTotalFor } from "../../helpers/promo";
 import { Spinner } from "../ui/Spinner";
 import { PlacedPaymentNote } from "./PaymentFields";
 import { sheetSkin } from "./CatalogSheet";
+import { useEffect, useRef, useState } from "react";
+import CountUp, { IconoPapelera } from "./CountUp";
+import Celebracion from "./Celebracion";
+
+// Cuánto tarda una línea en irse: se desliza a un lado y la lista se cierra sobre su hueco.
+// Recién al terminar se quita del carrito; si se quitara antes, la lista saltaría de golpe.
+const SALIDA_MS = 340;
 
 // Carrito del catálogo público, el mismo en los tres temas (antes cada tema tenía el suyo:
 // OrderPanel en el estándar, uno propio en boutique). Va en el papel que diga el tema
@@ -21,24 +28,10 @@ const IconoBolsa = ({ className }) => (
     </svg>
 );
 
-// Chispas alrededor del visto: ocho puntos que salen en abanico (el ángulo va en --a).
-const CHISPAS = Array.from({ length: 8 }, (_, i) => i * 45);
-
 function PedidoEnviado({ placedOrder, store, identity, fmt, baseCur, altCur, waHref, onClose, onOpenMyOrders, skin, keepShoppingLabel }) {
     return (
         <div className="flex-1 overflow-y-auto px-5 pt-6 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-center">
-            <div className="relative w-24 h-24 mx-auto">
-                {CHISPAS.map((a, i) => (
-                    <span key={a} aria-hidden="true"
-                        className={`burst-dot absolute left-1/2 top-1/2 -ml-1 -mt-1 w-2 h-2 rounded-full ${i % 2 ? "bg-brand-500" : "bg-emerald-500"}`}
-                        style={{ "--a": `${a}deg` }} />
-                ))}
-                <div className="ring-grow absolute inset-0 rounded-full bg-emerald-500 shadow-[0_14px_30px_-10px_rgba(16,185,129,.8)] flex items-center justify-center">
-                    <svg className="w-11 h-11 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path className="check-draw" strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.8} d="M5 13l4 4L19 7" />
-                    </svg>
-                </div>
-            </div>
+            <Celebracion />
 
             <div className="rise-in mt-6 space-y-1.5" style={{ "--i": 4 }}>
                 <p className={`text-[13px] font-semibold text-emerald-700 tabular-nums`}>Pedido #{placedOrder.id}</p>
@@ -105,6 +98,27 @@ export default function CartDrawer({
     placedOrder, waHref, onOpenMyOrders,
     panelColor, keepShoppingLabel = "Seguir comprando",
 }) {
+    const [saliendo, setSaliendo] = useState(() => new Set());
+    const timers = useRef([]);
+    useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+    // Quitar con salida animada. `fin` es lo que de verdad lo quita (una línea o todas).
+    const despedir = (ids, fin) => {
+        setSaliendo((prev) => new Set([...prev, ...ids]));
+        timers.current.push(setTimeout(() => {
+            fin();
+            setSaliendo((prev) => { const n = new Set(prev); ids.forEach((id) => n.delete(id)); return n; });
+        }, SALIDA_MS + (ids.length > 1 ? Math.min(ids.length, 8) * 40 : 0)));
+    };
+    const quitar = (id) => despedir([id], () => removeFromCart(id));
+    // El "−" sobre la última unidad también se despide: es quitar, no restar.
+    const restar = (it) => {
+        const paso = isIntegerUnit(it.unit) ? 1 : 0.5;
+        if ((parseFloat(it.qty) || 0) - paso <= 0) quitar(it.id);
+        else changeQty(it.id, -1);
+    };
+    const vaciar = () => despedir(cart.map((it) => it.id), clearCart);
+
     if (!open) return null;
     const skin = sheetSkin(panelColor || "#FFFFFF");
     const unidades = cart.length;
@@ -172,9 +186,23 @@ export default function CartDrawer({
                                     </button>
                                 </div>
                             ) : (
-                                <ul className="space-y-2.5 pb-3">
-                                    {cart.map((it, i) => (
-                                        <li key={it.id} style={{ "--i": Math.min(i, 8) }} className={`rise-in ${skin.card} p-3 flex gap-3`}>
+                                <ul className="pb-3">
+                                    {cart.map((it, i) => {
+                                        const fuera = saliendo.has(it.id);
+                                        return (
+                                        // La fila se cierra con grid-template-rows (1fr → 0fr), que
+                                        // anima la altura real sin medirla; el espacio entre líneas va
+                                        // DENTRO (pb), para que también se cierre y no quede un hueco.
+                                        <li key={it.id}
+                                            className="grid transition-[grid-template-rows] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                                            style={{ gridTemplateRows: fuera ? "0fr" : "1fr", transitionDelay: fuera && saliendo.size > 1 ? `${Math.min(i, 8) * 40}ms` : "0ms" }}>
+                                        <div className="min-h-0 overflow-hidden">
+                                        {/* La entrada (rise-in) va en esta capa y la salida en la de
+                                            adentro: una animación con fill fija el transform y taparía
+                                            la transición de salida si fueran en el mismo elemento. */}
+                                        <div className="pb-2.5 rise-in" style={{ "--i": Math.min(i, 8) }}>
+                                        <div style={{ transitionDelay: fuera && saliendo.size > 1 ? `${Math.min(i, 8) * 40}ms` : "0ms" }}
+                                            className={`${skin.card} p-3 flex gap-3 transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${fuera ? "-translate-x-10 opacity-0 scale-[0.97]" : ""}`}>
                                             <div className="w-[72px] h-[72px] shrink-0 rounded-2xl bg-black/5 overflow-hidden relative">
                                                 {it.image_url ? (
                                                     <img src={resolveImageUrl(it.image_url)} alt="" onError={imgRetryOnError}
@@ -193,11 +221,12 @@ export default function CartDrawer({
                                                     </h3>
                                                     <button
                                                         type="button"
-                                                        onClick={() => removeFromCart(it.id)}
+                                                        onClick={() => quitar(it.id)}
+                                                        disabled={fuera}
                                                         aria-label={`Quitar ${it.name}`}
-                                                        className="shrink-0 -mt-1 -mr-1 w-8 h-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-red-600 hover:bg-red-500/[0.08] transition-colors"
+                                                        className="group/trash shrink-0 -mt-1 -mr-1 w-8 h-8 rounded-full flex items-center justify-center text-neutral-400 hover:text-red-600 hover:bg-red-500/[0.08] active:scale-90 transition-[color,background-color,transform]"
                                                     >
-                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.9} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                                        <IconoPapelera />
                                                     </button>
                                                 </div>
 
@@ -224,7 +253,7 @@ export default function CartDrawer({
                                                     <div className="flex items-center rounded-full bg-white ring-1 ring-black/[0.08] p-0.5">
                                                         <button
                                                             type="button"
-                                                            onClick={() => changeQty(it.id, -1)}
+                                                            onClick={() => restar(it)}
                                                             aria-label="Quitar uno"
                                                             className="w-8 h-8 rounded-full text-neutral-700 hover:bg-black/5 active:scale-90 transition-all flex items-center justify-center"
                                                         >
@@ -251,13 +280,15 @@ export default function CartDrawer({
                                                         </button>
                                                     </div>
 
-                                                    <span className={`text-[15px] font-bold ${skin.ink} tabular-nums`}>
-                                                        {fmt(lineTotalFor(it), baseCur)}
-                                                    </span>
+                                                    <CountUp value={lineTotalFor(it)} format={(v) => fmt(v, baseCur)} className={`text-[15px] font-bold ${skin.ink}`} />
                                                 </div>
                                             </div>
+                                        </div>
+                                        </div>
+                                        </div>
                                         </li>
-                                    ))}
+                                        );
+                                    })}
                                 </ul>
                             )}
 
@@ -284,9 +315,7 @@ export default function CartDrawer({
                                 <div className="flex items-baseline justify-between">
                                     <span className={`text-[14px] font-semibold ${skin.ink}`}>Subtotal</span>
                                     <div className="text-right">
-                                        <div className={`text-[22px] font-bold ${skin.ink} tabular-nums leading-none tracking-tight`}>
-                                            {fmt(cartTotal, baseCur)}
-                                        </div>
+                                        <CountUp value={cartTotal} format={(v) => fmt(v, baseCur)} className={`block text-[22px] font-bold ${skin.ink} leading-none tracking-tight`} />
                                         {altCur && (
                                             <div className={`text-[12px] ${skin.subtle} tabular-nums mt-1`}>
                                                 {fmt(cartTotal, altCur)}
@@ -325,7 +354,7 @@ export default function CartDrawer({
 
                                 <button
                                     type="button"
-                                    onClick={clearCart}
+                                    onClick={vaciar}
                                     disabled={sending}
                                     className={`w-full h-9 text-[13px] font-medium ${skin.subtle} hover:text-red-600 transition-colors disabled:opacity-40`}
                                 >

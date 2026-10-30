@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getSocialLinks } from "./socialLinks";
 import StoreLogo from "./StoreLogo";
 import GlidingTabs from "./GlidingTabs";
@@ -122,6 +122,93 @@ function MenuCategorias({ entradas, categories, category, setCategory }) {
     );
 }
 
+// Buscador integrado. Mientras está vacío, el texto de ayuda va cambiando solo entre las
+// categorías de la tienda ("Buscar Milagros", "Buscar Poción Kids"...): enseña qué hay sin
+// ocupar más espacio. En escritorio, la tecla / lo enfoca, como en las tiendas grandes.
+function Buscador({ search, setSearch, categories, autoFocus = false, onEscape = null, className = "" }) {
+    const ref = useRef(null);
+    const [foco, setFoco] = useState(false);
+    const [n, setN] = useState(0);
+    const ideas = ["productos", ...categories.slice(0, 8).map((c) => toNameCase(c.name))];
+
+    useEffect(() => {
+        if (search || foco || ideas.length < 2) return;
+        const t = setInterval(() => setN((k) => (k + 1) % ideas.length), 2600);
+        return () => clearInterval(t);
+    }, [search, foco, ideas.length]);
+
+    useEffect(() => {
+        if (autoFocus) return;
+        const tecla = (e) => {
+            if (e.key !== "/" || /^(input|textarea|select)$/i.test(document.activeElement?.tagName || "")) return;
+            if (!ref.current || ref.current.offsetParent === null) return;
+            e.preventDefault();
+            ref.current.focus();
+        };
+        window.addEventListener("keydown", tecla);
+        return () => window.removeEventListener("keydown", tecla);
+    }, [autoFocus]);
+
+    return (
+        <div className={`relative ${className}`}>
+            <svg className={`absolute left-4 top-1/2 -translate-y-1/2 w-[18px] h-[18px] pointer-events-none transition-colors ${foco ? "text-brand-500" : "text-content-subtle"}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+                <circle cx="10.5" cy="10.5" r="6.25" /><path d="M15.2 15.2L20 20" />
+            </svg>
+            <input
+                ref={ref}
+                autoFocus={autoFocus}
+                type="search"
+                autoComplete="off"
+                aria-label="Buscar productos"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onFocus={() => setFoco(true)}
+                onBlur={() => setFoco(false)}
+                onKeyDown={(e) => { if (e.key === "Escape") { setSearch(""); e.currentTarget.blur(); onEscape?.(); } }}
+                className="w-full h-11 pl-11 pr-12 rounded-full bg-surface-2 dark:bg-white/[0.06] border border-transparent text-[14px] font-medium text-content dark:text-white outline-none focus:bg-white dark:focus:bg-white/[0.08] focus:border-brand-500/50 focus:ring-4 focus:ring-brand-500/10 transition-[background-color,border-color,box-shadow] duration-200 [&::-webkit-search-cancel-button]:appearance-none"
+            />
+            {!search && (
+                <span aria-hidden="true" className="pointer-events-none absolute left-11 right-12 top-1/2 -translate-y-1/2 overflow-hidden whitespace-nowrap text-[14px] text-content-subtle">
+                    Buscar <span key={n} className="search-word font-medium text-content-muted">{ideas[n % ideas.length]}</span>
+                </span>
+            )}
+            {search ? (
+                <button type="button" onClick={() => { setSearch(""); ref.current?.focus(); }} aria-label="Borrar búsqueda"
+                    className="stepper-in absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-content-muted hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors">
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
+                </button>
+            ) : !autoFocus && (
+                <kbd className={`hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 w-6 h-6 rounded-md items-center justify-center text-[12px] font-sans font-medium text-content-subtle ring-1 ring-inset ring-border dark:ring-white/15 transition-opacity ${foco ? "opacity-0" : ""}`}>/</kbd>
+            )}
+        </div>
+    );
+}
+
+const IconoSede = ({ className = "w-4 h-4" }) => (
+    <svg className={`${className} shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.34,1.6,0.5,1)] group-hover/sede:-translate-y-0.5`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 21s-6.5-5.8-6.5-11a6.5 6.5 0 0113 0c0 5.2-6.5 11-6.5 11z" />
+        <circle cx="12" cy="10" r="2.3" />
+    </svg>
+);
+
+// La sede donde se compra, como un chip que se lee y se toca: "Comprando en · Principal" con
+// la flecha de que se puede cambiar. Antes era un texto gris de 11px suelto en la esquina.
+function Sede({ branch, onClick, className = "" }) {
+    return (
+        <button type="button" onClick={onClick} title="Cambiar de sede"
+            className={`group/sede h-10 pl-1.5 pr-3 rounded-full items-center gap-2 ring-1 ring-inset ring-border dark:ring-white/10 hover:ring-brand-500/40 hover:bg-brand-500/[0.04] active:scale-95 transition-[box-shadow,background-color,transform] ${className}`}>
+            <span className="w-7 h-7 rounded-full bg-brand-500/10 text-brand-600 dark:text-brand-400 flex items-center justify-center">
+                <IconoSede />
+            </span>
+            <span className="text-left leading-tight min-w-0">
+                <span className="block text-[10.5px] text-content-subtle">Comprando en</span>
+                <span className="block text-[13px] font-semibold text-content dark:text-white truncate max-w-[130px]">{toNameCase(branch.name)}</span>
+            </span>
+            <svg className="w-3.5 h-3.5 text-content-subtle transition-transform duration-300 group-hover/sede:translate-y-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+        </button>
+    );
+}
+
 export default function StorefrontHeader({
     store, identity, categories, menu,
     search, setSearch, category, setCategory,
@@ -189,40 +276,35 @@ export default function StorefrontHeader({
 
             <div className="bg-surface dark:bg-surface-dark-2 border-b border-border/60 dark:border-white/[0.06]">
                 <div className="max-w-6xl mx-auto px-4">
-                    <div className="h-16 flex items-center gap-3">
-                        {/* Sucursal: en una tienda con varios locales, saber en cuál se está
-                            comprando es parte de la identidad de la página, no un ajuste. */}
-                        <div className="flex-1 min-w-0">
-                            {canChangeBranch && branch && (
-                                <button
-                                    type="button"
-                                    onClick={onChangeBranch}
-                                    className="inline-flex items-center gap-1.5 max-w-full text-[11px] font-bold text-content-muted hover:text-brand-500 transition-colors"
-                                >
-                                    <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path d="M17.657 16.657L13.414 20.9a2 2 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                                    <span className="truncate">{branch.name}</span>
-                                </button>
-                            )}
-                        </div>
-
-                        {/* El logo es la forma esperada de "volver al inicio" en cualquier
-                            tienda: limpia búsqueda y categoría, y si había una ficha de
-                            producto abierta, la cierra — lo mismo que hace la miga "Tienda"
-                            de esa página. Antes no tenía ningún comportamiento. */}
-                        {/* El tope de ancho deja sitio a los iconos de la derecha en un
-                            teléfono estrecho: un logo apaisado a esta altura puede pasar de 200px. */}
-                        <button type="button" onClick={onGoHome} className="shrink-0 max-w-[48vw] md:max-w-none">
+                    {/* Logo a la izquierda, buscador en el centro, cliente a la derecha: la forma
+                        en que cualquiera espera una tienda. Antes el logo iba centrado con la
+                        mitad izquierda vacía, y el buscador era un icono que desplegaba una barra
+                        a todo el ancho debajo: buscar, que es lo primero que hace quien sabe qué
+                        quiere, costaba un toque extra y empujaba la página. */}
+                    <div className="h-16 md:h-[72px] flex items-center gap-3 md:gap-6">
+                        {/* El logo es la forma esperada de "volver al inicio": limpia búsqueda y
+                            categoría, y cierra la ficha de producto si había una abierta. */}
+                        <button type="button" onClick={onGoHome} className="shrink-0 max-w-[46vw] md:max-w-[220px] transition-transform active:scale-95">
                             {store?.logo_url ? (
-                                <StoreLogo store={store} className="h-11 md:h-12 w-auto max-w-full" />
+                                <StoreLogo store={store} className="h-10 md:h-12 w-auto max-w-full" />
                             ) : (
-                                <span className="text-[15px] md:text-[18px] font-bold text-content dark:text-white tracking-tight">
+                                <span className="font-display text-[17px] md:text-[20px] font-bold text-content dark:text-white tracking-tight">
                                     {store?.name}
                                 </span>
                             )}
                         </button>
 
-                        <div className="flex-1 flex items-center justify-end gap-0.5">
-                            <IconBtn onClick={() => setSearchOpen(v => !v)} label={searchOpen ? "Cerrar búsqueda" : "Buscar"}>
+                        <Buscador
+                            search={search} setSearch={setSearch} categories={categories}
+                            className="hidden md:block flex-1 max-w-[560px] mx-auto"
+                        />
+
+                        <div className="ml-auto md:ml-0 flex items-center gap-1">
+                            {canChangeBranch && branch && (
+                                <Sede branch={branch} onClick={onChangeBranch} className="hidden lg:flex mr-1" />
+                            )}
+
+                            <IconBtn onClick={() => setSearchOpen(v => !v)} label={searchOpen ? "Cerrar búsqueda" : "Buscar"} className="md:hidden">
                                 {searchOpen ? (
                                     <svg className="w-[19px] h-[19px] stepper-in" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
                                 ) : <IconoBuscar />}
@@ -258,20 +340,23 @@ export default function StorefrontHeader({
                         </div>
                     </div>
 
+                    {/* En el teléfono el buscador se despliega bajo la cabecera al tocar la lupa. */}
                     {searchOpen && (
-                        <div className="pb-3 popover-in relative">
-                            <svg className="absolute left-4 top-[22px] -translate-y-1/2 w-[18px] h-[18px] text-content-subtle pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                                <circle cx="10.5" cy="10.5" r="6.25" /><path d="M15.2 15.2L20 20" />
-                            </svg>
-                            <input
-                                autoFocus
-                                type="search"
-                                autoComplete="off"
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                placeholder="¿Qué estás buscando?"
-                                className="w-full h-11 pl-11 pr-4 rounded-full bg-surface-2 dark:bg-white/5 border border-border/60 dark:border-white/10 text-[14px] font-medium text-content dark:text-white placeholder:text-content-subtle outline-none focus:border-brand-500/60 focus:ring-4 focus:ring-brand-500/10 transition-[border-color,box-shadow]"
-                            />
+                        <div className="md:hidden pb-3 expand-in">
+                            <Buscador search={search} setSearch={setSearch} categories={categories} autoFocus
+                                onEscape={() => setSearchOpen(false)} />
+                        </div>
+                    )}
+
+                    {/* Sede en pantallas sin sitio para el chip: una línea fina, siempre a la vista. */}
+                    {canChangeBranch && branch && (
+                        <div className="lg:hidden -mt-1 pb-2">
+                            <button type="button" onClick={onChangeBranch}
+                                className="group/sede inline-flex items-center gap-1.5 max-w-full text-[12px] text-content-subtle hover:text-content dark:hover:text-white transition-colors">
+                                <IconoSede className="w-3.5 h-3.5 text-brand-500" />
+                                <span className="truncate">Comprando en <span className="font-semibold text-content dark:text-white">{toNameCase(branch.name)}</span></span>
+                                <span className="text-brand-600 dark:text-brand-400 font-medium">· Cambiar</span>
+                            </button>
                         </div>
                     )}
                 </div>
