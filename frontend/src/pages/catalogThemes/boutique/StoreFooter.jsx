@@ -24,14 +24,20 @@ const Ico = ({ d, className = "w-3.5 h-3.5" }) => (
 
 // `pegado`: cuando justo encima va el carrusel de destacados, que ya cierra la página a todo
 // el ancho; el margen de siempre dejaba una franja gris suelta entre los dos.
-export default function StoreFooter({ store, pegado = false }) {
+// `flotantes`: la tienda tiene el carrito (y WhatsApp) flotando abajo a la derecha. Antes eso
+// se resolvía con una franja vacía de 96px DEBAJO del pie, en todas las pantallas: en
+// escritorio el pie se veía el doble de alto sin razón. Ahora el pie se cuida solo: en el
+// teléfono reserva abajo el alto de las burbujas (dentro del mismo pie, que es lo que quedaba
+// tapado), y en escritorio mediano corre sus botones a la izquierda del carrito; desde 2xl el
+// margen lateral de la página ya los separa.
+export default function StoreFooter({ store, pegado = false, flotantes = false }) {
     const redes = getSocialLinks(store);
     const anio = new Date().getFullYear();
     const nombre = toNameCase(store?.name || "");
 
     return (
-        <footer className={`${pegado ? "" : "mt-12"} bg-surface dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06]`}>
-            <div className="max-w-6xl mx-auto px-5 py-7 md:py-6 flex flex-col md:flex-row items-center gap-5 md:gap-8 text-center md:text-left">
+        <footer className={`${pegado ? "" : "mt-12"} bg-surface dark:bg-surface-dark-2 border-t border-border/60 dark:border-white/[0.06] ${flotantes ? "pb-24 md:pb-0" : ""}`}>
+            <div className={`max-w-6xl mx-auto px-5 py-7 md:py-5 flex flex-col md:flex-row items-center gap-5 md:gap-8 text-center md:text-left ${flotantes ? "md:pr-52 2xl:pr-5" : ""}`}>
                 <div className="min-w-0 flex flex-col md:flex-row items-center gap-3 md:gap-6">
                     {store?.logo_url ? (
                         <StoreLogo store={store} className="h-10 w-auto max-w-[180px]" />

@@ -254,11 +254,9 @@ export default function CatalogLayout({ catalog, token }) {
             <StoreFooter
                 store={store}
                 pegado={!productId && enPortada && features?.length > 0}
+                flotantes={ordersEnabled}
             />
 
-            {/* Hueco para que el carrito flotante no tape el pie. Con el mismo fondo del pie
-                (bg-surface) y no el de la página: si no, se leía como un bloque gris de más. */}
-            {ordersEnabled && <div className="h-24 bg-surface dark:bg-surface-dark-2" />}
 
             {ordersEnabled && (
                 <FloatingCart count={cart.length} total={cartTotal} fmt={fmt} baseCur={baseCur}

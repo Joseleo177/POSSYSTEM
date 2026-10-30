@@ -15,11 +15,13 @@ import useReveal from "./useReveal";
 // Sin eslogan y sin frases no hay nada que decir, y la sección entera desaparece.
 
 // Lo escrito todo en mayúsculas se pasa a oración: en grande, las mayúsculas gritan.
-const oracion = (t) => {
+// Exportada: el carrusel de destacados (FeatureCarousel) hace lo mismo con sus títulos. La
+// mayúscula va en la primera LETRA, no en el primer carácter: "+ RECONSTRUCCIÓN" queda
+// "+ Reconstrucción", no "+ reconstrucción".
+export const oracion = (t) => {
     const s = String(t || "").trim();
     if (!/\p{L}/u.test(s) || s !== s.toUpperCase()) return s;
-    const baja = s.toLowerCase();
-    return baja.charAt(0).toUpperCase() + baja.slice(1);
+    return s.toLowerCase().replace(/\p{L}/u, (c) => c.toUpperCase());
 };
 
 const DESTELLO = "M12 2c.5 4.6 2.4 7.5 7 8.5-4.6 1-6.5 3.9-7 8.5-.5-4.6-2.4-7.5-7-8.5 4.6-1 6.5-3.9 7-8.5z";

@@ -173,8 +173,10 @@ function Buscador({ search, setSearch, categories, autoFocus = false, onEscape =
                 </span>
             )}
             {search ? (
+                // Centrada con inset-y-0 + my-auto y no con -translate-y-1/2: la animación de
+                // entrada (stepper-in) usa transform y pisaba la traslación, la X caía abajo.
                 <button type="button" onClick={() => { setSearch(""); ref.current?.focus(); }} aria-label="Borrar búsqueda"
-                    className="stepper-in absolute right-1.5 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center text-content-muted hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors">
+                    className="stepper-in absolute right-1.5 inset-y-0 my-auto w-8 h-8 rounded-full flex items-center justify-center text-content-muted hover:bg-black/[0.06] dark:hover:bg-white/10 transition-colors">
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18" /></svg>
                 </button>
             ) : !autoFocus && (
