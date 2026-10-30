@@ -72,10 +72,22 @@ export function buildSalesExcel(data, range) {
       headers: [
         { key: "total_sales",    label: "Total Facturas" },
         { key: "total_revenue",  label: "Ingresos ($)" },
-        { key: "avg_ticket",     label: "Ticket Promedio ($)" },
-        { key: "max_sale",       label: "Venta Máxima ($)" },
+        { key: "paid_same_day_amount", label: "Cobrado de Ventas del Día ($)" },
+        { key: "paid_older_amount",    label: "Cobrado de Ventas Anteriores ($)" },
         { key: "pending_count",  label: "Facturas Pendientes" },
         { key: "pending_amount", label: "Monto Pendiente ($)" },
+      ],
+    },
+    {
+      name: "Cobros Ventas Anteriores",
+      rows: data.older_payments || [],
+      headers: [
+        { key: "invoice_number", label: "Factura" },
+        { key: "customer_name",  label: "Cliente" },
+        { key: "sale_day",       label: "Fecha de la Venta" },
+        { key: "days",           label: "Días Después" },
+        { key: "count",          label: "Cobros" },
+        { key: "amount",         label: "Cobrado ($)" },
       ],
     },
     {

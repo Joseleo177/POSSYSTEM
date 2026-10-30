@@ -259,9 +259,17 @@ export function StockBadge({ qty, min }) {
 export function ProgressBar({ value, max, color }) {
  const w = max > 0 ? Math.min(100, (value / max) * 100) : 0;
  const fill = /\b(bg-danger|bg-red-|bg-amber-|bg-warning)/.test(color || "") ? color : "bg-chart";
+ // Entra en 0 y se llena: el ancho final se pone dos cuadros después del montaje, cuando el
+ // navegador ya pintó el 0, o la transición no tiene desde dónde arrancar.
+ const [shown, setShown] = useState(() => (reduceMotion() ? w : 0));
+ useEffect(() => {
+ let r2;
+ const r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => setShown(w)); });
+ return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+ }, [w]);
  return (
  <div className="h-1.5 bg-surface-3 dark:bg-white/[0.06] rounded-full overflow-hidden">
- <div className={`h-full rounded-full ${fill} transition-all duration-700`} style={{ width: `${w}%` }} />
+ <div className={`h-full rounded-full ${fill} transition-[width] duration-700 ease-out motion-reduce:transition-none`} style={{ width: `${shown}%` }} />
  </div>
  );
 }
@@ -290,25 +298,73 @@ function useThemeKey() {
  return k;
 }
 
+// Animación de entrada de los gráficos: devuelve el avance de 0 a 1 y vuelve a empezar cada
+// vez que cambia `key` (los datos de otro período). Con "reducir movimiento" del sistema
+// arranca en 1 y no anima.
+const reduceMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+export const easeOut = (x) => 1 - Math.pow(1 - Math.min(1, Math.max(0, x)), 3);
+function useEntrance(key, ms = 700) {
+ const [t, setT] = useState(() => (reduceMotion() ? 1 : 0));
+ useEffect(() => {
+  if (reduceMotion()) { setT(1); return; }
+  let raf, start = null;
+  setT(0);
+  const step = (now) => {
+   if (start === null) start = now;
+   const x = Math.min(1, (now - start) / ms);
+   setT(x);
+   if (x < 1) raf = requestAnimationFrame(step);
+  };
+  raf = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(raf);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+ }, [key]);
+ return t;
+}
+
+// Paso "redondo" del eje (1, 2, 2.5, 5 × 10^n): la escala decía 127 / 95 / 64 / 32.
+const niceStep = (v) => {
+ if (!(v > 0)) return 1;
+ const p = Math.pow(10, Math.floor(Math.log10(v)));
+ const f = v / p;
+ return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p;
+};
+const tickLabel = (v) => v >= 1000
+ ? `${+(v / 1000).toFixed(1)}k`
+ : String(+v.toFixed(Number.isInteger(v) ? 0 : 1));
+// "2026-10-14" → "14/10"; lo que no es una fecha completa se recorta como antes.
+const xLabel = (s) => {
+ const m = String(s).match(/^\d{4}-(\d{2})-(\d{2})/);
+ return m ? `${m[2]}/${m[1]}` : String(s).slice(5);
+};
+
 // `series` dibuja varios tramos apilados por barra ([{ key, color, label }], de abajo
 // hacia arriba); `yKey` + `color` siguen sirviendo para el caso de una sola serie.
 // `format` da el texto de la etiqueta flotante (por defecto, monto en Ref.).
-export function BarChart({ data, xKey, yKey, series, color = "chart", height = 160, format = fmt$ }) {
+// `fill`: en vez de un alto fijo, ocupa todo el alto que le dé su contenedor (que debe ser
+// flex en columna). Sin esto, en una tarjeta estirada por la de al lado quedaba un hueco.
+export function BarChart({ data, xKey, yKey, series, color = "chart", height = 160, fill = false, format = fmt$ }) {
  const ref = useRef(null);
  const wrapRef = useRef(null);
  const geo = useRef(null);
  const [hover, setHover] = useState(null);
- const [width, setWidth] = useState(0);
+ const [size, setSize] = useState({ w: 0, h: 0 });
  const themeKey = useThemeKey();
  const tramos = useMemo(
  () => (series?.length ? series : [{ key: yKey, color }]),
  [series, yKey, color]
  );
+ // Entrada: cada barra crece desde la base, una tras otra. El escalón se acorta con muchas
+ // barras para que 30 días no tarden más que 5.
+ const n = data?.length || 0;
+ const BAR_MS = 550;
+ const stagger = n > 1 ? Math.min(45, 420 / n) : 0;
+ const t = useEntrance(data, BAR_MS + stagger * Math.max(0, n - 1));
 
- // Redibujo al cambiar el ancho (sidebar, ventana): antes quedaba estirado o cortado.
+ // Redibujo al cambiar el tamaño (sidebar, ventana): antes quedaba estirado o cortado.
  useEffect(() => {
  if (!wrapRef.current) return;
- const ro = new ResizeObserver(([e]) => setWidth(Math.round(e.contentRect.width)));
+ const ro = new ResizeObserver(([e]) => setSize({ w: Math.round(e.contentRect.width), h: Math.round(e.contentRect.height) }));
  ro.observe(wrapRef.current);
  return () => ro.disconnect();
  }, []);
@@ -317,60 +373,65 @@ export function BarChart({ data, xKey, yKey, series, color = "chart", height = 1
  if (!data?.length || !ref.current) return;
  const canvas = ref.current;
  const ctx = canvas.getContext("2d");
- const W = canvas.offsetWidth; const H = height;
+ const W = canvas.offsetWidth; const H = canvas.offsetHeight || height;
+ if (!W || !H) return;
  // Sin esto el canvas se rasteriza a 1x y las barras salen borrosas en pantallas retina.
  const dpr = window.devicePixelRatio || 1;
  canvas.width = W * dpr; canvas.height = H * dpr;
  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
- const totalDe = d => tramos.reduce((t, s) => t + (parseFloat(d[s.key]) || 0), 0);
- const maxY = Math.max(...data.map(totalDe), 1);
- const pad = { top: 10, right: 8, bottom: 26, left: 44 };
+ const totalDe = d => tramos.reduce((s, x) => s + (parseFloat(d[x.key]) || 0), 0);
+ const paso = niceStep(Math.max(...data.map(totalDe), 1) / 4);
+ const maxY = paso * 4;
+ const pad = { top: 12, right: 8, bottom: 26, left: 44 };
  const cW = W - pad.left - pad.right;
  const cH = H - pad.top - pad.bottom;
  const slotW = cW / data.length;
- // Llenan el slot menos una holgura, con tope para que 3 días no den barras de 300px.
- const barW = Math.max(3, Math.min(slotW - Math.min(12, slotW * 0.25), 72));
+ // Llenan el slot menos una holgura, con tope: con 5 días salían bloques de 72px.
+ const barW = Math.max(3, Math.min(slotW - Math.min(12, slotW * 0.3), 40));
  geo.current = { pad, slotW, cH, maxY, H };
- const axis = `rgb(${cssVar("--c-content-subtle")} / 0.85)`;
+ const sub = cssVar("--c-content-subtle");
+ const axis = `rgb(${sub} / 0.85)`;
  const colores = tramos.map(s => resolveColor(s.color));
  ctx.clearRect(0, 0, W, H);
 
  // Rejilla y eje: recesivos. Cuatro guías, solo la base con más peso.
  for (let i = 0; i <= 4; i++) {
  const y = Math.round(pad.top + (cH / 4) * i) + 0.5;
- ctx.strokeStyle = i === 4 ? `rgb(${cssVar("--c-content-subtle")} / 0.35)` : `rgb(${cssVar("--c-content-subtle")} / 0.12)`;
+ ctx.strokeStyle = i === 4 ? `rgb(${sub} / 0.35)` : `rgb(${sub} / 0.12)`;
  ctx.lineWidth = 1;
  ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
  ctx.fillStyle = axis; ctx.font = "500 10px Inter,sans-serif"; ctx.textAlign = "right";
- const v = maxY * (1 - i / 4);
- ctx.fillText(v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v.toFixed(0), pad.left - 8, y + 3);
+ ctx.fillText(tickLabel(maxY * (1 - i / 4)), pad.left - 8, y + 3);
  }
 
+ const totalMs = BAR_MS + stagger * Math.max(0, n - 1);
  data.forEach((d, i) => {
  const x = pad.left + i * slotW + (slotW - barW) / 2;
+ const k = easeOut((t * totalMs - i * stagger) / BAR_MS);
  let base = pad.top + cH;   // se apila de abajo hacia arriba
  // Con el cursor encima de una barra, las demás se atenúan: se ve cuál describe la etiqueta.
- ctx.globalAlpha = hover === null || hover === i ? 1 : 0.45;
+ ctx.globalAlpha = hover === null || hover === i ? 1 : 0.4;
  const vivos = tramos.filter(s => (parseFloat(d[s.key]) || 0) > 0);
  tramos.forEach((s, si) => {
- let alto = ((parseFloat(d[s.key]) || 0) / maxY) * cH;
- if (alto <= 0) return;
+ const alto = ((parseFloat(d[s.key]) || 0) / maxY) * cH * k;
+ if (alto <= 0.5) return;
  const esTope = s === vivos[vivos.length - 1];
  // 2px de fondo entre tramos apilados, para que se lean como dos partes y no una mancha.
  const hueco = !esTope && alto > 4 ? 2 : 0;
  const y = base - alto;
  ctx.fillStyle = colores[si];
- ctx.beginPath(); ctx.roundRect(x, y + hueco, barW, alto - hueco, esTope ? [4, 4, 0, 0] : 0); ctx.fill();
+ ctx.beginPath(); ctx.roundRect(x, y + hueco, barW, alto - hueco, esTope ? [Math.min(4, alto), Math.min(4, alto), 0, 0] : 0); ctx.fill();
  base = y;
  });
  ctx.globalAlpha = 1;
  const step = Math.ceil(data.length / 10);
  if (i % step === 0) {
- ctx.fillStyle = axis; ctx.font = "500 10px Inter,sans-serif"; ctx.textAlign = "center";
- ctx.fillText(String(d[xKey]).slice(5), x + barW / 2, H - 8);
+ ctx.fillStyle = hover === i ? `rgb(${cssVar("--c-content-muted")})` : axis;
+ ctx.font = "500 10px Inter,sans-serif"; ctx.textAlign = "center";
+ ctx.fillText(xLabel(d[xKey]), x + barW / 2, H - 8);
  }
  });
- }, [data, tramos, xKey, height, hover, width, themeKey]);
+ }, [data, tramos, xKey, height, hover, size, themeKey, t, stagger, n]);
 
  const onMove = (e) => {
  const g = geo.current;
@@ -384,12 +445,13 @@ export function BarChart({ data, xKey, yKey, series, color = "chart", height = 1
  const g = geo.current;
 
  return (
- <div ref={wrapRef} className="relative">
-  <canvas ref={ref} className="w-full cursor-crosshair" style={{ height }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
+ <div className={fill ? "flex flex-col flex-1 min-h-0" : ""}>
+  <div ref={wrapRef} className={`relative ${fill ? "flex-1 min-h-[200px]" : ""}`} style={fill ? undefined : { height }}>
+  <canvas ref={ref} className="absolute inset-0 w-full h-full cursor-crosshair" onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
   {punto && g && (
   <div
-   className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full px-2.5 py-2 rounded-lg bg-white dark:bg-surface-dark-3 border border-black/[0.08] dark:border-white/10 shadow-[0_8px_24px_-6px_rgb(0_0_0/0.2)] whitespace-nowrap"
-   style={{ left: g.pad.left + hover * g.slotW + g.slotW / 2, top: g.pad.top - 4 }}
+   className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full px-2.5 py-2 rounded-lg bg-white dark:bg-surface-dark-3 border border-black/[0.08] dark:border-white/10 shadow-[0_8px_24px_-6px_rgb(0_0_0/0.2)] whitespace-nowrap transition-[left] duration-150 ease-out"
+   style={{ left: g.pad.left + hover * g.slotW + g.slotW / 2, top: g.pad.top + g.cH * (1 - tramos.reduce((s, x) => s + (parseFloat(punto[x.key]) || 0), 0) / g.maxY) - 6 }}
   >
    <div className="text-[11px] text-content-subtle mb-0.5 tabular-nums">{String(punto[xKey])}</div>
    {tramos.map(s => (
@@ -401,6 +463,7 @@ export function BarChart({ data, xKey, yKey, series, color = "chart", height = 1
    ))}
   </div>
   )}
+  </div>
   {tramos.length > 1 && (
   <div className="flex items-center justify-center gap-4 mt-2">
    {tramos.map(s => (
@@ -457,12 +520,125 @@ export function Pagination({ page, totalPages, total, onPage }) {
  );
 }
 
+// ── Torta (dona) de parte del todo ────────────────────────────
+// Cuatro tonos fijos y "Otros" en gris. Validado para daltonismo en el orden azul, naranja,
+// aguamarina, ámbar, gris (y el gris vuelve a tocar el azul al cerrar el anillo): con un
+// quinto tono el magenta quedaba pegado al gris y no se distinguían. Tonos propios del modo
+// oscuro, no los mismos aclarados.
+const DONUT_SLOTS = {
+ light: ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"],
+ dark:  ["#3987e5", "#d95926", "#199e70", "#c98500"],
+};
+const DONUT_OTROS = { light: "#8a8a86", dark: "#6b6b68" };
+export const DONUT_MAX_SLOTS = DONUT_SLOTS.light.length;
+
+// Punto del anillo a un ángulo, con 0 arriba y en sentido horario.
+const polar = (c, r, a) => [c + r * Math.sin(a), c - r * Math.cos(a)];
+const ringPath = (c, ro, ri, a0, a1) => {
+ const large = a1 - a0 > Math.PI ? 1 : 0;
+ const [x0, y0] = polar(c, ro, a0), [x1, y1] = polar(c, ro, a1);
+ const [x2, y2] = polar(c, ri, a1), [x3, y3] = polar(c, ri, a0);
+ return `M${x0} ${y0}A${ro} ${ro} 0 ${large} 1 ${x1} ${y1}L${x2} ${y2}A${ri} ${ri} 0 ${large} 0 ${x3} ${y3}Z`;
+};
+
+// `slices`: [{ key, label, value, slot }] con `slot` 0..3 u "otros". El tono lo decide quien
+// llama según el peso de la entidad en el total, para que el mismo diario salga del mismo
+// color en todas las tortas de la pantalla aunque en una sea el más chico.
+export function DonutChart({ slices, size = 140, thickness = 18, format = fmt$, emptyTitle = "Sin cobros", emptyText }) {
+ useThemeKey();
+ const [active, setActive] = useState(null);
+ const modo = typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
+ const colorDe = (slot) => slot === "otros" ? DONUT_OTROS[modo] : DONUT_SLOTS[modo][slot];
+ const vivos = (slices || []).filter(s => s.value > 0);
+ const total = vivos.reduce((t, s) => t + s.value, 0);
+ // Entrada: el anillo se dibuja en barrido desde arriba y el total sube contando. La clave
+ // son los valores, no el arreglo, que quien llama arma de nuevo en cada render.
+ const t0 = useEntrance(vivos.map(s => `${s.key}:${s.value}`).join("|"), 900);
+ const e = easeOut(t0);
+
+ if (total <= 0) {
+  return (
+   <div className="flex flex-col items-center justify-center text-center py-8">
+    <div className="w-10 h-10 rounded-xl bg-surface-2 dark:bg-white/[0.05] flex items-center justify-center text-content-subtle mb-2">
+     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" /></svg>
+    </div>
+    <div className="text-[13px] font-semibold text-content dark:text-white">{emptyTitle}</div>
+    {emptyText && <div className="text-[12px] text-content-subtle mt-0.5">{emptyText}</div>}
+   </div>
+  );
+ }
+
+ const c = size / 2, ro = c, ri = c - thickness;
+ // 2px de aire entre tramos, medido a mitad del anillo.
+ const gap = vivos.length > 1 ? 2 / (ro - thickness / 2) : 0;
+ let a = 0;
+ const tramos = vivos.map(s => {
+  const span = (s.value / total) * Math.PI * 2;
+  const a0 = a + gap / 2, a1 = Math.max(a0 + 0.01, a + span - gap / 2);
+  a += span;
+  return { ...s, a0: a0 * e, a1: a1 * e, pct: (s.value / total) * 100 };
+ });
+ const circ = 2 * Math.PI * (ro - thickness / 2);
+ const sel = tramos.find(t => t.key === active);
+ const [pre, cifra] = (() => { const t = format(sel ? sel.value : total * e); const m = t.match(/^(\S+\.)\s(.*)$/); return m ? [m[1], m[2]] : ["", t]; })();
+ const toggle = (k) => setActive(x => x === k ? null : k);
+
+ return (
+  // En el teléfono la leyenda va debajo: al lado, los nombres de los diarios se cortaban.
+  <div className="flex flex-col sm:flex-row items-center gap-4 min-w-0" onMouseLeave={() => setActive(null)}>
+   <div className="relative shrink-0" style={{ width: size, height: size }}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={tramos.map(t => `${t.label}: ${t.pct.toFixed(1)}%`).join(", ")}>
+     {tramos.length === 1 ? (
+      <circle cx={c} cy={c} r={ro - thickness / 2} fill="none" strokeWidth={thickness} stroke={colorDe(tramos[0].slot)}
+       strokeDasharray={`${circ * e} ${circ}`} transform={`rotate(-90 ${c} ${c})`}
+       onMouseEnter={() => setActive(tramos[0].key)} onClick={() => toggle(tramos[0].key)} className="cursor-pointer" />
+     ) : tramos.filter(t => t.a1 - t.a0 > 0.001).map(t => (
+      <path key={t.key} d={ringPath(c, ro, ri, t.a0, t.a1)} fill={colorDe(t.slot)}
+       opacity={active && active !== t.key ? 0.3 : 1}
+       onMouseEnter={() => setActive(t.key)} onClick={() => toggle(t.key)}
+       className="cursor-pointer transition-opacity duration-150" />
+     ))}
+    </svg>
+    {/* Al centro, el total; con un tramo señalado, su porcentaje y su monto. */}
+    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center px-6">
+     <div className="text-[12px] text-content-subtle leading-tight tabular-nums">{sel ? `${sel.pct.toFixed(1)}%` : "Total"}</div>
+     <div className="mt-0.5 flex items-baseline gap-1 tabular-nums whitespace-nowrap">
+      {pre && <span className="text-[10px] text-content-subtle">{pre}</span>}
+      <span className="text-[15px] font-semibold text-content dark:text-white tracking-tight">{cifra}</span>
+     </div>
+    </div>
+   </div>
+   <ul className="w-full sm:w-auto sm:flex-1 min-w-0 space-y-0.5">
+    {tramos.map((t, i) => {
+     // La leyenda entra a la par del anillo, una fila tras otra.
+     const k = easeOut(t0 * 1.6 - i * 0.12);
+     return (
+     <li key={t.key} style={{ opacity: k, transform: `translateX(${(1 - k) * 8}px)` }}>
+      <button type="button" onMouseEnter={() => setActive(t.key)} onClick={() => toggle(t.key)}
+       title={t.label}
+       className={`w-full flex items-start gap-2 px-2 py-1 rounded-md text-left transition-colors ${active === t.key ? "bg-surface-2 dark:bg-white/[0.05]" : ""}`}>
+       <span className="w-2.5 h-2.5 mt-[3px] rounded-sm shrink-0" style={{ background: colorDe(t.slot) }} />
+       <span className="flex-1 min-w-0">
+        <span className="block text-[12px] font-medium text-content dark:text-white truncate">{t.label}</span>
+        <span className="block text-[12px] text-content-subtle tabular-nums truncate">{t.pct.toFixed(1)}% · {format(t.value)}</span>
+       </span>
+      </button>
+     </li>
+     );
+    })}
+   </ul>
+  </div>
+ );
+}
+
 export function HeatmapHours({ data }) {
+ // Las 24 columnas suben de izquierda a derecha, como si el día transcurriera.
+ const t = useEntrance(data, 600 + 23 * 18);
  if (!data?.length) return null;
  const maxRev = Math.max(...data.map(d => d.revenue), 1);
  return (
  <div>
- <div className="flex gap-1 items-end mb-1">
+ <div className="flex gap-1 items-end mb-1 h-[52px]">
  {Array.from({ length: 24 }, (_, h) => {
  const row = data.find(d => parseInt(d.hour) === h);
  const rev = parseFloat(row?.revenue || 0);
@@ -474,7 +650,7 @@ export function HeatmapHours({ data }) {
  <div
  className={`w-full rounded-[3px] ${rev > 0 ? "" : "bg-surface-3 dark:bg-white/[0.06]"}`}
  style={rev > 0
- ? { height: `${Math.max(6, intensity * 52)}px`, background: `rgb(var(--c-chart) / ${0.25 + intensity * 0.75})` }
+ ? { height: `${Math.max(2, Math.max(6, intensity * 52) * easeOut((t * (600 + 23 * 18) - h * 18) / 600))}px`, background: `rgb(var(--c-chart) / ${0.25 + intensity * 0.75})` }
  : { height: "4px" }}
  />
  </div>

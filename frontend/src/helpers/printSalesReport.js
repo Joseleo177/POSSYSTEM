@@ -140,23 +140,23 @@ export function printSalesReport(sales, productos, range, companyInfo, baseCurre
 
     <div class="kpis">
         <div class="kpi">
-            <div class="kpi-label">Ventas</div>
-            <div class="kpi-value">${esc(s.total_sales ?? 0)}</div>
-            <div class="kpi-sub">${parseInt(s.cancelled_count || 0) > 0
-                ? `${esc(s.cancelled_count)} anuladas aparte`
-                : "del período"}</div>
-        </div>
-        <div class="kpi">
             <div class="kpi-label">Facturado</div>
             <div class="kpi-value">${fmtP(s.total_revenue)}</div>
-            ${parseFloat(s.total_returned || 0) > 0
-                ? `<div class="kpi-sub">devoluciones: ${fmtP(s.total_returned)}</div>`
-                : `<div class="kpi-sub">cobrado y por cobrar</div>`}
+            <div class="kpi-sub">${[
+                `${esc(s.total_sales ?? 0)} ventas`,
+                parseFloat(s.total_returned || 0) > 0 ? `devol. ${fmtP(s.total_returned)}` : "",
+                parseInt(s.cancelled_count || 0) > 0 ? `${esc(s.cancelled_count)} anuladas aparte` : "",
+            ].filter(Boolean).join(" · ")}</div>
         </div>
         <div class="kpi">
-            <div class="kpi-label">Ticket promedio</div>
-            <div class="kpi-value">${fmtP(s.avg_ticket)}</div>
-            <div class="kpi-sub">máx: ${fmtP(s.max_sale)}</div>
+            <div class="kpi-label">Cobrado de ventas del día</div>
+            <div class="kpi-value">${fmtP(s.paid_same_day_amount)}</div>
+            <div class="kpi-sub">${esc(s.paid_same_day_count ?? 0)} cobros</div>
+        </div>
+        <div class="kpi">
+            <div class="kpi-label">Cobrado de ventas anteriores</div>
+            <div class="kpi-value">${fmtP(s.paid_older_amount)}</div>
+            <div class="kpi-sub">${esc(s.paid_older_sales ?? 0)} facturas de días previos</div>
         </div>
         <div class="kpi">
             <div class="kpi-label">Por cobrar</div>

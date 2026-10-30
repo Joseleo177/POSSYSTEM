@@ -6,11 +6,13 @@ import { printSalesReport } from "../../helpers/printSalesReport";
 import { useApp } from "../../context/AppContext";
 import { fmtNumber } from "../../helpers/numbers";
 import { toNameCase } from "../../helpers";
+import { fmtDateShort } from "../../helpers/dates";
 import {
  fmt$, fmtN, pct, METHOD_COLORS,
  useReport, defaultRange, useHourRange,
  DateRangePicker, HourRangePicker, NightShiftNotice, KpiCard, SectionHeader, Card, Loading,
  ExportButton, ProgressBar, BarChart, HeatmapHours, Callout, REPORT_BTN,
+ DonutChart, DONUT_MAX_SLOTS,
 } from "./reportes.utils";
 
 export default function SalesReport() {
@@ -63,6 +65,24 @@ export default function SalesReport() {
  // vieja entra a caja sin facturar hoy—, así que dividir entre las ventas daba porcentajes
  // que no sumaban 100.
  const totalCobrado = (data?.by_method || []).reduce((acc, m) => acc + parseFloat(m.total || 0), 0);
+ const anteriores = data?.older_payments || [];
+
+ // Tortas por diario. El color se asigna por el peso del diario en TODO lo cobrado, y el
+ // mismo diario lleva el mismo color en las tres aunque en una sea el más chico; los que no
+ // entran en los primeros tonos se juntan en "Otros".
+ const metodos = data?.by_method || [];
+ const tortaDe = (campo) => {
+  const slices = [];
+  let otros = 0;
+  metodos.forEach((m, i) => {
+   const v = parseFloat(m[campo]) || 0;
+   if (i < DONUT_MAX_SLOTS) slices.push({ key: String(i), label: toNameCase(m.method_name), value: v, slot: i });
+   else otros += v;
+  });
+  if (otros > 0) slices.push({ key: "otros", label: "Otros", value: otros, slot: "otros" });
+  return slices;
+ };
+ const [verTodos, setVerTodos] = useState(false);
  const [pdfLoading, setPdfLoading] = useState(false);
 
  // El desglose por producto no viene con el reporte de la pantalla —esta vista muestra
@@ -158,23 +178,61 @@ export default function SalesReport() {
  {!loading && !error && data && (
  <div className="lg:flex-1 lg:min-h-0 space-y-3 lg:overflow-auto">
  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
- {/* Los cuatro miden lo DESPACHADO —la mercancía salió del inventario, se haya cobrado o
-     no—, así que monto ÷ ventas vuelve a dar el ticket promedio de al lado. Las anuladas
-     no son ventas: van como nota al pie del volumen, no sumadas dentro. */}
- <KpiCard label="Volumen de ventas" value={fmtN(s.total_sales)} sub={s.cancelled_count > 0 ? `${fmtN(s.cancelled_count)} anuladas aparte` : null} icon="" color="text-content dark:text-white" />
- <KpiCard label="Facturado" value={fmt$(s.total_revenue)} sub={s.total_returned > 0 ? `Devol.: ${fmt$(s.total_returned)}` : "Cobrado y por cobrar"} icon="" color="text-content dark:text-white" />
- <KpiCard label="Ticket promedio" value={fmt$(s.avg_ticket)} sub={`Máx: ${fmt$(s.max_sale)}`} icon="" color="text-content dark:text-white" />
- <KpiCard label="Cuentas x cobrar" value={fmt$(s.pending_amount)} sub={`${s.pending_count} ventas · ya incluidas arriba`} icon="" color="text-danger" />
+ {/* Facturado y por cobrar miden lo DESPACHADO —la mercancía salió, se haya cobrado o no—.
+     Los dos del medio miden la CAJA por fecha del cobro y suman lo de "Canales de pago":
+     lo cobrado de ventas del mismo día y lo que entró por ventas de días anteriores. El
+     ticket promedio se quitó: no decía nada que sirviera para cuadrar. */}
+ <KpiCard
+  label="Facturado"
+  value={fmt$(s.total_revenue)}
+  sub={[
+   `${fmtN(s.total_sales)} ${s.total_sales === 1 ? "venta" : "ventas"}`,
+   s.total_returned > 0 && `devol. ${fmt$(s.total_returned)}`,
+   s.cancelled_count > 0 && `${fmtN(s.cancelled_count)} anuladas aparte`,
+  ].filter(Boolean).join(" · ")}
+ />
+ {/* En el teléfono la tarjeta mide media pantalla y el rótulo largo se cortaba. */}
+ <KpiCard
+  label={<><span className="sm:hidden">Cobrado del día</span><span className="hidden sm:inline">Cobrado de ventas del día</span></>}
+  value={fmt$(s.paid_same_day_amount)}
+  sub={`${fmtN(s.paid_same_day_count)} ${s.paid_same_day_count === 1 ? "cobro" : "cobros"}`}
+ />
+ <KpiCard
+  label={<><span className="sm:hidden">Deudas cobradas</span><span className="hidden sm:inline">Cobrado de ventas anteriores</span></>}
+  value={fmt$(s.paid_older_amount)}
+  sub={s.paid_older_sales > 0
+   ? <>{fmtN(s.paid_older_sales)} {s.paid_older_sales === 1 ? "factura" : "facturas"}<span className="hidden sm:inline"> · detalle abajo</span></>
+   : "Ninguna en el período"}
+ />
+ <KpiCard label="Cuentas x cobrar" value={fmt$(s.pending_amount)} sub={`${s.pending_count} ventas del período`} />
+ </div>
+
+ {/* Lo cobrado por diario: todo, lo de ventas del día y lo de ventas anteriores. Las tres
+     suman lo mismo que "Canales de pago", que queda abajo como la tabla con los Bs. */}
+ <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+ <Card>
+ <SectionHeader title="Cobros por diario" sub="Todo lo cobrado en el período" />
+ <DonutChart slices={tortaDe("total")} emptyText="No entró dinero en el período." />
+ </Card>
+ <Card>
+ <SectionHeader title="De ventas del día" sub="Cobrado el mismo día de la venta" />
+ <DonutChart slices={tortaDe("total_same_day")} emptyText="Ninguna venta se cobró el mismo día." />
+ </Card>
+ <Card>
+ <SectionHeader title="De ventas anteriores" sub="Deudas de días previos cobradas" />
+ <DonutChart slices={tortaDe("total_older")} emptyTitle="Sin cobros de días anteriores" emptyText="Todo lo cobrado fue de ventas del día." />
+ </Card>
  </div>
 
  <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
- <Card className="lg:col-span-2">
+ <Card className="lg:col-span-2 flex flex-col">
  {/* Ya no es flujo de caja: son las ventas del día, cobradas o no. El dinero que entró
-     por día vive en el reporte de Diarios de Pago, que sí se corta por fecha de cobro. */}
+     por día vive en el reporte de Diarios de Pago, que sí se corta por fecha de cobro.
+     `fill`: ocupa el alto que le da "Canales de pago" al lado, en vez de dejar un hueco. */}
  <SectionHeader title="Facturación cronológica" sub="Ventas por día" />
  {data.by_day.length > 0 ? (
- <div className="pt-2">
- <BarChart data={data.by_day} xKey="day" yKey="revenue" height={180} />
+ <div className="pt-2 flex-1 flex flex-col">
+ <BarChart data={data.by_day} xKey="day" yKey="revenue" fill />
  </div>
  ) : (
  <div className="h-[140px] flex items-center justify-center text-[12px] font-bold text-content-subtle">Sin data</div>
@@ -216,6 +274,49 @@ export default function SalesReport() {
  </div>
  </Card>
  </div>
+
+ {/* Solo aparece si hubo cobros de ventas viejas: un negocio de contado lo vería vacío todos
+     los días, y la tarjeta de arriba ya dice Ref. 0,00. */}
+ {anteriores.length > 0 && (
+ <Card>
+ <SectionHeader
+  title="Cobros de ventas anteriores"
+  sub="Facturas de días previos que se cobraron en el período"
+  right={<span className="text-[13px] font-semibold text-content dark:text-white tabular-nums whitespace-nowrap">{fmt$(s.paid_older_amount)}</span>}
+ />
+ <div className="divide-y divide-border/60 dark:divide-white/[0.06]">
+ {(verTodos ? anteriores : anteriores.slice(0, 8)).map(r => (
+ <div key={r.sale_id} className="py-2.5">
+ <div className="flex items-center justify-between gap-3">
+ <span className="text-[13px] font-semibold text-content dark:text-white truncate">
+  {toNameCase(r.customer_name) || "Venta casual"}
+  <span className="ml-1.5 font-normal text-content-subtle tabular-nums">{r.invoice_number || `#${r.sale_id}`}</span>
+ </span>
+ <span className="text-[13px] font-semibold text-content dark:text-white tabular-nums whitespace-nowrap">{fmt$(r.amount)}</span>
+ </div>
+ <div className="mt-0.5 flex items-center justify-between gap-3">
+ <span className="text-[12px] text-content-subtle truncate">
+  Venta del {fmtDateShort(r.sale_day)}
+  <span className="hidden sm:inline"> · {r.days === 1 ? "1 día" : `${fmtN(r.days)} días`} después</span>
+  {r.count > 1 && <span className="hidden sm:inline"> · {r.count} cobros</span>}
+ </span>
+ {r.still_pending
+  ? <span className="text-[12px] font-semibold text-amber-700 dark:text-amber-400 whitespace-nowrap">Abono, aún debe</span>
+  : <span className="text-[12px] text-content-subtle whitespace-nowrap">Saldada</span>}
+ </div>
+ </div>
+ ))}
+ </div>
+ {anteriores.length > 8 && (
+ <button
+  onClick={() => setVerTodos(v => !v)}
+  className="mt-2 text-[12px] font-semibold text-content-subtle hover:text-content dark:hover:text-white"
+ >
+  {verTodos ? "Ver menos" : `Ver las ${fmtN(anteriores.length)}`}
+ </button>
+ )}
+ </Card>
+ )}
 
  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
  <Card>

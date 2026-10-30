@@ -47,7 +47,15 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
     ? `AND p.sale_id IN (SELECT id FROM sales WHERE serie_id IN (${seriesPedidas.join(',')}))`
     : '';
 
-  const [summary, byMethod, byDay, byEmployee, byHour, bySerie] = await Promise.all([
+  // Un cobro es "de una venta vieja" cuando la venta es de un día anterior al del cobro. Con
+  // franja nocturna se compara la jornada, no el calendario: la cuenta abierta a las 23:50 y
+  // cobrada a las 00:10 es de la misma noche. Mismo universo que los canales de pago —todo
+  // cobro con diario, por fecha del cobro—, así que las dos cifras suman el total de esa lista.
+  // IS TRUE: un cobro cuya venta no aparece cuenta como del día, para no perderlo de ninguna
+  // de las dos mitades.
+  const ventaAnterior = `(${localDate('s.created_at', hours)} < ${localDate('p.created_at', hours)}) IS TRUE`;
+
+  const [summary, byMethod, byDay, byEmployee, byHour, bySerie, cobrosAnteriores] = await Promise.all([
     sequelize.query(
       // Resumen del período, todo sobre lo DESPACHADO: la mercancía salió del inventario, se
       // haya cobrado o no. El WHERE lo recorta una sola vez para que las siete cifras hablen
@@ -112,8 +120,17 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
          COALESCE(c.is_base, true) AS is_base,
          COUNT(p.id)::int AS count,
          COALESCE(SUM(p.amount), 0)::float AS total,
-         COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS total_journal
+         COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)), 0)::float AS total_journal,
+         -- Lo mismo partido por el día de la venta: de ventas del día y de ventas anteriores.
+         -- Alimenta las tortas por diario y las dos tarjetas de cobrado de arriba.
+         COUNT(p.id) FILTER (WHERE NOT ${ventaAnterior})::int AS count_same_day,
+         COALESCE(SUM(p.amount) FILTER (WHERE NOT ${ventaAnterior}), 0)::float AS total_same_day,
+         COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)) FILTER (WHERE NOT ${ventaAnterior}), 0)::float AS total_journal_same_day,
+         COUNT(p.id) FILTER (WHERE ${ventaAnterior})::int AS count_older,
+         COALESCE(SUM(p.amount) FILTER (WHERE ${ventaAnterior}), 0)::float AS total_older,
+         COALESCE(SUM(p.amount * COALESCE(p.exchange_rate, 1)) FILTER (WHERE ${ventaAnterior}), 0)::float AS total_journal_older
        FROM payments p
+       LEFT JOIN sales s ON s.id = p.sale_id
        LEFT JOIN payment_journals pj ON p.payment_journal_id = pj.id
        LEFT JOIN currencies c ON c.id = pj.currency_id
        LEFT JOIN LATERAL (
@@ -177,7 +194,31 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
+    // Detalle de esas ventas viejas, una fila por factura: a quién se le cobró, de cuándo era
+    // y si todavía debe. Recortado a 100 por monto; el total de arriba no depende del recorte.
+    sequelize.query(
+      `SELECT s.id AS sale_id,
+              s.invoice_number,
+              c.name AS customer_name,
+              ${localDate('s.created_at')}::text AS sale_day,
+              MAX(p.created_at) AS paid_at,
+              (MAX(${localDate('p.created_at')}) - ${localDate('s.created_at')})::int AS days,
+              COUNT(p.id)::int AS count,
+              COALESCE(SUM(p.amount), 0)::float AS amount,
+              (s.status IN (${UNPAID_SQL})) AS still_pending,
+              -- Cuántas facturas son en total, antes del LIMIT: la tarjeta de arriba las cuenta todas.
+              COUNT(*) OVER ()::int AS total_rows
+       FROM payments p
+       JOIN sales s ON s.id = p.sale_id
+       LEFT JOIN customers c ON c.id = s.customer_id
+       WHERE p.payment_journal_id IS NOT NULL AND ${ventaAnterior} ${tcP} ${whPay} ${sePay} ${dP}
+       GROUP BY s.id, s.invoice_number, c.name, s.created_at, s.status
+       ORDER BY amount DESC
+       LIMIT 100`,
+      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+    ),
   ]);
+  const sumar = (k) => byMethod.reduce((t, m) => t + (parseFloat(m[k]) || 0), 0);
 
   const s = summary[0] || {};
   return {
@@ -192,7 +233,13 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
       total_returned: parseFloat(s.total_returned || 0),
       total_forgiven: parseFloat(s.total_forgiven || 0),
       cancelled_count: parseInt(s.cancelled_count || 0),
+      paid_same_day_amount: sumar('total_same_day'),
+      paid_same_day_count:  sumar('count_same_day'),
+      paid_older_amount:    sumar('total_older'),
+      paid_older_count:     sumar('count_older'),
+      paid_older_sales:     cobrosAnteriores[0]?.total_rows || 0,
     },
+    older_payments: cobrosAnteriores,
     by_method:   byMethod,
     by_day:      byDay,
     by_employee: byEmployee,
