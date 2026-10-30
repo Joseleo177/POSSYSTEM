@@ -1,5 +1,7 @@
 {
   "rewrites": [
+    { "source": "/catalogo/:slug/p/:id", "destination": "/api/vitrina?slug=:slug&p=:id" },
+    { "source": "/catalogo/:slug", "destination": "/api/vitrina?slug=:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
@@ -13,6 +15,10 @@
     {
       "source": "/index.html",
       "headers": [{ "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }]
+    },
+    {
+      "source": "/mesa/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }]
     },
     {
       "source": "/manifest.webmanifest",

@@ -47,6 +47,30 @@ router.get("/:slug/products", publicLimiter, async (req, res) => {
   }
 });
 
+// Cabecera HTML de un enlace compartido (título, foto, precio para Google). La pide la función
+// de Vercel del frontend, no el navegador: todas las vitrinas llegan desde las mismas IPs de
+// Vercel, así que lleva su propio tope, más holgado que el de la navegación. Y como la CDN
+// guarda la respuesta unos minutos, cada enlace la pide pocas veces.
+const metaLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1500,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiadas solicitudes." },
+});
+
+router.get("/:slug/meta", metaLimiter, async (req, res) => {
+  try {
+    const data = await svc.getMeta(req.params.slug, req.query.p ?? null);
+    if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
+    if (data.product === undefined) return res.status(404).json({ ok: false, message: "Producto no disponible", data: { store: data.store } });
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error("[public-catalog:meta]", err.message);
+    res.status(500).json({ ok: false, message: "Error al cargar el catálogo" });
+  }
+});
+
 // La ficha de un producto: el destino de un enlace compartido por WhatsApp. Mismo 404 para
 // "no existe", "es de otra empresa" y "la tienda lo despublicó" — un enlace viejo no debe
 // contar qué pasó con el producto.

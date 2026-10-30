@@ -1401,7 +1401,80 @@ async function reportPayment(token, saleId, body = {}) {
   });
 }
 
+// Lo mínimo para la cabecera HTML de un enlace compartido: título, descripción y foto para la
+// vista previa de WhatsApp y Facebook, y el precio para los datos estructurados de Google. Lo
+// pide la función de Vercel del frontend (api/vitrina.js), que no ejecuta la vitrina: por eso
+// va aparte de getStore/getProduct, que traen banners, categorías, variantes y adicionales.
+//
+// El precio es el de la sucursal principal (la primera que vende), con su descuento vigente:
+// el enlace no dice en qué sucursal compra el cliente. Solo en dólares; si la moneda base de
+// la empresa no es USD no se publica precio.
+async function getMeta(token, productId) {
+  const company_id = await resolveCompanyId(token);
+  if (!company_id) return null;
+
+  return tenantStorage.run({ company_id }, async () => {
+    const rows = await Setting.findAll({
+      where: { key: { [Op.in]: ["store_name", "store_slogan", "store_address", "store_city", "store_phone", "logo_filename"] } },
+      attributes: ["key", "value"],
+    });
+    const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    const store = {
+      name: s.store_name || "Catálogo",
+      slogan: s.store_slogan || null,
+      address: s.store_address || null,
+      city: s.store_city || null,
+      phone: s.store_phone || null,
+      logo_url: imageUrl(s.logo_filename),
+    };
+    if (productId == null) return { store, product: null };
+
+    const id = parseInt(productId, 10);
+    if (!Number.isInteger(id)) return { store, product: undefined };
+    const p = await Product.findOne({
+      where: { id, visible_in_catalog: true, sellable: true },
+      attributes: ["id", "name", "image_filename", "brand", "short_description", "description", "price", "stock", "is_service", "is_combo", "is_variant_parent"],
+    });
+    // undefined = la tienda existe pero el producto no: la función responde 404.
+    if (!p) return { store, product: undefined };
+
+    const [base, principal] = await Promise.all([
+      Currency.findOne({ where: { active: true, is_base: true }, attributes: ["code"] }),
+      Warehouse.findOne({ where: { active: true, sells: true }, attributes: ["id"], order: [["sort_order", "ASC"], ["name", "ASC"]] }),
+    ]);
+    let precio = parseFloat(p.price);
+    let stock = parseFloat(p.stock || 0);
+    if (principal) {
+      const ficha = await ProductStock.findOne({ where: { warehouse_id: principal.id, product_id: p.id }, attributes: ["qty", "price"] });
+      if (ficha) {
+        stock = parseFloat(ficha.qty);
+        if (ficha.price != null) precio = parseFloat(ficha.price);
+      }
+    }
+    if (base?.code === "USD" && precio > 0) {
+      precio = aplicarDescuento(precio, (await descuentosVigentes(principal?.id || null)).pct[p.id]).price;
+    } else {
+      precio = null;
+    }
+
+    return {
+      store,
+      product: {
+        id: p.id,
+        name: p.name,
+        brand: p.brand || null,
+        description: p.short_description || splitParagraphs(p.description)[0] || null,
+        image_url: imageUrl(p.image_filename),
+        price_usd: precio,
+        // Combos, servicios y modelos con tallas no tienen un stock propio que leer barato:
+        // para ellos no se publica disponibilidad.
+        available: p.is_service || p.is_combo || p.is_variant_parent ? null : stock > 0,
+      },
+    };
+  });
+}
+
 module.exports = {
-  getStore, getProducts, getProduct, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
+  getStore, getProducts, getProduct, getMeta, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };
