@@ -1,62 +1,37 @@
 // src/App.jsx
-import { AppProvider } from "./context/AppContext";
-import { CartProvider } from "./context/CartContext";
+import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
-import PosApp from "./components/PosApp";
-import PublicCatalogPage from "./pages/PublicCatalogPage";
-import MesaPublicPage from "./pages/MesaPublicPage";
+import { getPublicCatalogRoute, getMesaRoute } from "./publicRoutes";
 
 // El proyecto no usa react-router: PosApp maneja toda la navegación interna. Para el
 // catálogo público basta con mirar la URL una vez, antes de montar nada.
 //
 // Tiene que quedar FUERA de AppProvider/CartProvider: esos contextos piden sesión al
 // arrancar y mandarían al login a un cliente que solo abrió el enlace.
-// El enlace lleva el nombre de la tienda (/catalogo/el-gran-terminal), así que el guion es
-// parte de la dirección. Se pasa a minúsculas porque un enlace dictado por teléfono se
-// escribe como sea y tiene que llegar igual a la tienda.
-// La dirección admite dos formas: la tienda (/catalogo/el-gran-terminal) y la ficha de un
-// producto (/catalogo/el-gran-terminal/p/45), que es el enlace que la tienda comparte por
-// WhatsApp. El id inicial solo se lee aquí una vez; abrir y cerrar fichas navegando dentro
-// del catálogo lo maneja usePublicCatalog con el historial del navegador.
-function getPublicCatalogRoute() {
-    const m = window.location.pathname.match(/^\/catalogo\/([A-Za-z0-9-]+)(?:\/p\/(\d+))?\/?$/);
-    return m ? { slug: m[1].toLowerCase(), productId: m[2] ? parseInt(m[2], 10) : null } : null;
-}
-
-// QR de la mesa (/mesa/<código>): el cliente ve cómo va su pedido. Igual que el catálogo, va
-// fuera de la sesión.
-function getMesaRoute() {
-    const m = window.location.pathname.match(/^\/mesa\/([A-Za-z0-9_-]{12,32})\/?$/);
-    return m ? m[1] : null;
-}
+//
+// Cada entrada se carga aparte (lazy): el cliente que abre una vitrina desde el teléfono
+// baja solo la vitrina, no el ERP entero. La ruta se decide una sola vez al abrir, así que
+// no hay cambios de pantalla que esperen una descarga a mitad de uso.
+const ErpApp = lazy(() => import("./ErpApp"));
+const PublicCatalogPage = lazy(() => import("./pages/PublicCatalogPage"));
+const MesaPublicPage = lazy(() => import("./pages/MesaPublicPage"));
 
 export default function App() {
     const catalogRoute = getPublicCatalogRoute();
     const mesaToken = getMesaRoute();
 
-    if (mesaToken) {
-        return (
-            <ErrorBoundary>
-                <MesaPublicPage token={mesaToken} />
-            </ErrorBoundary>
-        );
-    }
+    let page;
+    if (mesaToken) page = <MesaPublicPage token={mesaToken} />;
+    else if (catalogRoute) page = <PublicCatalogPage token={catalogRoute.slug} initialProductId={catalogRoute.productId} />;
+    else page = <ErpApp />;
 
-    if (catalogRoute) {
-        return (
-            <ErrorBoundary>
-                <PublicCatalogPage token={catalogRoute.slug} initialProductId={catalogRoute.productId} />
-            </ErrorBoundary>
-        );
-    }
-
+    // Sin indicador de carga: la descarga dura un instante y un parpadeo de spinner se ve peor
+    // que la pantalla vacía de siempre mientras arranca React.
     return (
         <ErrorBoundary>
-            <AppProvider>
-                <CartProvider>
-                    <PosApp />
-                </CartProvider>
-            </AppProvider>
+            <Suspense fallback={null}>
+                {page}
+            </Suspense>
         </ErrorBoundary>
     );
 }
