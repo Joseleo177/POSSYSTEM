@@ -3,6 +3,7 @@ import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 import { toNameCase } from "../../../helpers";
 import Money from "../../../components/ui/Money";
+import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 
 // Rejilla de la vitrina de marca. Misma paginación por scroll que la estándar; lo que cambia
 // es la tarjeta, que aquí muestra lo que muestran las tiendas de marca: la línea del producto
@@ -176,24 +177,17 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     ficha se quedaba corta: en una fila donde las demás sí lo tenían, el precio
                     del agotado se iba al fondo dejando un boquete en medio. */}
                 {canOrder && (
-                    <button
-                        onClick={() => onAdd(p, showPromo)}
+                    <AddToCartButton
+                        onAdd={() => onAdd(p, showPromo)}
                         disabled={!p.available || !hasPrice}
-                        className={[
-                            "mt-3 h-10 rounded-full text-[13px] font-semibold",
-                            "flex items-center justify-center gap-1.5",
-                            "transition-all duration-200 enabled:active:scale-[0.97]",
-                            !p.available || !hasPrice
-                                ? "border border-border/70 dark:border-white/10 text-content-subtle cursor-not-allowed"
-                                : inCart
-                                    ? "bg-brand-500/10 text-brand-500 border border-brand-500/30 hover:bg-brand-500/15"
-                                    : "bg-brand-500 text-white hover:brightness-110",
-                        ].join(" ")}
+                        instant={!!p.has_variants || !!p.addons?.length}
+                        soft={!!inCart}
+                        className="mt-3 h-10 text-[13px]"
                     >
                         {!p.available ? "Agotado"
                             : !hasPrice ? "Consultar"
                                 : inCart ? "Agregar otro" : "Agregar al carrito"}
-                    </button>
+                    </AddToCartButton>
                 )}
             </div>
         </article>

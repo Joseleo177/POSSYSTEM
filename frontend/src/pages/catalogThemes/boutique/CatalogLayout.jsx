@@ -219,7 +219,7 @@ export default function CatalogLayout({ catalog, token }) {
             </div>
 
             <StoreFooter
-                store={store} categories={categories} onPickCategory={setCategory}
+                store={store}
                 pegado={!productId && enPortada && features?.length > 0}
             />
 

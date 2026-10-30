@@ -90,6 +90,32 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 .ring-grow     { animation: ring-grow .45s cubic-bezier(.2, .9, .25, 1.2) both; }
 .burst-dot     { animation: burst .7s .2s cubic-bezier(.1, .7, .3, 1) both; }
 
+/* Vitrina boutique.
+   - add-fill / add-check / add-spark: el botón "Agregar al carrito" se llena como una barra de
+     carga, dibuja el visto y suelta chispas (AddToCartButton). La barra dura lo mismo que la
+     fase "Agregando" (520 ms) y luego se desvanece mientras se lee "Agregado".
+   - word-in / swash-draw: el lema entra palabra por palabra y el trazo bajo su final se dibuja.
+   - marquee: la cinta de frases cortas de la tienda; se detiene al pasar el cursor.
+   - reveal-up: las piezas de una sección suben al entrar en pantalla (--i es su posición). */
+@keyframes add-fill { 0% { transform: scaleX(0); opacity: 1; } 35% { transform: scaleX(1); opacity: 1; } 70%, 100% { transform: scaleX(1); opacity: 0; } }
+@keyframes add-spark {
+  0% { transform: rotate(var(--a)) translateY(0) scale(1); opacity: 1; }
+  100% { transform: rotate(var(--a)) translateY(-15px) scale(.2); opacity: 0; }
+}
+@keyframes word-in { from { opacity: 0; transform: translateY(.45em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes swash-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@keyframes footer-up { 0% { transform: none; } 45% { transform: translateY(-160%); opacity: 0; } 46% { transform: translateY(160%); opacity: 0; } 100% { transform: none; opacity: 1; } }
+@keyframes reveal-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.add-fill  { animation: add-fill 1.47s cubic-bezier(.65, 0, .35, 1) both; }
+.add-check { stroke-dasharray: 30; animation: check-draw .32s ease-out both; }
+.add-spark { animation: add-spark .5s .05s cubic-bezier(.1, .7, .3, 1) both; }
+.word-in   { display: inline-block; animation: word-in .6s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 70ms); }
+.swash-draw { stroke-dasharray: 1; animation: swash-draw .7s cubic-bezier(.65, 0, .35, 1) both; }
+.marquee   { animation: marquee var(--dur, 30s) linear infinite; }
+.marquee:hover { animation-play-state: paused; }
+.reveal-up { animation: reveal-up .55s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 55ms); }
+
 /* Página del QR de la mesa: la cocina "se ve" trabajar.
    - bell-ring: la campana del "ya está listo" y de "pediste la cuenta".
    - bar-shimmer: brillo que recorre la barra mientras el plato se prepara.
@@ -116,6 +142,9 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in { animation: none; }
   .catalog-sheet-in, .cart-bump, .badge-pop, .cart-toast-in, .fab-in, .rise-in, .ring-grow { animation: none; }
   .bell-ring, .bar-shimmer, .flame-flicker, .dot-wave > span { animation: none; }
+  .add-fill, .add-spark { display: none; }
+  .add-check, .swash-draw { animation: none; stroke-dasharray: none; }
+  .word-in, .marquee, .reveal-up { animation: none; }
   .check-draw { animation: none; stroke-dasharray: none; }
   .burst-dot { display: none; }
 }

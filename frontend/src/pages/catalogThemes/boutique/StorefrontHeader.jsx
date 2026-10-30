@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getSocialLinks } from "./socialLinks";
 import StoreLogo from "./StoreLogo";
-import { toNameCase } from "../../../helpers";
+import { toNameCase, resolveImageUrl, imgRetryOnError } from "../../../helpers";
 
 // Cabecera de tienda de marca: franja de anuncio, logo centrado, iconos de cliente y una
 // barra de menú con las categorías que la tienda destacó.
@@ -29,6 +29,101 @@ const IconBtn = ({ onClick, label, badge, children }) => (
         )}
     </button>
 );
+
+// La barra de categorías. Antes era la fila de pestañas subrayadas de cualquier plantilla; ahora
+// cada categoría lleva su foto en miniatura y la elegida se marca con una píldora que SE
+// DESLIZA desde la anterior, en vez de que una raya se apague aquí y se encienda allá: el ojo
+// sigue el movimiento y entiende qué cambió.
+//
+// Desplazable en horizontal: en un teléfono no caben cinco categorías y partirlas en dos filas
+// descoloca la cabecera. Al elegir una que asoma a medias, el carril la trae al centro.
+function MenuCategorias({ entradas, categories, category, setCategory }) {
+    const carril = useRef(null);
+    const botones = useRef(new Map());
+    const [pildora, setPildora] = useState(null);
+    // La primera medida se pinta sin transición: si no, la píldora entraría deslizándose
+    // desde el borde izquierdo al cargar la página.
+    const [lista, setLista] = useState(false);
+    const activa = category ? String(category) : "";
+    const fotoDe = (id) => categories.find((c) => c.id === id)?.image_url || null;
+
+    const medir = useCallback(() => {
+        const b = botones.current.get(activa);
+        if (!b) { setPildora(null); return; }
+        setPildora({ x: b.offsetLeft, w: b.offsetWidth });
+    }, [activa]);
+
+    useLayoutEffect(() => { medir(); }, [medir, entradas.length]);
+    useEffect(() => {
+        if (pildora && !lista) requestAnimationFrame(() => setLista(true));
+    }, [pildora, lista]);
+    useEffect(() => {
+        const el = carril.current;
+        if (!el || typeof ResizeObserver === "undefined") return;
+        const ro = new ResizeObserver(medir);
+        ro.observe(el);
+        // Las fuentes web cambian el ancho del texto al terminar de cargar.
+        document.fonts?.ready?.then(medir);
+        return () => ro.disconnect();
+    }, [medir]);
+
+    useEffect(() => {
+        const b = botones.current.get(activa);
+        const el = carril.current;
+        if (!b || !el || el.scrollWidth <= el.clientWidth) return;
+        el.scrollTo({ left: b.offsetLeft - (el.clientWidth - b.offsetWidth) / 2, behavior: "smooth" });
+    }, [activa]);
+
+    const items = [{ key: "", label: "Todo", foto: null }, ...entradas.map((e) => ({
+        key: String(e.category_id), label: toNameCase(e.label), foto: fotoDe(e.category_id), badge: e.badge,
+    }))];
+
+    return (
+        <nav className="border-t border-border/40 dark:border-white/[0.04]">
+            <div ref={carril} className="relative max-w-6xl mx-auto px-4 py-2 flex items-center gap-1 overflow-x-auto scrollbar-hide">
+                {pildora && (
+                    <span
+                        aria-hidden="true"
+                        className={`absolute top-2 h-9 rounded-full bg-brand-500/10 dark:bg-brand-500/20 ring-1 ring-inset ring-brand-500/25 ${lista ? "transition-[transform,width] duration-500 ease-[cubic-bezier(0.34,1.4,0.5,1)] motion-reduce:transition-none" : ""}`}
+                        style={{ left: 0, width: pildora.w, transform: `translateX(${pildora.x}px)` }}
+                    />
+                )}
+                {items.map((it) => {
+                    const sel = it.key === activa;
+                    return (
+                        <button
+                            key={it.key || "todo"}
+                            ref={(n) => { if (n) botones.current.set(it.key, n); else botones.current.delete(it.key); }}
+                            type="button"
+                            onClick={() => setCategory(it.key)}
+                            aria-current={sel ? "page" : undefined}
+                            className={`relative shrink-0 h-9 rounded-full flex items-center gap-2 text-[13px] font-semibold whitespace-nowrap transition-colors duration-300 ${it.foto || !it.key ? "pl-1 pr-3.5" : "px-3.5"} ${sel
+                                ? "text-brand-600 dark:text-brand-400"
+                                : "text-content-muted hover:text-content dark:hover:text-white"}`}
+                        >
+                            {it.key === "" ? (
+                                <span className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-300 ${sel ? "bg-brand-500 text-white" : "bg-surface-2 dark:bg-white/[0.06]"}`}>
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 5h6v6H4zM14 5h6v6h-6zM4 15h6v4H4zM14 15h6v4h-6z" />
+                                    </svg>
+                                </span>
+                            ) : it.foto && (
+                                <img src={resolveImageUrl(it.foto)} alt="" loading="lazy" onError={imgRetryOnError}
+                                    className={`w-7 h-7 rounded-full object-cover ring-2 transition-[box-shadow,transform] duration-300 ${sel ? "ring-brand-500 scale-105" : "ring-transparent"}`} />
+                            )}
+                            {it.label}
+                            {it.badge && (
+                                <span className="px-1.5 py-px rounded-full bg-brand-500 text-white text-[9px] font-semibold">
+                                    {it.badge}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+        </nav>
+    );
+}
 
 export default function StorefrontHeader({
     store, identity, categories, menu,
@@ -180,38 +275,10 @@ export default function StorefrontHeader({
                 </div>
 
                 {entradas.length > 0 && (
-                    <nav className="border-t border-border/40 dark:border-white/[0.04]">
-                        {/* Desplazable en horizontal: en un teléfono no caben cinco categorías
-                            con sus etiquetas, y partirlas en dos filas descoloca la cabecera. */}
-                        <div className="max-w-6xl mx-auto px-4 flex items-center gap-1 overflow-x-auto scrollbar-hide">
-                            <button
-                                type="button"
-                                onClick={() => setCategory("")}
-                                className={`shrink-0 h-11 px-3 text-[13px] font-semibold transition-colors border-b-2 ${!category
-                                    ? "text-brand-500 border-brand-500"
-                                    : "text-content-muted border-transparent hover:text-content dark:hover:text-white"}`}
-                            >
-                                Todo
-                            </button>
-                            {entradas.map((e) => (
-                                <button
-                                    key={e.category_id}
-                                    type="button"
-                                    onClick={() => setCategory(String(e.category_id))}
-                                    className={`relative shrink-0 h-11 px-3 text-[13px] font-semibold transition-colors border-b-2 ${String(category) === String(e.category_id)
-                                        ? "text-brand-500 border-brand-500"
-                                        : "text-content-muted border-transparent hover:text-content dark:hover:text-white"}`}
-                                >
-                                    {toNameCase(e.label)}
-                                    {e.badge && (
-                                        <span className="absolute -top-0.5 right-0 px-1.5 py-px rounded-full bg-brand-500 text-white text-[9px] font-semibold whitespace-nowrap">
-                                            {e.badge}
-                                        </span>
-                                    )}
-                                </button>
-                            ))}
-                        </div>
-                    </nav>
+                    <MenuCategorias
+                        entradas={entradas} categories={categories}
+                        category={category} setCategory={setCategory}
+                    />
                 )}
             </div>
         </header>

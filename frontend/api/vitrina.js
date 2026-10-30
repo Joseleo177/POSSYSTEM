@@ -47,26 +47,34 @@ const recortar = (s, n) => {
 // el backend, que es quien las sirve.
 const absoluta = (url, base) => (!url ? null : /^https?:\/\//i.test(url) ? url : `${base}${url}`);
 
-// WhatsApp no muestra la vista previa si la foto pasa de unos 300 KB. Casi todas pesan mucho
-// menos (en octubre de 2026, 42 de 4.935 la pasaban), así que se mira el peso con un HEAD y
-// solo las pesadas se piden a la transformación de Supabase, que se cobra por imagen distinta
-// al mes. A 500 px hasta un PNG grande queda por debajo: WhatsApp no pide WebP, y sin WebP
-// Supabase devuelve el mismo formato. Solo para la vista previa: el JSON-LD lleva la original.
+// La foto de la vista previa tiene que ser JPEG o PNG de menos de unos 300 KB. Con una WebP
+// WhatsApp en iPhone arma la tarjeta grande pero la deja borrosa (solo usa la miniatura), y
+// con una muy pesada no la muestra. Casi todas las fotos ya sirven (en octubre de 2026, de
+// 4.935: 484 WebP y 42 de más de 300 KB), así que se mira con un HEAD y solo las que no
+// sirven se piden a la transformación de Supabase, que se cobra por imagen distinta al mes.
+//
+// format=origin es lo que la saca en JPEG: sin él Supabase responde WebP a quien lo acepte, y
+// "jpeg" no es un valor admitido. Con origin una WebP sale en JPEG y una PNG sigue en PNG.
+// Una PNG pesada se lleva a 500 px (la más pesada del bucket queda en 218 KB); el resto a 800.
+// Solo para la vista previa: el JSON-LD lleva la original.
 const PESO_MAX_PREVIEW = 300 * 1024;
 const OBJETO_PUBLICO = "/storage/v1/object/public/";
 
 async function fotoPreview(url) {
   if (!url || !url.includes(OBJETO_PUBLICO)) return url;
+  let tipo;
   try {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 1500);
     const r = await fetch(url, { method: "HEAD", signal: ctrl.signal }).finally(() => clearTimeout(t));
     const peso = parseInt(r.headers.get("content-length"), 10);
-    if (!(peso > PESO_MAX_PREVIEW)) return url;
+    tipo = String(r.headers.get("content-type") || "").toLowerCase();
+    if (/image\/(jpe?g|png)/.test(tipo) && !(peso > PESO_MAX_PREVIEW)) return url;
   } catch {
     return url; // sin respuesta: mejor la original que ninguna
   }
-  return `${url.replace(OBJETO_PUBLICO, "/storage/v1/render/image/public/")}?width=500&height=500&resize=contain&quality=75`;
+  const lado = tipo.includes("png") ? 500 : 800;
+  return `${url.replace(OBJETO_PUBLICO, "/storage/v1/render/image/public/")}?width=${lado}&height=${lado}&resize=contain&quality=75&format=origin`;
 }
 
 // JSON dentro de <script>: "</script>" en un nombre de producto cerraría la etiqueta.

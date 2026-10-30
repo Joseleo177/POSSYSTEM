@@ -3,6 +3,7 @@ import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
 import Money from "../../../components/ui/Money";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 import VariantOptions, { useVariantSelection, lineaDeVariante } from "../../../components/PublicCatalog/VariantOptions";
+import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 
 // Página propia del producto: /catalogo/<tienda>/p/<id>. Es lo que la tienda comparte por
 // WhatsApp o Instagram — el enlace de un producto suelto, no de la vitrina entera — así que
@@ -221,20 +222,13 @@ export default function ProductDetail({
                         {(canOrder || waHref) && (
                             <div className="mt-5 flex flex-col sm:flex-row gap-2">
                                 {canOrder && (
-                                    <button
-                                        onClick={agregar}
+                                    // flex-1 solo en fila (sm): en la columna del teléfono
+                                    // reparte el ALTO y aplastaba el botón.
+                                    <AddToCartButton
+                                        onAdd={agregar}
                                         disabled={!listoParaAgregar}
-                                        className={[
-                                            // flex-1 solo en fila (sm): en la columna del
-                                            // teléfono reparte el ALTO y aplastaba el botón.
-                                            "w-full sm:w-auto sm:flex-1 shrink-0 h-12 px-6 rounded-full",
-                                            "text-[14px] font-semibold",
-                                            "flex items-center justify-center gap-2",
-                                            "transition-all duration-200 enabled:active:scale-[0.98]",
-                                            !listoParaAgregar
-                                                ? "border border-border/70 dark:border-white/10 text-content-subtle cursor-not-allowed"
-                                                : "bg-brand-500 text-white hover:brightness-110",
-                                        ].join(" ")}
+                                        instant={!!p.addons?.length}
+                                        className="w-full sm:w-auto sm:flex-1 shrink-0 h-12 px-3 text-[14px]"
                                     >
                                         {listoParaAgregar && (
                                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17M17 17a2 2 0 100 4 2 2 0 000-4zM9 19a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -244,7 +238,7 @@ export default function ProductDetail({
                                             : !disponible ? "Agotado" : !hasPrice ? "Consultar precio" : enCarrito
                                                 ? `En tu carrito · ${fmtQtyUnit(enCarrito.qty, p.unit)}`
                                                 : "Agregar al carrito"}
-                                    </button>
+                                    </AddToCartButton>
                                 )}
                                 {/* Preguntar antes de comprar: sobre todo si está agotado o
                                     sin precio, que es cuando el botón principal no sirve. */}
