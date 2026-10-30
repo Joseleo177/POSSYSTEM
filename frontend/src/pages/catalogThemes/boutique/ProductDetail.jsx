@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
-import Money from "../../../components/ui/Money";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 import VariantOptions, { useVariantSelection, lineaDeVariante } from "../../../components/PublicCatalog/VariantOptions";
 import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
@@ -29,12 +28,12 @@ export default function ProductDetail({
         return (
             <main className="max-w-5xl mx-auto px-4 py-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
-                    <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
+                    <div className="aspect-square rounded-2xl skeleton" />
                     <div className="space-y-3 pt-2">
-                        <div className="h-3 w-24 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                        <div className="h-7 w-3/4 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                        <div className="h-4 w-1/2 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                        <div className="h-9 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse mt-4" />
+                        <div className="h-3 w-24 rounded-full skeleton" />
+                        <div className="h-7 w-3/4 rounded-full skeleton" />
+                        <div className="h-4 w-1/2 rounded-full skeleton" />
+                        <div className="h-9 w-1/3 rounded-full skeleton mt-4" />
                     </div>
                 </div>
             </main>
@@ -175,7 +174,7 @@ export default function ProductDetail({
                                 {hasPrice ? (
                                     <>
                                         <div className="flex items-baseline gap-2.5 flex-wrap">
-                                            <Money value={fmt(precioDe.price, baseCur)} className="text-[30px] font-bold tracking-tight text-content dark:text-white leading-none" />
+                                            <span className="text-[30px] font-bold tracking-tight tabular-nums text-content dark:text-white leading-none">{fmt(precioDe.price, baseCur)}</span>
                                             {enOferta && (
                                                 <span className="text-[15px] font-medium text-content-subtle line-through tabular-nums leading-none">
                                                     {fmt(precioDe.price_before, baseCur)}

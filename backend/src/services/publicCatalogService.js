@@ -610,19 +610,17 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
            WHERE v.parent_id = "Product"."id" AND vps.warehouse_id = ${whId} AND vps.qty > 0)`
       : `EXISTS (SELECT 1 FROM products v WHERE v.parent_id = "Product"."id" AND v.stock > 0)`;
 
-    // "Destacados" = lo que la propia tienda ya decidió resaltar: un combo (siempre es
-    // una oferta armada), un producto con descuento de porcentaje, o uno con una promo
-    // "compra y lleva" vigente. No es una nueva bandera que el comercio tenga que mantener
-    // aparte — sale sola de datos que ya existen.
+    // "Destacados" = las ofertas vigentes: un producto con descuento de porcentaje o con una
+    // promo "compra y lleva". No es una nueva bandera que el comercio tenga que mantener
+    // aparte — sale sola de datos que ya existen. Los combos ya no entran por ser combos:
+    // muchos son productos compuestos (un kit, un plato con receta) y no rebajas; un combo
+    // con su propio descuento sí aparece, por estar en la lista de promociones.
     if (featured) {
       const conPromo = [
         ...Object.keys(descuentos.pct).map((id) => parseInt(id, 10)),
         ...Object.keys(descuentos.bxg).map((id) => parseInt(id, 10)),
       ];
-      where[Op.or] = [
-        { is_combo: true },
-        { id: { [Op.in]: conPromo.length ? conPromo : [-1] } },
-      ];
+      where.id = { [Op.in]: conPromo.length ? conPromo : [-1] };
     }
 
     const { rows, count } = await Product.findAndCountAll({

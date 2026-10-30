@@ -178,7 +178,7 @@ export default function PaymentFields({ options, value, onChange, owedBase, late
                                 <label className="block min-w-0">
                                     <span className={skin.label}>Monto pagado</span>
                                     <div className="relative mt-1.5">
-                                        <span className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] ${skin.subtle} pointer-events-none`}>{op.currency?.symbol}</span>
+                                        <span className={`absolute left-3.5 top-1/2 -translate-y-1/2 text-[13px] ${skin.subtle} pointer-events-none`}>{op.currency?.code === "USD" ? "$" : op.currency?.symbol}</span>
                                         <input value={value.amount} onChange={e => set("amount", e.target.value.replace(/[^\d.,]/g, ""))}
                                             inputMode="decimal" autoComplete="off" className={`${skin.field} pl-11 tabular-nums`} />
                                     </div>

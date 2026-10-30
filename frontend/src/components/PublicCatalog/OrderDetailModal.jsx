@@ -178,7 +178,7 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur,
                                             <span className={`text-[14px] font-medium ${skin.ink} min-w-0 truncate`}>
                                                 {p.method_name}{p.bank_name ? ` · ${p.bank_name}` : ""}
                                             </span>
-                                            <Money value={`${p.currency_symbol} ${p.amount.toFixed(2)}`} className={`text-[14px] font-semibold ${skin.ink} shrink-0`} />
+                                            <Money value={/^ref\.?$/i.test(String(p.currency_symbol || "").trim()) ? `$${p.amount.toFixed(2)}` : `${p.currency_symbol} ${p.amount.toFixed(2)}`} className={`text-[14px] font-semibold ${skin.ink} shrink-0`} />
                                         </div>
                                         <div className="mt-0.5 flex items-center justify-between gap-3">
                                             <span className={`text-[12px] ${skin.subtle} tabular-nums truncate`}>Ref. {p.reference}</span>

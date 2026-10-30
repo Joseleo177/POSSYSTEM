@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 import { toNameCase } from "../../../helpers";
-import Money from "../../../components/ui/Money";
 import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
 
 // Rejilla de la vitrina de marca. Misma paginación por scroll que la estándar; lo que cambia
@@ -113,9 +112,9 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                 )}
 
                 {inCart && (
-                    <span className="absolute bottom-2.5 left-2.5 h-6 px-2 rounded-full bg-brand-500 text-white text-[10px] font-bold flex items-center gap-1 shadow-md animate-in zoom-in-50 duration-300 tabular-nums">
+                    <span key={inCart.qty} className="absolute bottom-2.5 left-2.5 h-6 px-2 rounded-full bg-brand-500 text-white text-[11px] font-semibold flex items-center gap-1 shadow-md badge-pop tabular-nums">
                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                        {fmtQtyUnit(inCart.qty, p.unit)}
+                        {fmtQtyUnit(inCart.qty, p.unit).toLowerCase()}
                     </span>
                 )}
             </a>
@@ -155,7 +154,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, index, 
                     {hasPrice ? (
                         <>
                             <div className="flex items-baseline gap-2 flex-wrap">
-                                <Money value={fmt(p.price, baseCur)} className="text-[17px] font-bold tracking-tight text-content dark:text-white leading-none" />
+                                <span className="text-[18px] font-bold tracking-tight tabular-nums text-content dark:text-white leading-none">{fmt(p.price, baseCur)}</span>
                                 {enOferta && (
                                     <span className="text-[12px] font-medium text-content-subtle line-through tabular-nums leading-none">
                                         {fmt(p.price_before, baseCur)}
@@ -235,11 +234,11 @@ export default function BoutiqueGrid({
                 <div className="grid grid-cols-2 sm:grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-x-4 gap-y-8">
                     {Array.from({ length: 8 }).map((_, i) => (
                         <div key={i}>
-                            <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
+                            <div className="aspect-square rounded-2xl skeleton" />
                             <div className="pt-3 space-y-2">
-                                <div className="h-2.5 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                <div className="h-3 w-3/4 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                <div className="h-4 w-1/2 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
+                                <div className="h-2.5 w-1/3 rounded-full skeleton" />
+                                <div className="h-3 w-3/4 rounded-full skeleton" />
+                                <div className="h-4 w-1/2 rounded-full skeleton" />
                             </div>
                         </div>
                     ))}

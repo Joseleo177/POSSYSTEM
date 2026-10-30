@@ -32,6 +32,32 @@ import StoreFooter from "./StoreFooter";
 // Los diálogos (carrito, mis pedidos, perfil, salir) se reutilizan del tema estándar: son
 // pantallas de trámite, ya están resueltas y rehacerlas solo multiplicaría los sitios donde
 // arreglar un error.
+function PortadaCargando() {
+    return (
+        <div className="min-h-screen bg-surface-2 dark:bg-surface-dark" aria-busy="true" aria-label="Cargando la tienda">
+            <div className="bg-surface dark:bg-surface-dark-2 border-b border-border/60 dark:border-white/[0.06]">
+                <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-center">
+                    <div className="skeleton w-28 h-9 rounded-xl" />
+                </div>
+                <div className="max-w-6xl mx-auto px-4 h-[52px] flex items-center gap-3 overflow-hidden">
+                    {[72, 96, 120, 84, 104].map((w, i) => (
+                        <div key={i} className="skeleton h-8 rounded-full shrink-0" style={{ width: w }} />
+                    ))}
+                </div>
+            </div>
+            <div className="skeleton h-[42vw] max-h-[460px] min-h-[220px] rounded-none" />
+            <div className="max-w-6xl mx-auto px-4 pt-12">
+                <div className="skeleton h-6 w-48 rounded-full mb-5" />
+                <div className="flex gap-5 overflow-hidden">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="skeleton shrink-0 w-[152px] sm:w-[184px] lg:w-[206px] aspect-[4/5] rounded-[26px]" />
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function CatalogLayout({ catalog, token }) {
     const {
         dark, toggle,
@@ -71,6 +97,11 @@ export default function CatalogLayout({ catalog, token }) {
             </div>
         );
     }
+
+    // Mientras llega la tienda, un esqueleto con la forma de la portada. Antes se dibujaba la
+    // página real con la tienda vacía: cabecera sin logo, "Ofertas" con un carril invisible y
+    // un pie con "© 2026" y nada más. Se leía como una tienda rota, no como una que carga.
+    if (!store) return <PortadaCargando />;
 
     // Identificarse y elegir tienda van como hojas ENCIMA de la portada real —cabecera,
     // carrusel, lema y categorías, que cargan sin identidad— y no como pantallas sueltas: el

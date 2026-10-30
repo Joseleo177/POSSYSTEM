@@ -110,7 +110,7 @@ export default function CategoryProductRow({
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                     </button>
                 )}
-                {(bordes.der || products === null) && (
+                {bordes.der && (
                     <button
                         type="button"
                         onClick={() => desplazar(1)}
@@ -125,11 +125,11 @@ export default function CategoryProductRow({
                     {products === null
                         ? Array.from({ length: 4 }).map((_, i) => (
                             <div key={i} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
-                                <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
+                                <div className="aspect-square rounded-2xl skeleton" />
                                 <div className="pt-3 space-y-2">
-                                    <div className="h-2.5 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                    <div className="h-3 w-3/4 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                    <div className="h-4 w-1/2 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
+                                    <div className="h-2.5 w-1/3 rounded-full skeleton" />
+                                    <div className="h-3 w-3/4 rounded-full skeleton" />
+                                    <div className="h-4 w-1/2 rounded-full skeleton" />
                                 </div>
                             </div>
                         ))

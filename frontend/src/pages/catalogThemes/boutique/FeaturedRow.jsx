@@ -2,14 +2,17 @@ import { useState, useEffect, useRef } from "react";
 import { publicApi } from "../../../services/api";
 import { Card } from "./BoutiqueGrid";
 
-// Carril de "Ofertas y combos" en la portada, antes de las categorías: lo que la propia
-// tienda ya decidió resaltar —precio rebajado o un combo armado— se ve primero, no
-// mezclado en medio del catálogo. Es el mismo carril que CategoryProductRow, con la
-// diferencia de qué le pide al servidor: `featured=true` en vez de una categoría, que el
-// backend resuelve como "combo, o con descuento vigente" (ver publicCatalogService).
+// Carril de "Ofertas" en la portada, antes de las categorías: lo que tiene un descuento o una
+// promo "compra y lleva" vigente se ve primero, no mezclado en medio del catálogo. Es el mismo
+// carril que CategoryProductRow, con la diferencia de qué le pide al servidor:
+// `featured=true` en vez de una categoría (ver publicCatalogService).
 //
-// Si la tienda no tiene ninguna oferta ni combo activo ahora mismo, la sección entera no
-// se dibuja — nada que mostrar es distinto de una franja vacía con un título encima.
+// Antes también entraban todos los combos, y muchos no son ofertas sino productos compuestos
+// (un kit armado, un plato con receta): llenaban el carril de cosas sin rebaja. Un combo
+// solo aparece si tiene su propio descuento.
+//
+// Mientras carga no se dibuja nada, ni siquiera el título: si resulta que hoy no hay ofertas,
+// el título con un esqueleto debajo aparecía y desaparecía, y se veía como una sección rota.
 const LIMITE = 12;
 
 export default function FeaturedRow({
@@ -45,7 +48,7 @@ export default function FeaturedRow({
         return () => { el.removeEventListener("scroll", actualizar); ro.disconnect(); };
     }, [products]);
 
-    if (products?.length === 0) return null;
+    if (!products?.length) return null;
 
     const desplazar = (dir) => {
         const el = scrollerRef.current;
@@ -59,7 +62,7 @@ export default function FeaturedRow({
                 <span className="w-7 h-7 rounded-full bg-brand-500/15 text-brand-500 flex items-center justify-center shrink-0">
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.568 3H5.25A2.25 2.25 0 003 5.25v4.318c0 .597.237 1.17.659 1.591l9.581 9.581c.699.699 1.78.872 2.607.33a18.095 18.095 0 005.223-5.223c.542-.827.369-1.908-.33-2.607L11.16 3.66A2.25 2.25 0 009.568 3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M6 6h.008v.008H6V6z" /></svg>
                 </span>
-                <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white">Ofertas y combos</h2>
+                <h2 className="text-[20px] font-bold tracking-tight text-content dark:text-white">Ofertas</h2>
             </div>
 
             <div className="relative">
@@ -80,7 +83,7 @@ export default function FeaturedRow({
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
                     </button>
                 )}
-                {(bordes.der || products === null) && (
+                {bordes.der && (
                     <button
                         type="button"
                         onClick={() => desplazar(1)}
@@ -95,11 +98,11 @@ export default function FeaturedRow({
                     {products === null
                         ? Array.from({ length: 4 }).map((_, i) => (
                             <div key={i} className="w-[42vw] max-w-[180px] sm:max-w-none sm:w-[calc((100%_-_2rem)/3)] md:w-[calc((100%_-_3rem)/4)] lg:w-[calc((100%_-_4rem)/5)] shrink-0 snap-start">
-                                <div className="aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] animate-pulse" />
+                                <div className="aspect-square rounded-2xl skeleton" />
                                 <div className="pt-3 space-y-2">
-                                    <div className="h-2.5 w-1/3 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                    <div className="h-3 w-3/4 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
-                                    <div className="h-4 w-1/2 rounded-full bg-surface-2 dark:bg-white/[0.05] animate-pulse" />
+                                    <div className="h-2.5 w-1/3 rounded-full skeleton" />
+                                    <div className="h-3 w-3/4 rounded-full skeleton" />
+                                    <div className="h-4 w-1/2 rounded-full skeleton" />
                                 </div>
                             </div>
                         ))

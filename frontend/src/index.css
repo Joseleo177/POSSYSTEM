@@ -105,6 +105,20 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 @keyframes word-in { from { opacity: 0; transform: translateY(.45em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes swash-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* Esqueleto de carga de la vitrina. Antes era bg-surface-2 sobre una página bg-surface-2: el
+   bloque no se veía y la sección parecía rota (un título y una flecha sobre la nada). Ahora
+   es un gris que sí se distingue, con un brillo que lo recorre para que se lea "cargando". */
+@keyframes skeleton-sweep { from { background-position: -150% 0; } to { background-position: 250% 0; } }
+.skeleton {
+  background-color: rgb(17 24 39 / .07);
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .6) 50%, transparent 100%);
+  background-size: 60% 100%; background-repeat: no-repeat;
+  animation: skeleton-sweep 1.4s ease-in-out infinite;
+}
+.dark .skeleton {
+  background-color: rgb(255 255 255 / .06);
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / .07) 50%, transparent 100%);
+}
 @keyframes footer-up { 0% { transform: none; } 45% { transform: translateY(-160%); opacity: 0; } 46% { transform: translateY(160%); opacity: 0; } 100% { transform: none; opacity: 1; } }
 @keyframes reveal-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
 .add-fill  { animation: add-fill 1.47s cubic-bezier(.65, 0, .35, 1) both; }
@@ -144,7 +158,7 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   .bell-ring, .bar-shimmer, .flame-flicker, .dot-wave > span { animation: none; }
   .add-fill, .add-spark { display: none; }
   .add-check, .swash-draw { animation: none; stroke-dasharray: none; }
-  .word-in, .marquee, .reveal-up { animation: none; }
+  .word-in, .marquee, .reveal-up, .skeleton { animation: none; }
   .check-draw { animation: none; stroke-dasharray: none; }
   .burst-dot { display: none; }
 }

@@ -249,10 +249,10 @@ export function usePublicCatalog(token, initialProductId = null) {
     const fmt = (amount, cur) => {
         if (!cur) return "";
         const value = parseFloat(amount) * (cur.is_base ? 1 : cur.exchange_rate);
-        // Mismo formato que el resto del sistema ("Ref. 36.00", "Bs. 30926.26"): con espacio y
-        // sin separador de miles. El cliente ve el mismo número que le dirá la caja y el del
-        // ticket; con el formato local convivían dos convenciones para el mismo precio.
-        return `${cur.symbol} ${value.toFixed(2)}`;
+        // Sin separador de miles, como el resto del sistema: el cliente ve el mismo número que
+        // le dirá la caja y el del ticket. El "$" va pegado ("$36.00"); los símbolos con
+        // letras llevan espacio ("Bs. 30926.26").
+        return cur.symbol === "$" ? `$${value.toFixed(2)}` : `${cur.symbol} ${value.toFixed(2)}`;
     };
 
     const ordersEnabled = !!store?.orders_enabled;
@@ -544,7 +544,12 @@ export function usePublicCatalog(token, initialProductId = null) {
                 // El catálogo hereda el color de la empresa: para el cliente final esta
                 // página es la tienda, no un módulo del POS.
                 if (r.data.store?.brand_color) applyBrandColor(r.data.store.brand_color);
-                setCurrencies(r.data.currencies || []);
+                // En la vitrina el dólar se escribe "$", no "Ref.": "Ref." es lenguaje de caja
+                // (el monto de referencia del ERP) y al cliente final no le dice nada. Se
+                // cambia aquí, en la fuente, para que precios, carrito, pedido y el mensaje
+                // de WhatsApp digan lo mismo.
+                setCurrencies((r.data.currencies || []).map((c) =>
+                    c.code === "USD" || /^ref\.?$/i.test(String(c.symbol || "").trim()) ? { ...c, symbol: "$" } : c));
                 setCategories(r.data.categories || []);
                 setWarehouses(r.data.warehouses || []);
                 setBanners(r.data.banners || []);
