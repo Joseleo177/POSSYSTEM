@@ -55,63 +55,95 @@ const Check = ({ className = "w-4 h-4", draw = false }) => (
 
 const TARJETA = "rounded-[22px] bg-white ring-1 ring-black/[0.05] shadow-[0_1px_3px_rgba(0,0,0,0.05)]";
 
+// 31-10-2026, "más limpio": un icono con el estado y una barra fina de tres tramos, en vez de
+// tres círculos con su rótulo, una píldora y un aro verde alrededor de la tarjeta.
 function Ronda({ r, index }) {
     const e = ESTADO[r.status] || ESTADO.nueva;
     const servida = r.status === "entregada";
     const lista = r.status === "lista";
+    const icono = servida ? null : r.status === "preparando" ? I.llama : lista ? I.campana : I.recibo;
     return (
-        <div style={{ "--i": index }}
-            className={`rise-in ${TARJETA} px-4 py-4 transition-shadow ${lista ? "ring-2 ring-emerald-500 shadow-[0_10px_28px_-12px_rgba(16,185,129,.7)]" : ""}`}>
-            <div className="flex items-center justify-between gap-3">
-                <div className="text-[13px] text-neutral-500 tabular-nums">
-                    <span className="font-semibold text-neutral-900">Ronda {r.n}</span> · {fmtTime(r.sent_at)}
-                </div>
-                <span className={`h-7 px-2.5 rounded-full text-[12px] font-semibold flex items-center gap-1.5 ${e.tono} ${e.pill}`}>
-                    {r.status === "preparando" && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}
-                    {r.status === "nueva" && <span className="w-2 h-2 rounded-full bg-sky-500 animate-pulse" />}
-                    {(lista || servida) && <Check className="w-3.5 h-3.5" />}
-                    {e.txt}
+        <div style={{ "--i": index }} className={`rise-in ${TARJETA} px-4 py-4`}>
+            <div className="flex items-center gap-3">
+                <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${e.pill} ${e.tono}`}>
+                    {servida
+                        ? <Check className="w-[18px] h-[18px]" />
+                        : <span className={r.status === "preparando" ? "flame-flicker" : lista ? "bell-ring" : ""}><Ico d={icono} className="w-5 h-5" /></span>}
                 </span>
+                <div className="min-w-0 flex-1">
+                    <div className={`text-[15px] font-semibold leading-tight ${servida ? "text-neutral-500" : "text-neutral-900"}`}>{e.txt}</div>
+                    <div className="text-[12px] text-neutral-500 tabular-nums mt-0.5">Ronda {r.n} · {fmtTime(r.sent_at)}</div>
+                </div>
             </div>
 
-            {/* Recibido → Preparando → Listo, con icono por paso. Servido ya no necesita la barra. */}
+            {/* Recibido → Preparando → Listo. Servido ya no necesita la barra. */}
             {!servida && (
-                <div className="mt-4 grid grid-cols-3" aria-label={`Estado: ${e.txt}`}>
+                <div className="mt-3.5 grid grid-cols-3 gap-1.5" aria-label={`Estado: ${e.txt}`}>
                     {PASOS.map((p, i) => {
                         const hecho = i < e.paso;
                         const actual = i === e.paso - 1;
-                        const color = lista ? "bg-emerald-500" : "bg-brand-500";
                         return (
-                            <div key={p.label} className="relative flex flex-col items-center">
-                                {i > 0 && (
-                                    <span className="absolute top-[17px] right-1/2 w-full h-1 rounded-full bg-black/[0.07] overflow-hidden" aria-hidden="true">
-                                        <span className={`block h-full rounded-full transition-all duration-700 ${color} ${hecho ? "w-full" : "w-0"}`} />
-                                        {actual && !lista && <span className="absolute inset-0 bar-shimmer" />}
-                                    </span>
-                                )}
-                                <span className={`relative z-10 w-9 h-9 rounded-full flex items-center justify-center transition-colors duration-500 ${hecho ? `${color} text-white` : "bg-black/[0.05] text-neutral-400"} ${actual && !lista ? "ring-4 ring-brand-500/20" : ""}`}>
-                                    <span className={actual && i === 1 ? "flame-flicker" : actual && i === 2 ? "bell-ring" : ""}>
-                                        <Ico d={p.d} className="w-[18px] h-[18px]" />
-                                    </span>
-                                </span>
-                                <span className={`mt-1.5 text-[11px] ${hecho ? "font-semibold text-neutral-900" : "text-neutral-400"}`}>{p.label}</span>
-                            </div>
+                            <span key={p.label} className="relative h-1.5 rounded-full bg-black/[0.07] overflow-hidden" aria-hidden="true">
+                                <span className={`absolute inset-y-0 left-0 rounded-full transition-all duration-700 ${lista ? "bg-emerald-500" : "bg-brand-500"} ${hecho ? "w-full" : "w-0"}`} />
+                                {actual && !lista && <span className="absolute inset-0 bar-shimmer" />}
+                            </span>
                         );
                     })}
                 </div>
             )}
 
-            <ul className={`mt-4 pt-3 border-t border-black/[0.06] space-y-2 ${servida ? "opacity-60" : ""}`}>
-                {r.items.map((it, i) => (
-                    <li key={i} className="flex gap-3 text-[14px] text-neutral-900">
-                        <span className="h-6 min-w-[24px] px-1.5 rounded-lg bg-black/[0.05] text-[12px] font-bold tabular-nums flex items-center justify-center shrink-0">{cant(it.quantity)}</span>
-                        <span className="min-w-0 pt-0.5">
-                            {it.name}
-                            {it.modifiers && <span className="block text-[12px] text-neutral-500 leading-snug mt-0.5">{it.modifiers}</span>}
-                        </span>
-                    </li>
-                ))}
-            </ul>
+            <Lineas items={r.items} apagada={servida} />
+        </div>
+    );
+}
+
+// Lo que lleva una ronda o un pedido: cantidad, plato y debajo sus adicionales.
+function Lineas({ items, apagada = false }) {
+    return (
+        <ul className={`mt-3.5 pt-3 border-t border-black/[0.06] space-y-1.5 ${apagada ? "opacity-60" : ""}`}>
+            {items.map((it, i) => (
+                <li key={i} className="flex gap-2.5 text-[14px] text-neutral-900">
+                    <span className="w-5 text-right text-neutral-500 tabular-nums shrink-0">{cant(it.quantity)}</span>
+                    <span className="min-w-0">
+                        {it.name}
+                        {it.modifiers && <span className="block text-[12px] text-neutral-500 leading-snug">{it.modifiers}</span>}
+                    </span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+// "2 × Lomo apanado (Papas fritas), 1 × Café" → líneas. Así arma el resumen el servidor
+// (mesaPublica.pedir); se parte solo antes de "N × " para no romper un nombre con coma.
+const lineasDe = (summary) => String(summary || "").split(/, (?=\d+(?:[.,]\d+)? × )/).filter(Boolean).map(t => {
+    const m = /^(\d+(?:[.,]\d+)?) × (.+?)(?: \(([^()]*)\))?$/.exec(t.trim());
+    return m ? { quantity: m[1].replace(",", "."), name: m[2], modifiers: m[3] || null } : { quantity: "", name: t, modifiers: null };
+});
+
+// Un pedido hecho desde el QR que todavía no es una ronda: espera al mesonero, o lo rechazó.
+// 31-10-2026: antes era una franja con el resumen en una sola línea corrida y no se leía qué
+// se estaba esperando; ahora va como una ronda más, con cada plato en su línea.
+function PedidoQr({ o, index }) {
+    const rechazado = o.status === "rechazado";
+    return (
+        <div style={{ "--i": index }} className={`rise-in ${TARJETA} px-4 py-4`}>
+            <div className="flex items-center gap-3">
+                <span className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${rechazado ? "bg-red-500/10 text-red-600" : "bg-amber-500/15 text-amber-700"}`}>
+                    {rechazado
+                        ? <Ico d="M6 18L18 6M6 6l12 12" className="w-[18px] h-[18px]" w={2.2} />
+                        : <Ico d={I.reloj} className="w-5 h-5 animate-spin [animation-duration:3s]" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                    <div className="text-[15px] font-semibold leading-tight text-neutral-900">
+                        {rechazado ? "El mesonero no pudo tomarlo" : "Esperando al mesonero"}
+                    </div>
+                    <div className={`text-[12px] mt-0.5 ${rechazado ? "text-red-600" : "text-neutral-500"}`}>
+                        {rechazado ? (o.reason || "Pídeselo directamente al mesonero.") : `Enviado a las ${fmtTime(o.created_at)} · lo confirma y pasa a la cocina`}
+                    </div>
+                </div>
+            </div>
+            <Lineas items={lineasDe(o.summary)} apagada={rechazado} />
         </div>
     );
 }
@@ -205,42 +237,62 @@ export default function MesaPublicPage({ token }) {
         );
     }
 
-    const sym = d.currency?.symbol || "Ref.";
+    // Como en la vitrina (30-10-2026): de cara al cliente la moneda base es "$", no "Ref.".
+    const base = d.currency?.symbol || "";
+    const sym = !base || /^(ref\.?|usd|\$)$/i.test(base) ? "$" : base;
     const enBs = d.currency?.bs_rate && d.currency?.bs_symbol ? d.total * d.currency.bs_rate : null;
     const hayListas = d.rounds.some(r => r.status === "lista");
     const enCocina = d.rounds.filter(r => r.status === "nueva" || r.status === "preparando").length;
+    const porConfirmar = (d.qr_orders || []).some(o => o.status === "pendiente");
+    const yaPidio = d.open || porConfirmar;
+    // Lo que la mesa ya pidió y todavía no llega: se ve también dentro de la carta, para no
+    // pedir dos veces lo mismo mientras se espera.
+    const enCurso = [
+        ...(d.qr_orders || []).filter(o => o.status === "pendiente")
+            .map(o => ({ estado: "Esperando al mesonero", tono: "bg-amber-500", items: lineasDe(o.summary) })),
+        ...d.rounds.filter(r => r.status !== "entregada")
+            .map(r => ({ estado: (ESTADO[r.status] || ESTADO.nueva).txt, tono: r.status === "lista" ? "bg-emerald-500" : r.status === "preparando" ? "bg-amber-500" : "bg-sky-500", items: r.items })),
+    ];
 
     return (
         <div className="min-h-[100dvh] bg-[#F6F4F1] text-neutral-900">
             <div className="max-w-[560px] mx-auto px-4 pb-12">
                 {/* Cabecera: la tienda y la mesa, en el color de la tienda, con el "en vivo"
                     que dice que esto se mueve solo. */}
-                <header className="rise-in relative mt-4 mb-4 rounded-[28px] overflow-hidden bg-brand-500 text-brand-ink px-5 pt-5 pb-5 shadow-[0_18px_40px_-18px_rgb(var(--c-brand-700)/0.9)]">
-                    <span className="absolute inset-0 bg-gradient-to-br from-white/20 via-transparent to-black/20" aria-hidden="true" />
-                    <span className="absolute -right-10 -top-12 w-44 h-44 rounded-full bg-white/10" aria-hidden="true" />
-                    <span className="absolute -right-4 top-16 w-24 h-24 rounded-full bg-white/[0.07]" aria-hidden="true" />
-                    <div className="relative flex items-center gap-3">
-                        {d.store.logo_url && (
-                            <span className="h-12 max-w-[120px] px-2 rounded-2xl bg-black/25 backdrop-blur flex items-center">
-                                <img src={resolveImageUrl(d.store.logo_url)} alt="" className="h-9 w-auto object-contain" />
+                {/* 31-10-2026, "más limpio": sin círculos de adorno ni el nombre repetido al lado
+                    del logo. El logo (o el nombre, si no hay logo) y el "en vivo" arriba; la mesa
+                    y cómo va, abajo. */}
+                <header className={`rise-in relative mt-4 mb-4 rounded-[28px] overflow-hidden px-5 pt-4 pb-5 ${d.store.cover_url ? "bg-neutral-900 text-white" : "bg-brand-500 text-brand-ink"}`}>
+                    {/* Con foto del local (la portada de su catálogo), la cabecera es esa foto. */}
+                    {d.store.cover_url ? (
+                        <>
+                            <img src={resolveImageUrl(d.store.cover_url)} alt="" className="hero-zoom absolute inset-0 w-full h-full object-cover" />
+                            <span className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/25" aria-hidden="true" />
+                        </>
+                    ) : (
+                        <span className="absolute inset-0 bg-gradient-to-b from-white/10 to-black/10" aria-hidden="true" />
+                    )}
+                    <div className="relative flex items-center justify-between gap-3 min-h-[40px]">
+                        {d.store.logo_url ? (
+                            <span className="h-10 max-w-[160px] px-2.5 rounded-xl flex items-center" style={{ backgroundColor: d.store.bg_color || "#FFFFFF" }}>
+                                <img src={resolveImageUrl(d.store.logo_url)} alt={d.store.name} className="h-7 w-auto object-contain" />
                             </span>
+                        ) : (
+                            <span className="text-[14px] font-semibold truncate">{d.store.name}</span>
                         )}
-                        <div className="min-w-0 flex-1">
-                            <div className="text-[13px] opacity-85 truncate">{d.store.name}</div>
-                            <span className="mt-1 inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full bg-black/20 text-[11px] font-semibold">
-                                <span className="relative flex w-2 h-2">
-                                    <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping" />
-                                    <span className="relative w-2 h-2 rounded-full bg-emerald-400" />
-                                </span>
-                                En vivo
+                        <span className="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-black/15 text-[12px] font-medium">
+                            <span className="relative flex w-1.5 h-1.5">
+                                <span className="absolute inset-0 rounded-full bg-emerald-300 animate-ping" />
+                                <span className="relative w-1.5 h-1.5 rounded-full bg-emerald-300" />
                             </span>
-                        </div>
+                            En vivo
+                        </span>
                     </div>
-                    <div className="relative mt-5">
-                        <h1 className="font-display text-[38px] font-bold tracking-tight leading-none">{d.table.name}</h1>
-                        <div className="mt-1.5 text-[14px] opacity-90">
+                    <div className="relative mt-7">
+                        <h1 className="font-display text-[36px] font-bold tracking-tight leading-none">{d.table.name}</h1>
+                        <div className="mt-2 text-[14px] opacity-85">
                             {d.table.area ? `${d.table.area} · ` : ""}
-                            {!d.open ? "Bienvenido" : enCocina > 0 ? `${enCocina} ${enCocina === 1 ? "ronda" : "rondas"} en la cocina` : "Todo servido"}
+                            {porConfirmar && !enCocina && !hayListas ? "Pedido por confirmar" : !d.open ? "Bienvenido" : hayListas ? "Tu pedido está listo" : enCocina > 0 ? `${enCocina} ${enCocina === 1 ? "ronda" : "rondas"} en la cocina` : "Todo servido"}
                         </div>
                     </div>
                 </header>
@@ -249,11 +301,11 @@ export default function MesaPublicPage({ token }) {
                 {d.ordering && (
                     <div className="mb-5">
                         <button onClick={() => { setEnviado(null); setMenuAbierto(true); }}
-                            className={`w-full h-14 rounded-[20px] text-[15px] font-semibold flex items-center gap-3 pl-2 pr-5 active:scale-[0.99] transition-all ${d.open ? `${TARJETA} hover:ring-black/[0.12]` : "bg-neutral-900 text-white shadow-lg"}`}>
-                            <span className={`w-10 h-10 rounded-2xl flex items-center justify-center ${d.open ? "bg-brand-500 text-brand-ink" : "bg-white/15"}`}>
+                            className={`w-full h-14 rounded-[20px] text-[15px] font-semibold flex items-center gap-3 pl-2 pr-5 active:scale-[0.99] transition-all ${yaPidio ? `${TARJETA} hover:ring-black/[0.12]` : "bg-neutral-900 text-white shadow-lg"}`}>
+                            <span className={`w-10 h-10 rounded-2xl flex items-center justify-center ${yaPidio ? "bg-brand-500 text-brand-ink" : "bg-white/15"}`}>
                                 <Ico d={I.mas} className="w-5 h-5" w={2.4} />
                             </span>
-                            <span className="flex-1 text-left">{d.open ? "Pedir algo más" : "Hacer mi pedido"}</span>
+                            <span className="flex-1 text-left">{yaPidio ? "Pedir algo más" : "Hacer mi pedido"}</span>
                             <Ico d="M9 5l7 7-7 7" className="w-4 h-4 opacity-50" w={2.2} />
                         </button>
                         {enviado && (
@@ -267,24 +319,11 @@ export default function MesaPublicPage({ token }) {
 
                 {/* Pedidos hechos desde aquí que todavía no son una ronda */}
                 {d.qr_orders?.length > 0 && (
-                    <section className="mb-5 space-y-2">
-                        {d.qr_orders.map((o, i) => (
-                            <div key={o.id} style={{ "--i": i }}
-                                className={`rise-in rounded-[20px] px-4 py-3.5 flex gap-3 ${o.status === "rechazado" ? "bg-white ring-1 ring-red-500/40" : "bg-amber-50 ring-1 ring-amber-500/40"}`}>
-                                <span className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${o.status === "rechazado" ? "bg-red-500/10 text-red-600" : "bg-amber-500/15 text-amber-700"}`}>
-                                    {o.status === "rechazado"
-                                        ? <Ico d="M6 18L18 6M6 6l12 12" className="w-4 h-4" w={2.4} />
-                                        : <Ico d={I.reloj} className="w-[18px] h-[18px] animate-spin [animation-duration:3s]" />}
-                                </span>
-                                <div className="min-w-0">
-                                    <div className={`text-[13px] font-semibold ${o.status === "rechazado" ? "text-red-700" : "text-amber-800"}`}>
-                                        {o.status === "rechazado" ? "El mesonero no pudo tomar este pedido" : "Esperando que el mesonero lo confirme"}
-                                    </div>
-                                    <div className="text-[14px] text-neutral-900 mt-0.5">{o.summary}</div>
-                                    {o.status === "rechazado" && o.reason && <div className="text-[13px] text-neutral-500 mt-0.5">{o.reason}</div>}
-                                </div>
-                            </div>
-                        ))}
+                    <section className="mb-6">
+                        <h2 className="font-display text-[17px] font-bold mb-2.5 px-1">Por confirmar</h2>
+                        <div className="space-y-3">
+                            {d.qr_orders.map((o, i) => <PedidoQr key={o.id} o={o} index={i} />)}
+                        </div>
                     </section>
                 )}
 
@@ -311,8 +350,8 @@ export default function MesaPublicPage({ token }) {
                 ) : (
                     <div className="space-y-6">
                         {hayListas && (
-                            <div className="cart-toast-in rounded-[20px] bg-gradient-to-r from-emerald-500 to-emerald-600 text-white px-4 py-3.5 flex items-center gap-3 shadow-[0_12px_28px_-12px_rgba(16,185,129,.9)]">
-                                <span className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                            <div className="cart-toast-in rounded-[20px] bg-emerald-600 text-white px-4 py-3.5 flex items-center gap-3">
+                                <span className="w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0">
                                     <span className="bell-ring"><Ico d={I.campana} className="w-5 h-5" w={2} /></span>
                                 </span>
                                 <div>
@@ -338,16 +377,17 @@ export default function MesaPublicPage({ token }) {
 
                         <section>
                             <h2 className="font-display text-[17px] font-bold mb-2.5 px-1">Tu cuenta</h2>
-                            <div className={`${TARJETA} overflow-hidden`}>
-                                <ul className="px-4 pt-3.5 space-y-2">
+                            <div className={`${TARJETA} px-4`}>
+                                <ul className="pt-3.5 space-y-2">
                                     {d.lines.map((l, i) => (
-                                        <li key={i} style={{ "--i": i }} className="rise-in flex items-baseline justify-between gap-3 text-[14px]">
-                                            <span className="min-w-0"><span className="tabular-nums text-neutral-500">{cant(l.quantity)} × </span>{l.name}</span>
+                                        <li key={i} style={{ "--i": i }} className="rise-in flex items-baseline gap-2.5 text-[14px]">
+                                            <span className="w-5 text-right tabular-nums text-neutral-500 shrink-0">{cant(l.quantity)}</span>
+                                            <span className="min-w-0 flex-1">{l.name}</span>
                                             <span className="tabular-nums shrink-0">{dinero(l.subtotal, sym)}</span>
                                         </li>
                                     ))}
                                 </ul>
-                                <div className="mt-3.5 px-4 py-3.5 bg-black/[0.03] border-t border-black/[0.05] flex items-baseline justify-between">
+                                <div className="mt-3.5 py-3.5 border-t border-black/[0.06] flex items-baseline justify-between">
                                     <span className="text-[14px] font-semibold">Total</span>
                                     <span className="text-right">
                                         <span className="block font-display text-[26px] font-bold tracking-tight tabular-nums leading-none">{dinero(d.total, sym)}</span>
@@ -391,7 +431,7 @@ export default function MesaPublicPage({ token }) {
             </div>
 
             {menuAbierto && (
-                <MenuMesaPublico token={token} mesa={d.table.name} sym={sym} modo={d.ordering}
+                <MenuMesaPublico token={token} mesa={d.table.name} area={d.table.area} store={d.store} sym={sym} modo={d.ordering} enCurso={enCurso}
                     onClose={() => setMenuAbierto(false)}
                     onEnviado={(r) => {
                         huella.current = r.v || null;

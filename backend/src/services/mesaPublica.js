@@ -1,10 +1,13 @@
-const { DiningTable, DiningArea, Company, Setting, Currency, Sale, SaleItem, KitchenTicket, KitchenTicketItem, TableOrder, Product, sequelize, Sequelize } = require("../models");
+const { DiningTable, DiningArea, Company, Setting, Currency, Sale, SaleItem, KitchenTicket, KitchenTicketItem, TableOrder, Product, CatalogBanner, sequelize, Sequelize } = require("../models");
+const { DISPATCHED_SQL } = require("../utils/saleBalance");
 const { runWithoutTenant } = require("../utils/tenantStorage");
 const { huella, olvidar } = require("../utils/huella");
 
 const { Op } = Sequelize;
 // Color en hex de seis dígitos o nada: termina en una variable CSS del navegador del cliente.
 const colorDe = (raw) => (/^#?[0-9a-fA-F]{6}$/.test(String(raw || "").trim()) ? String(raw).trim() : null);
+// Un archivo guardado: nombre local (uploads) o URL completa de Supabase.
+const archivo = (f) => (f ? (f.startsWith("http") ? f : `/uploads/${f}`) : null);
 
 // La página del QR de la mesa (/mesa/<código>): lo que el cliente ve desde su teléfono, sin
 // sesión. Cómo va cada ronda en la cocina, lo que lleva pedido y cuánto va la cuenta, y un
@@ -82,9 +85,19 @@ async function armar(token) {
     const area = await DiningArea.findByPk(mesa.area_id, { attributes: ["name"] });
 
     const ajustes = Object.fromEntries((await Setting.findAll({
-      where: { company_id: cid, key: { [Op.in]: ["store_name", "logo_filename", "brand_color", "catalog_brand_color", SLUG_KEY, MODO_KEY] } },
+      where: {
+        company_id: cid,
+        key: { [Op.in]: ["store_name", "store_slogan", "logo_filename", "brand_color", "catalog_brand_color", "catalog_bg_color", "catalog_panel_color", SLUG_KEY, MODO_KEY] },
+      },
       attributes: ["key", "value"],
     })).map(s => [s.key, s.value]));
+    // La foto del local: el primer banner de portada del catálogo (31-10-2026, "debe verse
+    // como mi local"). Esta función solo corre cuando la huella cambia, no en cada refresco.
+    const portada = await CatalogBanner.findOne({
+      where: { company_id: cid, active: true, placement: { [Op.ne]: "feature" } },
+      attributes: ["image_filename", "image_mobile_filename"],
+      order: [["sort_order", "ASC"], ["id", "ASC"]],
+    });
     // Pedidos que el cliente hizo desde el QR y que todavía no son una ronda: los que esperan
     // al mesonero y los rechazados de la última media hora (con el motivo).
     const pedidosQr = await TableOrder.findAll({
@@ -151,6 +164,12 @@ async function armar(token) {
           // El color de la tienda, el mismo que pinta su catálogo: sin él la página de la mesa
           // salía en el rosa de NXUS. Se valida como en el catálogo: va a una variable CSS.
           brand_color: colorDe(ajustes.catalog_brand_color) || colorDe(ajustes.brand_color),
+          // El resto de la identidad de su catálogo: fondo ("el mantel"), papel de la carta,
+          // eslogan y la foto de portada.
+          bg_color: colorDe(ajustes.catalog_bg_color),
+          panel_color: colorDe(ajustes.catalog_panel_color),
+          slogan: ajustes.store_slogan || null,
+          cover_url: archivo(portada?.image_mobile_filename || portada?.image_filename),
         },
         table: { name: mesa.name, area: area?.name || null },
         open: ventas.length > 0,
@@ -219,11 +238,12 @@ async function menu(token) {
     const { company, wid } = await mesaConPedidos(token);
     const clave = `${company.id}:${wid}`;
     const h = menus.get(clave);
-    if (h && Date.now() - h.at < MENU_TTL) return { data: h.data };
+    if (h && Date.now() - h.at < MENU_TTL) return h.data;
 
     const filas = await sequelize.query(`
       SELECT p.id, p.name, p.short_description, p.image_filename, p.unit, p.is_combo, p.is_service,
              COALESCE(ps.price, p.price) AS price, ps.qty, c.id AS category_id, c.name AS category_name,
+             c.image_filename AS category_image, c.short_description AS category_desc,
              EXISTS (SELECT 1 FROM product_modifier_groups pmg JOIN modifier_groups mg ON mg.id = pmg.group_id AND mg.active
                       WHERE pmg.product_id = p.id) AS has_addons
         FROM products p
@@ -237,11 +257,11 @@ async function menu(token) {
        ORDER BY c.name NULLS LAST, p.name`,
       { replacements: { cid: company.id, wid }, type: Sequelize.QueryTypes.SELECT });
 
-    const data = filas.map(p => ({
+    const items = filas.map(p => ({
       id: p.id,
       name: p.name,
       description: p.short_description || null,
-      image_url: p.image_filename ? (p.image_filename.startsWith("http") ? p.image_filename : `/uploads/${p.image_filename}`) : null,
+      image_url: archivo(p.image_filename),
       category: p.category_name || "Otros",
       price: round2(p.price),
       has_addons: !!p.has_addons,
@@ -249,10 +269,52 @@ async function menu(token) {
       // producto de reventa (el refresco) sí, con su existencia en la sucursal.
       agotado: !(p.is_service || p.is_combo) && !(parseFloat(p.qty) > 0),
     }));
+    // Las secciones de la carta, en el orden de la consulta, con la foto y la frase que la
+    // tienda ya cargó para su catálogo.
+    const categorias = [];
+    for (const p of filas) {
+      const name = p.category_name || "Otros";
+      if (categorias.some(c => c.name === name)) continue;
+      categorias.push({ name, image_url: archivo(p.category_image), description: p.category_desc || null });
+    }
+    const favoritos = (await masPedidos(company.id, wid)).filter(id => items.some(p => p.id === id && !p.agotado));
+
+    const data = { data: items, categories: categorias, favorites: favoritos.slice(0, 8) };
     if (menus.size > 200) menus.delete(menus.keys().next().value);
     menus.set(clave, { at: Date.now(), data });
-    return { data };
+    return data;
   });
+}
+
+// "Los favoritos de la casa": lo más vendido en la sucursal en los últimos 30 días. Es una suma
+// sobre un mes de líneas, así que va en su propia caché de 30 minutos y no en la del menú, que
+// se rehace cada minuto. Si falla, la carta sale sin favoritos: no es motivo para no mostrarla.
+const favoritosCache = new Map();   // `${cid}:${wid}` → { at, ids }
+const FAVORITOS_TTL = 30 * 60_000;
+
+async function masPedidos(cid, wid) {
+  const clave = `${cid}:${wid}`;
+  const h = favoritosCache.get(clave);
+  if (h && Date.now() - h.at < FAVORITOS_TTL) return h.ids;
+  let ids = [];
+  try {
+    const filas = await sequelize.query(`
+      SELECT si.product_id, SUM(si.quantity) AS n
+        FROM sales s
+        JOIN sale_items si ON si.sale_id = s.id
+       WHERE s.company_id = :cid AND s.warehouse_id = :wid
+         AND s.created_at > NOW() - INTERVAL '30 days'
+         AND s.status IN (${DISPATCHED_SQL})
+         AND si.product_id IS NOT NULL AND si.price > 0
+       GROUP BY si.product_id
+       ORDER BY n DESC
+       LIMIT 20`,
+      { replacements: { cid, wid }, type: Sequelize.QueryTypes.SELECT });
+    ids = filas.map(f => f.product_id);
+  } catch { ids = h?.ids || []; }
+  if (favoritosCache.size > 200) favoritosCache.delete(favoritosCache.keys().next().value);
+  favoritosCache.set(clave, { at: Date.now(), ids });
+  return ids;
 }
 
 /** Los adicionales de un plato (término, contornos, extras), sin existencias internas. */

@@ -232,7 +232,10 @@ export default function SettingsTab({ notify }) {
     return (
         <Page module="Sistema" title="Configuración general" subheader={subheader}>
             {/* En el móvil sin relleno lateral propio: Page ya pone 12px y sumados eran 28. */}
-            <div className="flex-1 min-h-0 overflow-auto custom-scrollbar py-3 sm:p-4">
+            {/* ── Vitrina ── trae su propia área de desplazamiento y su barra de guardado: guarda
+                sus claves aparte (ver StorefrontSettings) y no comparte el botón de abajo. */}
+            {section === "vitrina" && <StorefrontSettings notify={notify} />}
+            {section !== "vitrina" && <div className="flex-1 min-h-0 overflow-auto custom-scrollbar py-3 sm:p-4">
 
                 {/* ── Empresa ──
                     Todo a la vista sin bajar: los dos formularios lado a lado y, debajo, la imagen
@@ -610,8 +613,6 @@ export default function SettingsTab({ notify }) {
                     </div>
                 )}
 
-                {/* ── Vitrina ── */}
-                {section === "vitrina" && <StorefrontSettings notify={notify} />}
                 {section === "pedidos_web" && <WebOrdersSettings notify={notify} />}
 
                 {/* ── Respaldo ── */}
@@ -679,7 +680,7 @@ export default function SettingsTab({ notify }) {
                     </div>
                 )}
 
-            </div>
+            </div>}
             {["empresa", "factura", "pos", "credito"].includes(section) && barraGuardar}
         </Page>
     );
