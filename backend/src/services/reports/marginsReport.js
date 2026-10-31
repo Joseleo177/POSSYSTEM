@@ -81,6 +81,12 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
   //
   // Mismo criterio de venta que salesReport (DISPATCHED): la mercancía salió, se haya cobrado
   // o no. Incluye las exoneradas —el costo se incurrió igual— y lo vendido a crédito.
+  //
+  // RENDIMIENTO: ningún paso cruza dos CTE con JOIN. Postgres estima en una fila lo que sale
+  // de un CTE agrupado y elige un bucle anidado que recorre el otro entero por cada fila: con
+  // 5.000 facturas al mes la base "cobro" tardaba 13 s (31-10-2026). Por eso el resumen de cada
+  // factura se arma juntando filas (UNION ALL) y agrupando, y lo que una fila necesita de su
+  // factura se propaga con funciones de ventana sobre sale_id: ordenar es n·log n, no n².
   const base = (ventas) => `
     v AS (${ventas}),
     l AS (
@@ -102,19 +108,28 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
        WHERE si.quantity - COALESCE(dv.qty, 0) > 0
     ),
     vs AS (
-      SELECT v.id, v.created_at, v.fx_forgiven, v.forgiven_amount, v.forgiven_at, v.credit_applied,
-             GREATEST(v.total - COALESCE(dev.total, 0), 0) AS neto,
-             COALESCE(x.sub, 0) AS sub,
-             COALESCE(x.sin_sub, 0) AS sin_sub,
-             COALESCE(x.cost, 0) AS costo
-        FROM v
-        LEFT JOIN (
-          SELECT sale_id, SUM(sub) AS sub, SUM(sub) FILTER (WHERE NOT con_costo) AS sin_sub, SUM(cost) AS cost
-            FROM l GROUP BY sale_id
-        ) x ON x.sale_id = v.id
-        LEFT JOIN LATERAL (
-          SELECT SUM(r.total) AS total FROM returns r WHERE r.sale_id = v.id AND r.status <> 'anulado'
-        ) dev ON TRUE
+      SELECT id,
+             MAX(created_at) AS created_at, MAX(fx_forgiven) AS fx_forgiven, MAX(forgiven_amount) AS forgiven_amount,
+             MAX(forgiven_at) AS forgiven_at, MAX(credit_applied) AS credit_applied,
+             GREATEST(MAX(total) - COALESCE(SUM(devuelto), 0), 0) AS neto,
+             COALESCE(SUM(sub), 0) AS sub,
+             COALESCE(SUM(sin_sub), 0) AS sin_sub,
+             COALESCE(SUM(cost), 0) AS costo
+        FROM (
+          SELECT id, created_at, total, fx_forgiven, forgiven_amount, forgiven_at, credit_applied,
+                 NULL::numeric AS devuelto, NULL::numeric AS sub, NULL::numeric AS sin_sub, NULL::numeric AS cost
+            FROM v
+          UNION ALL
+          SELECT sale_id, NULL, NULL, NULL, NULL, NULL, NULL,
+                 NULL, sub, CASE WHEN con_costo THEN NULL ELSE sub END, cost
+            FROM l
+          UNION ALL
+          SELECT r.sale_id, NULL, NULL, NULL, NULL, NULL, NULL,
+                 r.total, NULL, NULL, NULL
+            FROM returns r
+           WHERE r.status <> 'anulado' AND r.sale_id IN (SELECT id FROM v)
+        ) x
+       GROUP BY id
     )`;
 
   const columnas = `s.id, s.created_at, s.total, s.warehouse_id, s.fx_forgiven, s.forgiven_amount, s.forgiven_at, s.credit_applied`;
@@ -135,25 +150,48 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
       UNION ALL
       SELECT id, forgiven_at, 2, 0, 'perdon', forgiven_amount - fx_forgiven, 0, 0
         FROM v WHERE forgiven_at IS NOT NULL AND forgiven_amount - fx_forgiven > 0.000001
-    ),
+    )`;
+
+  // Cada movimiento con los datos de su factura (ref, tope, costo) y lo saldado hasta él. La
+  // factura entra como una fila más (prio −1, monto 0) y la ventana reparte sus datos: un JOIN
+  // entre mov y vs es justo el cruce que se volvía cuadrático.
+  const ac = `
     ac AS (
-      SELECT m.*,
-             GREATEST(vs.neto - vs.fx_forgiven, 0) AS ref,
-             GREATEST(vs.neto - vs.fx_forgiven - GREATEST(vs.forgiven_amount - vs.fx_forgiven, 0), 0) AS tope,
-             SUM(CASE WHEN m.kind = 'perdon' THEN 0 ELSE m.monto END) OVER (
-               PARTITION BY m.sale_id ORDER BY m.prio, m.created_at, m.ord ROWS UNBOUNDED PRECEDING
-             ) AS hasta
-        FROM mov m
-        JOIN vs ON vs.id = m.sale_id
+      SELECT * FROM (
+        SELECT x.sale_id, x.created_at, x.kind, x.monto, x.bruto, x.vuelto,
+               MAX(x.r_ref)   OVER w AS ref,
+               MAX(x.r_tope)  OVER w AS tope,
+               MAX(x.r_sub)   OVER w AS sub,
+               MAX(x.r_sin)   OVER w AS sin_sub,
+               MAX(x.r_costo) OVER w AS costo,
+               SUM(CASE WHEN x.kind = 'perdon' THEN 0 ELSE x.monto END) OVER (
+                 PARTITION BY x.sale_id ORDER BY x.prio, x.created_at, x.ord ROWS UNBOUNDED PRECEDING
+               ) AS hasta
+          FROM (
+            SELECT sale_id, created_at, prio, ord, kind, monto, bruto, vuelto,
+                   NULL::numeric AS r_ref, NULL::numeric AS r_tope, NULL::numeric AS r_sub,
+                   NULL::numeric AS r_sin, NULL::numeric AS r_costo
+              FROM mov
+            UNION ALL
+            SELECT id, created_at, -1, 0, 'factura', 0, 0, 0,
+                   GREATEST(neto - fx_forgiven, 0),
+                   GREATEST(neto - fx_forgiven - GREATEST(forgiven_amount - fx_forgiven, 0), 0),
+                   sub, sin_sub, costo
+              FROM vs
+          ) x
+        WINDOW w AS (PARTITION BY x.sale_id)
+      ) y
+      WHERE kind <> 'factura'
     )`;
 
   // Un evento por cosa que pasó: `ingreso` es el dinero que cuenta y `saldado / ref` la
   // fracción de la factura —y de su costo— que se reconoce. En la base "venta" cada factura
-  // es un solo evento que la reconoce entera el día en que se vendió.
+  // es un solo evento que la reconoce entera el día en que se vendió. Cada evento lleva los
+  // datos de su factura para no tener que volver a cruzarla.
   const eventos = porCobro
-    ? `${mov},
+    ? `${mov},${ac},
     ev AS (
-      SELECT sale_id, created_at, kind = 'perdon' AS perdon, bruto, vuelto, ref,
+      SELECT sale_id, created_at, kind = 'perdon' AS perdon, bruto, vuelto, ref, sub, sin_sub, costo,
              CASE WHEN kind = 'perdon' THEN 0
                   ELSE GREATEST(LEAST(hasta, tope) - LEAST(hasta - monto, tope), 0) END AS ingreso,
              CASE WHEN kind = 'perdon' THEN LEAST(monto, ref)
@@ -163,7 +201,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     : `
     ev AS (
       SELECT id AS sale_id, created_at, FALSE AS perdon, 0::numeric AS bruto, 0::numeric AS vuelto,
-             neto AS ref, neto AS ingreso, neto AS saldado
+             neto AS ref, sub, sin_sub, costo, neto AS ingreso, neto AS saldado
         FROM vs
     )`;
 
@@ -186,65 +224,93 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     : `SELECT ${columnas} FROM sales s
         WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${whS} ${dateClause(df, dt, 's', hours)}`;
 
-  const ctes = `WITH ${base(ventas)},${eventos},
-    evr AS (SELECT * FROM ev e WHERE TRUE ${dateClause(df, dt, 'e', hours)})`;
-
   // Mismo día que el filtro: con franja nocturna es la jornada, no la fecha del calendario.
   const dia = localDate('e.created_at', hours);
   const q = (sql) => sequelize.query(sql, { replacements: rep, type: Sequelize.QueryTypes.SELECT });
 
-  const [dias, lineas, pendiente] = await Promise.all([
-    // Por día, y la fila de totales (day NULL) con las ventas distintas del período.
-    q(`${ctes}
-       SELECT ${dia} AS day,
-              COUNT(DISTINCT e.sale_id)::int AS sales,
-              COALESCE(SUM(e.ingreso), 0)::float AS revenue,
-              COALESCE(SUM(e.ingreso * vs.sin_sub / NULLIF(vs.sub, 0)), 0)::float AS sin_costo,
-              COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * vs.costo), 0)::float AS cost,
-              COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * vs.costo) FILTER (WHERE e.perdon), 0)::float AS forgiven_cost,
-              COALESCE(SUM(e.bruto), 0)::float AS cobrado,
-              COALESCE(SUM(e.vuelto), 0)::float AS vuelto
-         FROM evr e
-         JOIN vs ON vs.id = e.sale_id
-        GROUP BY GROUPING SETS ((${dia}), ())
-        ORDER BY 1 ASC NULLS LAST`),
-    // Por producto. Cada línea recibe la parte del ingreso de su factura según su peso —así el
-    // descuento de la factura se reparte y la suma de los productos da el total— y la fracción
-    // del costo que se reconoció en el período.
-    q(`${ctes},
-       pv AS (
-         SELECT sale_id, SUM(ingreso) AS ingreso, SUM(saldado / NULLIF(ref, 0)) AS frac
-           FROM evr GROUP BY sale_id
-       )
-       SELECT l.product_id, l.name AS product_name, COALESCE(c.name, 'Sin categoría') AS category_name, l.con_costo,
-              COUNT(DISTINCT l.sale_id)::int AS sales_count,
-              COALESCE(SUM(l.qty * pv.frac), 0)::float AS total_qty,
-              COALESCE(SUM(pv.ingreso * l.sub / NULLIF(vs.sub, 0)), 0)::float AS revenue,
-              COALESCE(SUM(l.cost * pv.frac), 0)::float AS total_cost
-         FROM l
-         JOIN pv ON pv.sale_id = l.sale_id
-         JOIN vs ON vs.id = l.sale_id
-         LEFT JOIN categories c ON c.id = l.category_id
-        GROUP BY l.product_id, l.name, c.name, l.con_costo`),
-    // Ganancia que sigue en la calle: lo que falta cobrar de las facturas abiertas, con su
-    // parte de utilidad. No depende del período: es la foto de hoy.
-    porCobro
-      ? q(`WITH ${base(`SELECT ${columnas} FROM sales s WHERE s.status IN ('pendiente', 'parcial') ${tcS} ${whS}`)},${mov}
-           SELECT COUNT(*)::int AS count,
-                  COALESCE(SUM(pend), 0)::float AS amount,
-                  COALESCE(SUM(pend - pend * sin_sub / NULLIF(sub, 0) - pend / NULLIF(ref, 0) * costo), 0)::float AS profit
-             FROM (
-               SELECT vs.sub, vs.sin_sub, vs.costo,
-                      GREATEST(vs.neto - vs.fx_forgiven, 0) AS ref,
-                      GREATEST(
-                        GREATEST(vs.neto - vs.fx_forgiven - GREATEST(vs.forgiven_amount - vs.fx_forgiven, 0), 0)
-                        - COALESCE((SELECT SUM(m.monto) FROM mov m WHERE m.sale_id = vs.id AND m.kind <> 'perdon'), 0),
-                      0) AS pend
-                 FROM vs
-             ) x
-            WHERE pend > 0.005`)
-      : Promise.resolve(null),
-  ]);
+  // Días y productos en UNA consulta: comparten las líneas y los eventos, que así se calculan
+  // una vez y no dos.
+  const principal = q(`
+    WITH ${base(ventas)},${eventos},
+    evr AS (SELECT * FROM ev e WHERE TRUE ${dateClause(df, dt, 'e', hours)}),
+    -- Por día, y la fila de totales (day NULL) con las ventas distintas del período.
+    dias AS (
+      SELECT ${dia} AS day,
+             COUNT(DISTINCT e.sale_id)::int AS sales,
+             COALESCE(SUM(e.ingreso), 0) AS revenue,
+             COALESCE(SUM(e.ingreso * e.sin_sub / NULLIF(e.sub, 0)), 0) AS sin_costo,
+             COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * e.costo), 0) AS cost,
+             COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * e.costo) FILTER (WHERE e.perdon), 0) AS forgiven_cost,
+             COALESCE(SUM(e.bruto), 0) AS cobrado,
+             COALESCE(SUM(e.vuelto), 0) AS vuelto
+        FROM evr e
+       GROUP BY GROUPING SETS ((${dia}), ())
+    ),
+    -- Lo reconocido de cada factura en el período.
+    pv AS (
+      SELECT sale_id, SUM(ingreso) AS ingreso, SUM(saldado / NULLIF(ref, 0)) AS frac, MAX(sub) AS sub
+        FROM evr GROUP BY sale_id
+    ),
+    -- Cada línea recibe la parte del ingreso de su factura según su peso —así el descuento de la
+    -- factura se reparte y la suma de los productos da el total— y la fracción del costo que se
+    -- reconoció en el período. Los factores de la factura llegan por ventana, no por JOIN.
+    lw AS (
+      SELECT * FROM (
+        SELECT u.sale_id, u.es_linea, u.product_id, u.name, u.category_id, u.con_costo, u.qty, u.sub, u.cost,
+               MAX(u.f_ing)  OVER w AS ing,
+               MAX(u.f_frac) OVER w AS frac,
+               MAX(u.f_sub)  OVER w AS vsub
+          FROM (
+            SELECT sale_id, TRUE AS es_linea, product_id, name, category_id, con_costo, qty, sub, cost,
+                   NULL::numeric AS f_ing, NULL::numeric AS f_frac, NULL::numeric AS f_sub
+              FROM l
+            UNION ALL
+            SELECT sale_id, FALSE, NULL, NULL, NULL, NULL, NULL, NULL, NULL, ingreso, frac, sub
+              FROM pv
+          ) u
+        WINDOW w AS (PARTITION BY u.sale_id)
+      ) y
+      WHERE es_linea AND frac IS NOT NULL
+    ),
+    productos AS (
+      SELECT lw.product_id, lw.name AS product_name, COALESCE(c.name, 'Sin categoría') AS category_name, lw.con_costo,
+             COUNT(DISTINCT lw.sale_id)::int AS sales_count,
+             COALESCE(SUM(lw.qty * lw.frac), 0) AS total_qty,
+             COALESCE(SUM(lw.ing * lw.sub / NULLIF(lw.vsub, 0)), 0) AS revenue,
+             COALESCE(SUM(lw.cost * lw.frac), 0) AS total_cost
+        FROM lw
+        LEFT JOIN categories c ON c.id = lw.category_id
+       GROUP BY lw.product_id, lw.name, c.name, lw.con_costo
+    )
+    SELECT (SELECT COALESCE(json_agg(d ORDER BY d.day NULLS LAST), '[]'::json) FROM dias d) AS dias,
+           (SELECT COALESCE(json_agg(p), '[]'::json) FROM productos p) AS lineas`);
+
+  // Ganancia que sigue en la calle: lo que falta cobrar de las facturas abiertas, con su parte
+  // de utilidad. No depende del período: es la foto de hoy. Lo cobrado de cada una se junta
+  // con su factura agrupando, por la misma razón que arriba.
+  const porCobrar = porCobro
+    ? q(`WITH ${base(`SELECT ${columnas} FROM sales s WHERE s.status IN ('pendiente', 'parcial') ${tcS} ${whS}`)},${mov}
+         SELECT COUNT(*)::int AS count,
+                COALESCE(SUM(pend), 0)::float AS amount,
+                COALESCE(SUM(pend - pend * sin_sub / NULLIF(sub, 0) - pend / NULLIF(ref, 0) * costo), 0)::float AS profit
+           FROM (
+             SELECT id, MAX(sub) AS sub, MAX(sin_sub) AS sin_sub, MAX(costo) AS costo, MAX(ref) AS ref,
+                    GREATEST(MAX(tope) - COALESCE(SUM(pagado), 0), 0) AS pend
+               FROM (
+                 SELECT id, sub, sin_sub, costo,
+                        GREATEST(neto - fx_forgiven, 0) AS ref,
+                        GREATEST(neto - fx_forgiven - GREATEST(forgiven_amount - fx_forgiven, 0), 0) AS tope,
+                        NULL::numeric AS pagado
+                   FROM vs
+                 UNION ALL
+                 SELECT sale_id, NULL, NULL, NULL, NULL, NULL, monto FROM mov WHERE kind <> 'perdon'
+               ) u
+              GROUP BY id
+           ) x
+          WHERE pend > 0.005`)
+    : Promise.resolve(null);
+
+  const [[{ dias, lineas }], pendiente] = await Promise.all([principal, porCobrar]);
 
   const total = dias.find(d => d.day === null) || {};
   const byDay = dias.filter(d => d.day !== null).map(d => {
