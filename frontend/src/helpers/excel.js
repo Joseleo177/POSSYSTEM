@@ -208,15 +208,26 @@ export function buildInventoryExcel(data) {
 }
 
 export function buildMarginsExcel(data, range) {
+  // La base va en el resumen y en el nombre del archivo: los dos Excel se parecen mucho y
+  // dicen cosas distintas.
+  const cobro = data.basis === "cobro";
   download(buildWb([
     {
       name: "Resumen",
-      rows: [data.summary],
+      rows: [{ ...data.summary, base: cobro ? "Por cobro (gestión, no fiscal)" : "Por venta" }],
       headers: [
-        { key: "total_revenue",      label: "Ingresos ($)" },
+        { key: "base",               label: "Base" },
+        ...(cobro ? [
+          { key: "cobrado",          label: "Cobros del Período ($)" },
+          { key: "vuelto",           label: "Vuelto Entregado ($)" },
+          { key: "ajustes",          label: "Saldo a Favor y Sobrantes ($)" },
+        ] : []),
+        { key: "total_revenue",      label: cobro ? "Ingreso Cobrado ($)" : "Total Vendido ($)" },
+        { key: "sin_costo",          label: "Sin Costo Cargado ($)" },
         { key: "total_cost",         label: "Costo Total ($)" },
+        ...(cobro ? [{ key: "forgiven_cost", label: "Mercancía Exonerada ($)" }] : []),
         { key: "total_margin",       label: "Utilidad Bruta ($)" },
-        { key: "avg_margin_pct",     label: "Margen Promedio (%)" },
+        { key: "avg_margin_pct",     label: "Margen (%)" },
         { key: "products_with_cost", label: "Productos con Costo" },
       ],
     },
@@ -256,7 +267,17 @@ export function buildMarginsExcel(data, range) {
         { key: "margin_pct",   label: "Margen (%)" },
       ],
     },
-  ]), `Margenes_${range.from}_${range.to}${sufijoFranja(range)}`);
+    {
+      name: "Sin Costo",
+      rows: data.sin_costo || [],
+      headers: [
+        { key: "product_name",  label: "Producto" },
+        { key: "category_name", label: "Categoría" },
+        { key: "sales_count",   label: "Ventas" },
+        { key: "revenue",       label: "Ingresos ($)" },
+      ],
+    },
+  ]), `Margenes_${cobro ? "cobro_" : ""}${range.from}_${range.to}${sufijoFranja(range)}`);
 }
 
 export function buildCustomersExcel(data, range) {

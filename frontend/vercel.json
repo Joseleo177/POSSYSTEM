@@ -2,6 +2,9 @@
   "rewrites": [
     { "source": "/catalogo/:slug/p/:id", "destination": "/api/vitrina?slug=:slug&p=:id" },
     { "source": "/catalogo/:slug", "destination": "/api/vitrina?slug=:slug" },
+    { "source": "/robots.txt", "destination": "/api/robots" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/sitemap/:slug", "destination": "/api/sitemap?slug=:slug" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

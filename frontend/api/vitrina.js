@@ -20,6 +20,8 @@
 //
 // Solo corre en Vercel (ver rewrites de vercel.json). En Docker nginx sirve index.html tal cual.
 
+const { direcciones } = require("./_sitio");
+
 const ESPERA_MS = 2500;
 
 // La vista previa de WhatsApp va sin precio, a propósito. WhatsApp guarda la vista previa días y el
@@ -158,6 +160,9 @@ async function cabecera({ store, product }, { url, origen, api }) {
     `<meta property="og:locale" content="es_VE" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
     `<script type="application/ld+json">${jsonLd(ld)}</script>`,
+    // "Aparecer en Google" apagado en Gestión de Empresas: la vista previa de WhatsApp sigue,
+    // pero los buscadores no la indexan (y la tienda tampoco entra al sitemap).
+    ...(store.indexable === false ? [`<meta name="robots" content="noindex" />`] : []),
   ].join("\n    ");
   return { titulo, meta };
 }
@@ -235,7 +240,8 @@ module.exports = async (req, res) => {
 
   try {
     const { data } = await r.json();
-    const url = `${origen}/catalogo/${slug}${pid ? `/p/${pid}` : ""}`;
+    // Canónica con el dominio oficial (SITE_URL, ver _sitio.js), no con el de la visita.
+    const url = `${direcciones(req).sitio}/catalogo/${slug}${pid ? `/p/${pid}` : ""}`;
     const cab = await cabecera(data, { url, origen, api });
     cab.meta += `\n    ${aceleradores({ api, slug, logo: absoluta(data.store?.logo_url, api) })}`;
     enviar(200, inyectar(html, cab), CACHE_OK);

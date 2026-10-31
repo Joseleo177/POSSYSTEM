@@ -129,7 +129,11 @@ function hourClause(col, hours = null) {
 }
 
 function dateClause(date_from, date_to, alias = '', hours = null) {
-  const raw = alias ? `${alias}.created_at` : 'created_at';
+  return dateClauseOn(date_from, date_to, alias ? `${alias}.created_at` : 'created_at', hours);
+}
+
+// Lo mismo sobre otra columna de fecha (forgiven_at, por ejemplo).
+function dateClauseOn(date_from, date_to, raw, hours = null) {
   const col = localDate(raw, hours);
   const parts = [];
   if (date_from) parts.push(`AND ${col} >= '${date_from}'::date`);
@@ -144,4 +148,4 @@ function dateClause(date_from, date_to, alias = '', hours = null) {
 // propio shared —igual que dateClause— y no de una ruta a utils distinta en cada archivo.
 const { SETTLED_SQL, DISPATCHED_SQL, UNPAID_SQL } = require("../../utils/saleBalance");
 
-module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, buildSerieScope, idList, dateClause, hourClause, localDate, TZ, SETTLED_SQL, DISPATCHED_SQL, UNPAID_SQL };
+module.exports = { sanitizeDate, sanitizeHour, buildHours, buildTenantContext, buildWarehouseScope, buildSerieScope, idList, dateClause, dateClauseOn, hourClause, localDate, TZ, SETTLED_SQL, DISPATCHED_SQL, UNPAID_SQL };

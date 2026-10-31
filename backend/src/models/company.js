@@ -34,6 +34,9 @@ module.exports = (sequelize, DataTypes) => {
     // Pedidos del catálogo con delivery y pago reportado (ver services/catalogCheckout.js). Un
     // extra más, y solo tiene sentido con el catálogo encendido.
     pedidos_web_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // La vitrina aparece en Google: entra al sitemap y su cabecera no lleva noindex. Encendido
+    // por defecto (el catálogo ya es público); lo apaga el superusuario a quien no lo quiera.
+    seo_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

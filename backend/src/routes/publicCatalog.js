@@ -18,6 +18,38 @@ const publicLimiter = rateLimit({
 });
 
 // ── Público (sin autenticación) ───────────────────────────────
+
+// Sitemap para Google. Lo pide la función de Vercel (frontend/api/sitemap.js), que lo guarda
+// un día en la CDN: aquí llega pocas veces. Antes de "/:slug" para que no se lea como tienda;
+// el guion bajo no es válido en un slug, así que ninguna tienda puede llamarse así.
+const sitemapLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiadas solicitudes." },
+});
+
+router.get("/_sitemap", sitemapLimiter, async (req, res) => {
+  try {
+    res.json({ ok: true, data: await svc.sitemapStores() });
+  } catch (err) {
+    console.error("[public-catalog:sitemap]", err.message);
+    res.status(500).json({ ok: false, message: "Error al armar el sitemap" });
+  }
+});
+
+router.get("/_sitemap/:slug", sitemapLimiter, async (req, res) => {
+  try {
+    const data = await svc.sitemapStore(req.params.slug);
+    if (!data) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error("[public-catalog:sitemap]", err.message);
+    res.status(500).json({ ok: false, message: "Error al armar el sitemap" });
+  }
+});
+
 router.get("/:slug", publicLimiter, async (req, res) => {
   try {
     const data = await svc.getStore(req.params.slug, { warehouse_id: req.query.warehouse_id });

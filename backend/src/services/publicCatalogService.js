@@ -1,5 +1,5 @@
 const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, RecipeSheet, PaymentReport, Sequelize, sequelize } = require("../models");
-const { tenantStorage } = require("../utils/tenantStorage");
+const { tenantStorage, runWithoutTenant } = require("../utils/tenantStorage");
 const addons = require("./addons");
 const { imageUrl } = require("../utils/imageStorage");
 const { calculateComboStockAndCost } = require("./products/productService");
@@ -98,6 +98,12 @@ const isValidSlug = (s) => typeof s === "string" && /^[a-z0-9][a-z0-9-]{1,59}$/.
 // El slug se compara en minúsculas: un enlace dictado por teléfono y escrito con mayúsculas
 // tiene que llevar a la misma tienda, no a un 404.
 async function resolveCompanyId(slug) {
+  return (await resolveCompany(slug))?.id ?? null;
+}
+
+// Lo mismo, con la bandera de "Aparecer en Google" que viene en la misma consulta: la piden
+// la cabecera de la vitrina y el sitemap.
+async function resolveCompany(slug) {
   const clean = String(slug || "").trim().toLowerCase();
   if (!isValidSlug(clean)) return null;
   const row = await Setting.findOne({ where: { key: SLUG_KEY, value: clean } });
@@ -108,10 +114,10 @@ async function resolveCompanyId(slug) {
   // tener tema, banners y slug configurados de sobra y aun así no responder en público si
   // nadie le prendió este interruptor — por eso se revalida acá y no solo al guardar el
   // slug, que es donde vivía el único control hasta ahora.
-  const company = await Company.findByPk(row.company_id, { attributes: ["catalog_enabled"] });
+  const company = await Company.findByPk(row.company_id, { attributes: ["catalog_enabled", "seo_enabled"] });
   if (!company?.catalog_enabled) return null;
 
-  return row.company_id;
+  return { id: row.company_id, slug: clean, seo: !!company.seo_enabled };
 }
 
 // Datos de cabecera de la tienda. Se exponen solo campos de vitrina: nombre, logo y
@@ -1418,8 +1424,9 @@ async function reportPayment(token, saleId, body = {}) {
 // el enlace no dice en qué sucursal compra el cliente. Solo en dólares; si la moneda base de
 // la empresa no es USD no se publica precio.
 async function getMeta(token, productId) {
-  const company_id = await resolveCompanyId(token);
-  if (!company_id) return null;
+  const company = await resolveCompany(token);
+  if (!company) return null;
+  const company_id = company.id;
 
   return tenantStorage.run({ company_id }, async () => {
     const rows = await Setting.findAll({
@@ -1434,6 +1441,8 @@ async function getMeta(token, productId) {
       city: s.store_city || null,
       phone: s.store_phone || null,
       logo_url: imageUrl(s.logo_filename),
+      // "Aparecer en Google" apagado: la cabecera sale con noindex.
+      indexable: company.seo,
     };
     if (productId == null) return { store, product: null };
 
@@ -1482,7 +1491,39 @@ async function getMeta(token, productId) {
   });
 }
 
+// Sitemap: las tiendas que salen en Google, con la fecha del último cambio de su surtido. Una
+// sola consulta para todas: es la única ruta pública que cruza empresas, y la CDN de Vercel la
+// guarda un día (ver frontend/api/sitemap.js).
+async function sitemapStores() {
+  return runWithoutTenant(() => sequelize.query(`
+    SELECT s.value AS slug,
+           (SELECT MAX(p.updated_at) FROM products p
+             WHERE p.company_id = c.id AND p.visible_in_catalog AND p.sellable
+               AND NOT p.is_addon AND p.parent_id IS NULL) AS lastmod
+      FROM settings s
+      JOIN companies c ON c.id = s.company_id
+     WHERE s.key = :key AND c.active AND c.catalog_enabled AND c.seo_enabled
+     ORDER BY s.value
+  `, { replacements: { key: SLUG_KEY }, type: Sequelize.QueryTypes.SELECT }));
+}
+
+// Los productos de una tienda para su sitemap: lo mismo que lista la vitrina (visible,
+// vendible, sin adicionales) y sin las tallas sueltas, que se eligen dentro de su modelo.
+// Google admite 50.000 direcciones por sitemap.
+async function sitemapStore(slug) {
+  const company = await resolveCompany(slug);
+  if (!company || !company.seo) return null;
+  const products = await tenantStorage.run({ company_id: company.id }, () => Product.findAll({
+    where: { visible_in_catalog: true, sellable: true, is_addon: false, parent_id: null },
+    attributes: ["id", "updated_at"],
+    order: [["id", "ASC"]],
+    limit: 49999,
+    raw: true,
+  }));
+  return { slug: company.slug, products };
+}
+
 module.exports = {
-  getStore, getProducts, getProduct, getMeta, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
+  getStore, getProducts, getProduct, getMeta, sitemapStores, sitemapStore, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };
