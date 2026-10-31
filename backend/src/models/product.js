@@ -41,6 +41,10 @@ module.exports = (sequelize, DataTypes) => {
     // Adicional con precio de un plato ("Queso extra"): se vende solo como adicional, así que
     // no aparece en los menús. Ver migración 20261031130000-adicionales.
     is_addon: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Se prepara en cocina: al aceptar un pedido web sus líneas salen marcadas para la comanda.
+    // Lo que solo se embolsa (empanadas del exhibidor, un refresco) no. Ver migración
+    // 20261101160000-pedidos-etapas.
+    kitchen_prep: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Variantes (talla, color): la variante es un producto con parent_id hacia su modelo. El
     // modelo (is_variant_parent) es la plantilla: no se vende ni lleva existencias. variant_key
     // son los ids de sus valores ordenados, únicos por modelo. own_price = no sigue el precio

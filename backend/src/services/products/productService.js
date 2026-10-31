@@ -657,6 +657,8 @@ async function createProduct({ body, file, company_id }) {
       // Un insumo no se publica nunca: aunque llegue marcado, se guarda apagado.
       sellable: esVendible,
       visible_in_catalog: esVendible && (visible_in_catalog === 'true' || visible_in_catalog === true),
+      // Se prepara en cocina (pedidos web): ver migración 20261101160000-pedidos-etapas.
+      kitchen_prep: body.kitchen_prep === 'true' || body.kitchen_prep === true,
       company_id,
     }, { transaction: t });
 
@@ -901,6 +903,10 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       visible_in_catalog: !esVendible ? false : (visible_in_catalog === undefined
         ? product.visible_in_catalog
         : (visible_in_catalog === 'true' || visible_in_catalog === true)),
+      // Sin el campo se conserva (el modal solo lo manda en empresas con cocina).
+      kitchen_prep: body.kitchen_prep === undefined
+        ? product.kitchen_prep
+        : (body.kitchen_prep === 'true' || body.kitchen_prep === true),
     }, { transaction: t });
 
     // Control por piezas (Fábrica). Se valida después de escribir lo demás porque la unidad

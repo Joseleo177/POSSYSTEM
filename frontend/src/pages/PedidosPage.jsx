@@ -8,6 +8,7 @@ import Money from "../components/ui/Money";
 import Modal from "../components/ui/Modal";
 import CustomSelect from "../components/ui/CustomSelect";
 import { Button } from "../components/ui/Button";
+import Check from "../components/ui/Check";
 import PaymentReportList from "../components/PaymentReports/PaymentReportList";
 import MiniMapa from "../components/MiniMapa";
 import { toNameCase, printKitchenOrder, resolveImageUrl } from "../helpers";
@@ -18,6 +19,12 @@ import { toNameCase, printKitchenOrder, resolveImageUrl } from "../helpers";
 // delivery o se le suma un recargo con su motivo (el cliente lo ve en "Mis pedidos"), y al
 // aceptarlo pasa al POS como cuenta en espera, donde se cobra como siempre.
 //
+// Después de aceptarlo el pedido se sigue aquí (30-10-2026): al aceptar se elige qué va a
+// cocina (salen marcados los productos con "Se prepara en cocina"), y luego avanza su
+// despacho —Listo, En camino (delivery), Entregado— con un botón por paso. El cobro sigue en
+// la caja: "Cobrar en la caja" abre ESA cuenta en el POS. "En curso" guarda lo que falta
+// entregar o cobrar, sin límite de días.
+//
 // Lista a la izquierda y pedido a la derecha; en el teléfono el pedido sube como hoja (mismo
 // patrón que warehouses/AdjustmentsView).
 
@@ -27,6 +34,51 @@ const CARD = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 
 const POLL_MS = 20000;
 
 const PEDIDO_STATUS = { ...SALE_STATUS, pedido: { label: "Por aceptar", tone: "violet", flag: true } };
+
+// Etapa del despacho de un pedido aceptado. "cocina" no es una etapa guardada: es "aceptado"
+// con una comanda todavía en el tablero de cocina.
+const ETAPA = {
+    aceptado:  { label: "Preparando", tone: "info" },
+    cocina:    { label: "En cocina",  tone: "info" },
+    listo:     { label: "Listo",      tone: "violet" },
+    en_camino: { label: "En camino",  tone: "info" },
+    entregado: { label: "Entregado",  tone: "success", quiet: "check" },
+    anulado:   { label: "Anulado",    tone: "neutral", quiet: "void" },
+};
+const etapaDe = (o) => {
+    if (o.status === "anulado") return "anulado";
+    const f = o.fulfillment_status || "aceptado";
+    return f === "aceptado" && ["nueva", "preparando"].includes(o.kitchen_status) ? "cocina" : f;
+};
+const etapas = (o) => ({ ...ETAPA, listo: { ...ETAPA.listo, label: o.fulfillment === "delivery" ? "Listo para salir" : "Para retirar" } });
+const cobrado = (o) => ["pagado", "exonerado"].includes(o.status);
+
+// Siguiente paso del despacho y el texto de su botón.
+function siguiente(o) {
+    const delivery = o.fulfillment === "delivery";
+    switch (o.fulfillment_status || "aceptado") {
+        case "aceptado":  return { stage: "listo", label: delivery ? "Marcar listo para salir" : "Marcar listo para retirar" };
+        case "listo":     return delivery ? { stage: "en_camino", label: "Salió a entregar" } : { stage: "entregado", label: "Entregado al cliente" };
+        case "en_camino": return { stage: "entregado", label: "Entregado" };
+        default:          return null;
+    }
+}
+
+// Cobro del pedido, aparte de su despacho: ámbar mientras se le debe a la caja.
+function CobroMark({ o }) {
+    if (o.status === "anulado" || o.status === "pedido") return null;
+    return cobrado(o) ? (
+        <span className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
+            Cobrado
+        </span>
+    ) : (
+        <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-amber-700 dark:text-amber-400 whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+            {["pendiente", "parcial"].includes(o.status) ? "Factura con saldo" : "Por cobrar"}
+        </span>
+    );
+}
 
 const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 const ref = (n) => `Ref. ${r2(n).toFixed(2)}`;
@@ -98,29 +150,47 @@ function Foto({ src, nombre, className = "w-11 h-11 rounded-lg" }) {
     );
 }
 
-// Por dónde va el pedido. El módulo llega hasta aceptarlo; el cobro lo cierra la caja.
-const PASOS = ["Recibido", "Aceptado", "Cobrado"];
-function Avance({ status, creado }) {
-    const hecho = status === "pedido" ? 1 : ["pagado", "exonerado"].includes(status) ? 3 : status === "anulado" ? 0 : 2;
+// Por dónde va el despacho: Recibido → Aceptado → Listo → En camino (solo delivery) → Entregado.
+// El cobro no es un paso: va al lado (CobroMark), porque puede pasar antes o después de entregar
+// (pago reportado al pedir, o pago al recibir).
+function Avance({ o }) {
+    const delivery = o.fulfillment === "delivery";
+    const pasos = [
+        { key: "pedido", label: "Recibido" },
+        { key: "aceptado", label: "Aceptado" },
+        { key: "listo", label: delivery ? "Listo" : "Para retirar" },
+        ...(delivery ? [{ key: "en_camino", label: "En camino" }] : []),
+        { key: "entregado", label: "Entregado" },
+    ];
+    const hecho = o.status === "pedido" ? 1
+        : o.status === "anulado" ? 0
+            : pasos.findIndex(p => p.key === (o.fulfillment_status || "aceptado")) + 1;
+    const enCocina = (o.fulfillment_status || "aceptado") === "aceptado" && ["nueva", "preparando"].includes(o.kitchen_status);
+    const nota = (i) => {
+        if (i !== hecho) return null;
+        if (i === 1) return "Por aceptar";
+        if (i === 2) return enCocina ? "En cocina" : "Preparando";
+        return "Siguiente";
+    };
     return (
         <ol className="flex items-start">
-            {PASOS.map((p, i) => {
+            {pasos.map((p, i) => {
                 const listo = i < hecho;
                 const actual = i === hecho;
                 return (
-                    <li key={p} className="flex-1 min-w-0 flex flex-col items-center text-center relative">
-                        {i > 0 && <span className={`absolute top-[11px] right-1/2 w-full h-[2px] ${i < hecho ? "bg-emerald-500" : "bg-border dark:bg-white/10"}`} />}
-                        <span className={`relative z-[1] w-6 h-6 rounded-full flex items-center justify-center ${listo
+                    <li key={p.key} className="flex-1 min-w-0 flex flex-col items-center text-center relative">
+                        {i > 0 && <span className={`absolute top-[11px] right-1/2 w-full h-[2px] transition-colors duration-500 ${i < hecho ? "bg-emerald-500" : "bg-border dark:bg-white/10"}`} />}
+                        <span className={`relative z-[1] w-6 h-6 rounded-full flex items-center justify-center transition-colors duration-300 ${listo
                             ? "bg-emerald-500 text-white"
                             : actual ? "bg-white dark:bg-surface-dark-2 ring-2 ring-brand-500 text-brand-600 dark:text-brand-400" : "bg-surface-3 dark:bg-white/10 text-content-subtle"}`}>
                             {listo
                                 ? <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
                                 : <span className="text-[11px] font-bold">{i + 1}</span>}
                         </span>
-                        <span className={`mt-1.5 text-[12px] ${listo || actual ? "font-medium text-content dark:text-white" : "text-content-subtle"}`}>{p}</span>
-                        {i === 0 && <span className="text-[11px] text-content-subtle tabular-nums">{hora(creado)}</span>}
-                        {actual && i === 1 && <span className="text-[11px] text-brand-600 dark:text-brand-400">Por aceptar</span>}
-                        {actual && i === 2 && <span className="text-[11px] text-brand-600 dark:text-brand-400">En la caja</span>}
+                        <span className={`mt-1.5 text-[12px] leading-tight ${listo || actual ? "font-medium text-content dark:text-white" : "text-content-subtle"}`}>{p.label}</span>
+                        {i === 0 && <span className="text-[11px] text-content-subtle tabular-nums">{hora(o.created_at)}</span>}
+                        {i > 0 && i === hecho - 1 && o.fulfillment_status_at && <span className="text-[11px] text-content-subtle tabular-nums">{hora(o.fulfillment_status_at)}</span>}
+                        {nota(i) && <span className="text-[11px] text-brand-600 dark:text-brand-400">{nota(i)}</span>}
                     </li>
                 );
             })}
@@ -159,7 +229,12 @@ function Fila({ o, activo, onClick, nuevos }) {
                 </span>
                 <span className="mt-2 flex items-center justify-between gap-3">
                     <Money value={ref(o.total)} className="text-[15px] font-bold tracking-tight text-content dark:text-white" />
-                    {nuevos ? <PagoMark pago={o.pago} /> : <StatusMark status={o.status} map={PEDIDO_STATUS} />}
+                    {nuevos ? <PagoMark pago={o.pago} /> : (
+                        <span className="flex flex-col items-end gap-0.5">
+                            <StatusMark status={etapaDe(o)} map={etapas(o)} />
+                            {!cobrado(o) && <CobroMark o={o} />}
+                        </span>
+                    )}
                 </span>
             </span>
         </button>
@@ -181,13 +256,16 @@ function Seccion({ titulo, aside = null, children }) {
 }
 
 function Detalle({ id, onChanged, onClose }) {
-    const { notify, activeCurrencies, navigateTo, companyInfo, printerWidth } = useApp();
+    const { notify, activeCurrencies, triggerAction, companyInfo, printerWidth } = useApp();
     const [o, setO] = useState(null);
     const [cargo, setCargo] = useState({ fee: "", extra: "", reason: "" });
     const [serie, setSerie] = useState("");
     const [rechazar, setRechazar] = useState(false);
     const [motivo, setMotivo] = useState("");
     const [aceptado, setAceptado] = useState(false);
+    // Líneas que van a cocina al aceptar (ids de sale_items).
+    const [cocina, setCocina] = useState(() => new Set());
+    const [moviendo, setMoviendo] = useState(false);
 
     const cargar = useCallback(async () => {
         try {
@@ -199,6 +277,8 @@ function Detalle({ id, onChanged, onClose }) {
                 reason: r.data.extra_charge_reason || "",
             });
             setSerie(r.data.series?.length === 1 ? String(r.data.series[0].id) : "");
+            // Salen marcados los productos que se preparan; quien acepta puede cambiarlo.
+            setCocina(new Set((r.data.items || []).filter(i => i.kitchen_prep && !i.is_addon).map(i => i.id)));
         } catch (e) { notify(e.message, "err"); onClose(); }
     }, [id, notify, onClose]);
     useEffect(() => { setO(null); setAceptado(false); cargar(); }, [cargar]);
@@ -224,6 +304,9 @@ function Detalle({ id, onChanged, onClose }) {
         cargo.reason.trim() !== (o.extra_charge_reason || "")
     );
     const confirmados = (o.payment_reports || []).filter(r => r.status === "confirmado").length;
+    const conCocina = nuevo && o.cocina_enabled;
+    const paso = !nuevo && o.status !== "anulado" ? siguiente(o) : null;
+    const porCobrar = !nuevo && ["espera", "borrador"].includes(o.status);
 
     const guardarCargo = async () => {
         try {
@@ -241,12 +324,26 @@ function Detalle({ id, onChanged, onClose }) {
     const aceptar = async () => {
         try {
             if (sucio) await guardarCargo();
-            await api.webOrders.accept(o.id, { serie_id: serie || undefined });
-            notify("Pedido aceptado: ya está en la caja");
+            const r = await api.webOrders.accept(o.id, { serie_id: serie || undefined, cocina: conCocina ? [...cocina] : [] });
+            const n = r.data?.kitchen_sent || 0;
+            notify(n ? `Pedido aceptado y enviado a cocina (${n} ${n === 1 ? "producto" : "productos"})` : "Pedido aceptado");
             setAceptado(true);
             await cargar();
             onChanged();
         } catch (e) { notify(e.message, "err"); }
+    };
+
+    // Abre ESTA cuenta en el POS (CobroPage la toma de la acción pendiente).
+    const cobrar = () => triggerAction("Cobro", `caja:retomar:${o.id}`);
+
+    const mover = async (body) => {
+        setMoviendo(true);
+        try {
+            await api.webOrders.stage(o.id, body);
+            await cargar();
+            onChanged();
+        } catch (e) { notify(e.message, "err"); }
+        finally { setMoviendo(false); }
     };
 
     const confirmarRechazo = async () => {
@@ -282,7 +379,10 @@ function Detalle({ id, onChanged, onClose }) {
                         <div className="min-w-0">
                             <p className="text-[12px] text-content-subtle tabular-nums">{o.invoice_number || `Pedido #${o.id}`} · {hace(o.created_at).toLowerCase()}</p>
                             <h2 className="text-[20px] font-semibold tracking-tight text-content dark:text-white truncate">{toNameCase(o.customer_name || o.web_customer_name)}</h2>
-                            <div className="mt-0.5"><StatusMark status={o.status} map={PEDIDO_STATUS} /></div>
+                            <div className="mt-0.5 flex items-center gap-3 flex-wrap">
+                                {nuevo ? <StatusMark status={o.status} map={PEDIDO_STATUS} /> : <StatusMark status={etapaDe(o)} map={etapas(o)} />}
+                                <CobroMark o={o} />
+                            </div>
                         </div>
                     </div>
                     <div className="text-right shrink-0">
@@ -292,13 +392,13 @@ function Detalle({ id, onChanged, onClose }) {
                 </div>
 
                 <div className={`${CARD} px-4 pt-4 pb-3`}>
-                    <Avance status={o.status} creado={o.created_at} />
+                    <Avance o={o} />
                 </div>
 
                 {aceptado && (
                     <div className="rounded-xl bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <p className="text-[13px] text-emerald-800 dark:text-emerald-300 leading-snug">Aceptado: el pedido está en Venta → En espera para cobrarlo.</p>
-                        <Button variant="ghost" className="h-12 sm:h-9 shrink-0" onClick={() => navigateTo("Cobro")}>Ir a la caja</Button>
+                        <p className="text-[13px] text-emerald-800 dark:text-emerald-300 leading-snug">Aceptado. Síguelo aquí hasta entregarlo; el cobro lo hace la caja.</p>
+                        {porCobrar && <Button variant="ghost" className="h-12 sm:h-9 shrink-0" onClick={cobrar}>Cobrar en la caja</Button>}
                     </div>
                 )}
 
@@ -345,7 +445,9 @@ function Detalle({ id, onChanged, onClose }) {
                 )}
 
                 {/* Productos */}
-                <Seccion titulo="Productos" aside={<span className="text-[12px] text-content-subtle">{o.items.length} {o.items.length === 1 ? "línea" : "líneas"}</span>}>
+                <Seccion titulo="Productos" aside={<span className="text-[12px] text-content-subtle">
+                    {conCocina ? (cocina.size ? `${cocina.size} a cocina` : "Nada va a cocina") : `${o.items.length} ${o.items.length === 1 ? "línea" : "líneas"}`}
+                </span>}>
                     <div className={`${CARD} divide-y divide-border/60 dark:divide-white/[0.06]`}>
                         {o.items.map(i => (
                             <div key={i.id} className="px-4 py-3 flex items-center gap-3">
@@ -357,10 +459,24 @@ function Detalle({ id, onChanged, onClose }) {
                                     </div>
                                     <div className="text-[12px] text-content-subtle tabular-nums">{i.quantity % 1 === 0 ? i.quantity : i.quantity.toFixed(3)} × {ref(i.price)}</div>
                                     {i.note && <div className="text-[12px] italic text-content-muted dark:text-white/70">{i.note}</div>}
+                                    {/* Va a cocina: sale marcado si el producto "se prepara en cocina".
+                                        Los adicionales van con su plato, no se eligen solos. */}
+                                    {conCocina && !i.is_addon && (
+                                        <label className="mt-1.5 inline-flex items-center gap-2 cursor-pointer select-none">
+                                            <Check checked={cocina.has(i.id)} title="Va a cocina"
+                                                onChange={(v) => setCocina(prev => { const n = new Set(prev); if (v) n.add(i.id); else n.delete(i.id); return n; })} />
+                                            <span className={`text-[12px] ${cocina.has(i.id) ? "font-medium text-content dark:text-white" : "text-content-subtle"}`}>Va a cocina</span>
+                                        </label>
+                                    )}
                                 </div>
                             </div>
                         ))}
                     </div>
+                    {conCocina && (
+                        <p className="mt-2 text-[12px] text-content-subtle leading-snug">
+                            Se marcan solos los productos con "Se prepara en cocina" (Catálogo → producto). Lo que solo se empaca, déjalo sin marcar.
+                        </p>
+                    )}
                 </Seccion>
 
                 {/* Lo que se cobra aparte: delivery y recargo. Solo antes de aceptar. */}
@@ -439,8 +555,11 @@ function Detalle({ id, onChanged, onClose }) {
                 <div className="flex flex-col sm:flex-row gap-2">
                     {/* En el teléfono, las dos secundarias comparten fila y la principal va debajo a lo ancho. */}
                     <div className="grid grid-cols-2 gap-2 sm:contents">
-                        <Button variant="ghost" className={`h-12 sm:h-10 sm:flex-1 ${nuevo ? "" : "col-span-2"}`} onClick={imprimir}>Imprimir</Button>
+                        <Button variant="ghost" className={`h-12 sm:h-10 sm:flex-1 ${nuevo || (paso && porCobrar) ? "" : "col-span-2"}`} onClick={imprimir}>Imprimir</Button>
                         {nuevo && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={() => { setMotivo(""); setRechazar(true); }}>Rechazar</Button>}
+                        {/* Con un paso de despacho pendiente, cobrar es secundario; entregado y sin
+                            cobrar, cobrar pasa a ser LA acción. */}
+                        {paso && porCobrar && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={cobrar}>Cobrar en la caja</Button>}
                     </div>
                     {nuevo && (
                         <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={aceptar}
@@ -448,11 +567,25 @@ function Detalle({ id, onChanged, onClose }) {
                             Aceptar · {ref(totalVista)}
                         </Button>
                     )}
-                    {!nuevo && ["espera", "borrador"].includes(o.status) && (
-                        <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={() => navigateTo("Cobro")}>Ir a la caja</Button>
+                    {paso && (
+                        <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={() => mover({ stage: paso.stage })} disabled={moviendo}>
+                            {paso.label}
+                        </Button>
+                    )}
+                    {!paso && porCobrar && (
+                        <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={cobrar}>Cobrar en la caja · {ref(o.total)}</Button>
                     )}
                 </div>
-                {nuevo && <p className="text-[12px] text-content-subtle text-center">Al aceptarlo se descuenta el inventario y pasa a la caja para cobrarlo.</p>}
+                {/* Deshacer: para el toque equivocado, un paso atrás. */}
+                {!nuevo && o.fulfillment_status && o.fulfillment_status !== "aceptado" && o.status !== "anulado" && (
+                    <button type="button" onClick={() => mover({ deshacer: true })} disabled={moviendo}
+                        className="block mx-auto text-[12px] text-content-subtle hover:text-content dark:hover:text-white underline-offset-2 hover:underline disabled:opacity-50">
+                        Deshacer el último paso
+                    </button>
+                )}
+                {nuevo && <p className="text-[12px] text-content-subtle text-center">
+                    Al aceptarlo se descuenta el inventario{conCocina && cocina.size ? `, ${cocina.size === 1 ? "su producto de cocina va" : "sus productos de cocina van"} al tablero` : ""} y queda en la caja para cobrarlo.
+                </p>}
             </div>
             </div>
 
@@ -488,6 +621,7 @@ export default function PedidosPage() {
     const [tab, setTab] = useState("nuevos");
     const [rows, setRows] = useState(null);
     const [nuevos, setNuevos] = useState(0);
+    const [curso, setCurso] = useState(0);
     const [sel, setSel] = useState(null);
     const vistos = useRef(null);
 
@@ -496,6 +630,7 @@ export default function PedidosPage() {
             const r = await api.webOrders.list({ tab });
             setRows(r.data || []);
             setNuevos(r.counts?.nuevos || 0);
+            setCurso(r.counts?.curso || 0);
             // Aviso de pedido nuevo: los que no estaban en la vuelta anterior. La primera carga calla.
             if (tab === "nuevos") {
                 const ids = new Set((r.data || []).map(x => x.id));
@@ -523,7 +658,11 @@ export default function PedidosPage() {
     const sub = (
         <div className="px-3 sm:px-4 py-2">
             <Segmented value={tab} onChange={(t) => { setTab(t); setSel(null); }}
-                options={[{ key: "nuevos", label: "Por aceptar", count: nuevos }, { key: "aceptados", label: "Aceptados" }]} />
+                options={[
+                    { key: "nuevos", label: "Por aceptar", count: nuevos },
+                    { key: "curso", label: "En curso", count: curso },
+                    { key: "cerrados", label: "Cerrados" },
+                ]} />
         </div>
     );
 
@@ -547,10 +686,12 @@ export default function PedidosPage() {
                                 <IconoEntrega delivery className="w-6 h-6" />
                             </div>
                             <p className="mt-3 text-[14px] font-medium text-content dark:text-white">
-                                {tab === "nuevos" ? "No hay pedidos por aceptar" : "Nada aceptado en los últimos 3 días"}
+                                {tab === "nuevos" ? "No hay pedidos por aceptar" : tab === "curso" ? "Nada pendiente" : "Nada cerrado en los últimos 3 días"}
                             </p>
                             <p className="text-[12px] text-content-subtle mt-0.5">
-                                {tab === "nuevos" ? "Los pedidos que hagan tus clientes desde el catálogo llegan aquí." : "Los pedidos que aceptes se ven aquí con su estado en la caja."}
+                                {tab === "nuevos" ? "Los pedidos que hagan tus clientes desde el catálogo llegan aquí."
+                                    : tab === "curso" ? "Aquí quedan los aceptados que falta entregar o cobrar."
+                                        : "Los pedidos entregados y cobrados."}
                             </p>
                         </div>
                     ) : (

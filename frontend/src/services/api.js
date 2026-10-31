@@ -506,6 +506,8 @@ export const api = {
     saveCharges: (id, body)    => request(`/web-orders/${id}/charges`, { method: "PUT", body: JSON.stringify(body) }),
     accept:      (id, body={}) => request(`/web-orders/${id}/accept`, { method: "POST", body: JSON.stringify(body) }),
     reject:      (id, reason)  => request(`/web-orders/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
+    // Despacho del pedido aceptado: { stage } para avanzar, { deshacer: true } para volver un paso.
+    stage:       (id, body)    => request(`/web-orders/${id}/stage`, { method: "POST", body: JSON.stringify(body) }),
   },
   // Pagos que los clientes reportan desde el catálogo.
   paymentReports: {

@@ -25,6 +25,10 @@ export const STAGE_TONE = {
     confirmado: { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400",         pill: "bg-sky-500/10" },
     facturado:  { dot: "bg-amber-500", text: "text-amber-700 dark:text-amber-400",     pill: "bg-amber-500/15" },
     pagado:     { check: true,         text: "text-emerald-700 dark:text-emerald-400", pill: "bg-emerald-500/15" },
+    // Despacho del pedido web (ver etapaCliente en el backend).
+    listo:      { dot: "bg-violet-500", text: "text-violet-700 dark:text-violet-400",  pill: "bg-violet-500/10" },
+    en_camino:  { dot: "bg-sky-500",   text: "text-sky-700 dark:text-sky-400",         pill: "bg-sky-500/10" },
+    entregado:  { check: true,         text: "text-emerald-700 dark:text-emerald-400", pill: "bg-emerald-500/15" },
     anulado:    { dot: "bg-neutral-400", text: "text-neutral-500",                     pill: "bg-black/[0.05]" },
     rechazado:  { dot: "bg-red-500",   text: "text-red-600 dark:text-red-400",         pill: "bg-red-500/10" },
 };

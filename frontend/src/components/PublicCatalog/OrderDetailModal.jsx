@@ -19,6 +19,9 @@ const D = {
     confirmado: "M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z",
     facturado: "M9 14l2 2 4-4m-9 9h12a2 2 0 002-2V5a2 2 0 00-2-2H6a2 2 0 00-2 2v14a2 2 0 002 2z",
     pagado: "M5 13l4 4L19 7",
+    entregado: "M5 13l4 4L19 7",
+    listo: "M6 7h12l-1 12.2a2 2 0 01-2 1.8H9a2 2 0 01-2-1.8L6 7z M9 10V6a3 3 0 016 0v4",
+    en_camino: "M3 7h11v9H3zM14 10h4l3 3v3h-7M7.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM17.5 19a1.5 1.5 0 100-3 1.5 1.5 0 000 3z",
     anulado: "M6 18L18 6M6 6l12 12",
     rechazado: "M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z",
     reloj: "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
@@ -31,6 +34,7 @@ const D = {
 const CIRCULO = {
     enviado: "bg-sky-500", confirmado: "bg-sky-500", facturado: "bg-amber-500",
     pagado: "bg-emerald-500", anulado: "bg-neutral-400", rechazado: "bg-red-500",
+    listo: "bg-violet-500", en_camino: "bg-sky-500", entregado: "bg-emerald-500",
 };
 
 const Ico = ({ d, className = "w-4 h-4", w = 1.9 }) => (
@@ -64,7 +68,8 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur,
     const items = order.items || [];
     const productos = items.reduce((a, it) => a + (Number.isFinite(it.subtotal) ? it.subtotal : (Number.isFinite(it.price) ? it.price * it.quantity : 0)), 0);
     const tono = STAGE_TONE[order.stage] || STAGE_TONE.enviado;
-    const pagoTxt = order.stage === "pagado" ? "Pagado"
+    const pagado = order.paid || order.stage === "pagado";
+    const pagoTxt = pagado ? "Pagado"
         : debe ? (sinAbono ? "Sin pagar" : `Falta ${fmt(order.owed, baseCur)}`)
             : pagos.some(p => p.status === "pendiente") ? "Por confirmar"
                 : order.stage === "facturado" ? "Pendiente" : "Al entregar";
@@ -86,18 +91,18 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur,
                 {/* En qué va: lo primero que el cliente busca. */}
                 <div className={`${skin.carta ? skin.card : skin.soft} px-4 pt-5 pb-4 text-center`}>
                     <div className="ring-grow relative w-16 h-16 mx-auto">
-                        {["enviado", "confirmado"].includes(order.stage) && (
+                        {["enviado", "confirmado", "en_camino"].includes(order.stage) && (
                             <span className={`absolute inset-0 rounded-full ${CIRCULO[order.stage]} opacity-30 animate-ping`} aria-hidden="true" />
                         )}
                         <span className={`relative w-16 h-16 rounded-full ${CIRCULO[order.stage] || "bg-sky-500"} text-white flex items-center justify-center shadow-lg`}>
-                            <Ico d={D[order.stage] || D.enviado} className="w-7 h-7" w={order.stage === "pagado" ? 2.6 : 1.9} />
+                            <Ico d={D[order.stage] || D.enviado} className="w-7 h-7" w={["pagado", "entregado"].includes(order.stage) ? 2.6 : 1.9} />
                         </span>
                     </div>
                     <p className={`mt-3 font-display text-[19px] font-bold ${tono.text}`}>{order.stage_label}</p>
                     {order.stage_detail && <p className={`text-[13px] ${skin.muted} mt-0.5`}>{order.stage_detail}</p>}
-                    {["enviado", "confirmado", "facturado", "pagado"].includes(order.stage) && (
+                    {["enviado", "confirmado", "facturado", "pagado", "listo", "en_camino", "entregado"].includes(order.stage) && (
                         <div className="mt-4">
-                            <OrderProgress stage={order.stage} skin={skin} />
+                            <OrderProgress stage={order.stage} fulfillment={order.fulfillment} skin={skin} />
                         </div>
                     )}
                 </div>
@@ -114,7 +119,7 @@ export default function OrderDetailModal({ order, onClose, fmt, baseCur, altCur,
                         {order.fulfillment !== "delivery" && order.branch && <span className={`block font-normal ${skin.subtle}`}>{toNameCase(order.branch)}</span>}
                     </Dato>
                     <Dato icon={D.tarjeta} label="Pago" skin={skin}>
-                        <span className={order.stage === "pagado" ? "text-emerald-700" : debe ? "text-amber-700" : ""}>{pagoTxt}</span>
+                        <span className={pagado ? "text-emerald-700" : debe ? "text-amber-700" : ""}>{pagoTxt}</span>
                     </Dato>
                 </div>
 

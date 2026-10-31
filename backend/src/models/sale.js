@@ -92,6 +92,12 @@ module.exports = (sequelize, DataTypes) => {
     kitchen_status:     { type: DataTypes.STRING(12),  allowNull: true },
     kitchen_status_at:  { type: DataTypes.DATE,        allowNull: true },
     kitchen_ready_at:   { type: DataTypes.DATE,        allowNull: true },
+    // Etapa del pedido web después de aceptarlo (ver migración 20261101160000-pedidos-etapas):
+    // aceptado · listo · en_camino (solo delivery) · entregado. NULL = no es pedido web o no se
+    // ha aceptado. El cobro y la factura no van aquí: salen de status e invoice_number.
+    fulfillment_status:    { type: DataTypes.STRING(12), allowNull: true },
+    fulfillment_status_at: { type: DataTypes.DATE,       allowNull: true },
+    delivered_at:          { type: DataTypes.DATE,       allowNull: true },
     // Mesa de la cuenta y mesonero que la atiende (ver migración 20261031110000-mesas). El
     // mesonero NO va en employee_id: los mesoneros no cobran, y el turno de la caja cuenta
     // sus ventas por employee_id.

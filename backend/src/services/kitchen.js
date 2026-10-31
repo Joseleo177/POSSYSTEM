@@ -30,6 +30,15 @@ async function resumirCuenta(saleId, transaction) {
     { kitchen_status: status, kitchen_status_at: new Date(), kitchen_ready_at: listas.length ? new Date(Math.max(...listas)) : null },
     { where: { id: saleId }, transaction },
   );
+  // Un pedido web que cocina terminó pasa solo a "Listo" en el módulo Pedidos (y el cliente lo
+  // ve en "Mis pedidos"). Solo desde "aceptado": si ya lo marcaron listo, en camino o entregado
+  // a mano, la cocina no lo regresa.
+  if (status === "lista" || status === "entregada") {
+    await Sale.update(
+      { fulfillment_status: "listo", fulfillment_status_at: new Date() },
+      { where: { id: saleId, fulfillment_status: "aceptado" }, transaction },
+    );
+  }
 }
 
 /**

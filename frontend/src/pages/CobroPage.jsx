@@ -34,7 +34,7 @@ import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company, pendingAction, setPendingAction } = useApp();
     const conMesas = !!company?.cocina_enabled && can("tables.view");
     // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
     const revisarAntes = settings?.pos_review_checkout === "true";
@@ -56,7 +56,7 @@ export default function CobroPage() {
         selectedCustomer, setSelectedCustomer,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
-        heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder,
+        heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder, heldSaleId,
         cartTable, setCartTable, addonPick, setAddonPick, addAddonLine,
         activePromos, promoLineDiscount, promoDiscount,
     } = useCart();
@@ -73,6 +73,22 @@ export default function CobroPage() {
 
     // ── Estado local ───────────────────────────────────────────
     const [mobileTab, setMobileTab]               = useState("products");
+
+    // "Cobrar en la caja" desde Pedidos: llega como acción pendiente con el id de la cuenta y se
+    // abre aquí, en el carrito. Si la caja tiene otra venta a medias no se pisa: se avisa y el
+    // cajero decide (pausarla o terminarla) antes de volver a intentarlo.
+    useEffect(() => {
+        if (typeof pendingAction !== "string" || !pendingAction.startsWith("caja:retomar:") || !activeWarehouse) return;
+        const id = parseInt(pendingAction.split(":")[2], 10);
+        setPendingAction(null);
+        if (!id || heldSaleId === id) { setMobileTab("cart"); return; }
+        if (cart.length > 0) {
+            notify("Tienes una venta en curso: pausa o termínala antes de abrir el pedido", "err");
+            return;
+        }
+        takeHeldCart(id).then(() => setMobileTab("cart"));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pendingAction, activeWarehouse]);
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [showHeldModal, setShowHeldModal]        = useState(false);
     // Mapa de mesas (restaurante): solo con el módulo encendido y permiso para verlo.

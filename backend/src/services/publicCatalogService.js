@@ -1,5 +1,4 @@
 const { Setting, Product, Category, Currency, Customer, Sale, SaleItem, ProductComboItem, ProductStock, Warehouse, CatalogBanner, Promotion, BenefitTag, Company, RecipeSheet, PaymentReport, Sequelize, sequelize } = require("../models");
-const { crearComanda } = require("./kitchen");
 const { tenantStorage } = require("../utils/tenantStorage");
 const addons = require("./addons");
 const { imageUrl } = require("../utils/imageStorage");
@@ -923,6 +922,28 @@ const ORDER_STAGES = {
   anulado:   { stage: "anulado",   label: "Anulado",    detail: "Este pedido fue anulado" },
 };
 
+// Lo que ve el cliente de un pedido ya aceptado sale de la etapa de despacho
+// (fulfillment_status), no del cobro: "¿dónde está mi pedido?" es lo que pregunta. Si ya pagó
+// o si tiene factura va aparte (paid / invoice_number), en el dato "Pago" del detalle.
+// Un pedido aceptado antes de existir las etapas, sin fulfillment_status, sigue como estaba.
+const PAGADO = ["pagado", "exonerado"];
+function etapaCliente(j) {
+  if (j.status === "pedido" || j.status === "anulado" || !j.fulfillment_status) return ORDER_STAGES[j.status];
+  const delivery = j.fulfillment === "delivery";
+  switch (j.fulfillment_status) {
+    case "listo":
+      return delivery
+        ? { stage: "listo", label: "Listo", detail: "Sale en breve hacia tu dirección" }
+        : { stage: "listo", label: "Listo para retirar", detail: "Ya puedes pasar a buscarlo" };
+    case "en_camino":
+      return { stage: "en_camino", label: "En camino", detail: "Va hacia tu dirección" };
+    case "entregado":
+      return { stage: "entregado", label: "Entregado", detail: PAGADO.includes(j.status) ? "Gracias por tu compra" : "Falta registrar el pago" };
+    default:
+      return { stage: "confirmado", label: "Confirmado", detail: "Están preparando tu pedido" };
+  }
+}
+
 // Historial de pedidos de un cliente, para que pueda seguir el suyo sin llamar a la
 // tienda. Devuelve solo sus propias ventas y solo campos de cara al cliente: ni almacén,
 // ni empleado, ni costos, ni saldos internos.
@@ -940,7 +961,7 @@ async function getMyOrders(token, document) {
     const sales = await Sale.findAll({
       where: { customer_id: customer.id, status: { [Op.in]: Object.keys(ORDER_STAGES) } },
       attributes: [
-        "id", "total", "status", "invoice_number", "created_at",
+        "id", "total", "status", "invoice_number", "created_at", "fulfillment_status",
         "fulfillment", "delivery_address", "delivery_reference", "service_charge", "service_charge_label",
         "delivery_fee", "extra_charge", "extra_charge_reason",
         "warehouse_id", "requested_warehouse_id",
@@ -1003,12 +1024,13 @@ async function getMyOrders(token, document) {
     return {
       orders: [...rechazos, ...sales.map((s) => {
         const j = s.toJSON();
-        const stage = ORDER_STAGES[j.status];
+        const stage = etapaCliente(j);
         return {
           id: j.id,
           total: parseFloat(j.total),
           created_at: j.created_at,
           invoice_number: j.invoice_number || null,
+          paid: PAGADO.includes(j.status),
           stage: stage.stage,
           stage_label: stage.label,
           stage_detail: stage.detail,
@@ -1271,10 +1293,9 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
 
     total = parseFloat((total + entrega.recargo).toFixed(2));
     const baseCurrency = await Currency.findOne({ where: { is_base: true } });
-    // En un restaurante con pantalla de cocina, el pedido que el mesonero manda desde la
-    // tablet es la comanda: entra al tablero en el acto, sin esperar a que caja lo acepte.
-    const empresa = await Company.findByPk(company_id, { attributes: ["cocina_enabled"] });
-    const aCocina = !!empresa?.cocina_enabled;
+    // El pedido ya NO entra a cocina al llegar: lo manda quien lo acepta, y solo con los
+    // productos que se preparan (ver webOrders.aceptar y products.kitchen_prep). Una tienda de
+    // empanadas solo embolsa; un refresco no tiene nada que hacer en el tablero de cocina.
 
     const t = await sequelize.transaction();
     try {
@@ -1345,17 +1366,6 @@ async function createOrder(token, { items, customer_name, customer_phone, custom
           cost_price: e.product.cost_price != null ? parseFloat(e.product.cost_price) : null,
           note: e.note,
         }, { transaction: t });
-      }
-
-      // Restaurante: el pedido entra a la cocina como su primera comanda.
-      if (aCocina) {
-        await crearComanda({
-          sale,
-          // La cocina ve el plato con sus adicionales debajo; los extras no van como líneas sueltas.
-          items: enriched.filter(e => !e.esExtra).map(e => ({ product_id: e.product.id, name: e.product.name, quantity: e.qty, note: e.notaCliente, modifiers: e.cocina })),
-          label: entrega.campos.fulfillment === "delivery" ? `Delivery · ${name}` : name,
-          note: sale.web_note,
-        }, t);
       }
 
       // El pago que reporta junto al pedido. Si la referencia ya se usó, el pedido no entra:

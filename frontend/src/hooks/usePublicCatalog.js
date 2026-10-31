@@ -230,7 +230,7 @@ export function usePublicCatalog(token, initialProductId = null) {
         : [];
 
     // Cuántos siguen en curso, para el distintivo de la cabecera.
-    const openOrdersCount = (myOrders || []).filter(o => ["enviado", "confirmado"].includes(o.stage)).length;
+    const openOrdersCount = (myOrders || []).filter(o => ["enviado", "confirmado", "listo", "en_camino"].includes(o.stage)).length;
 
     const [sending, setSending] = useState(false);
     const [sendError, setSendError] = useState(null);

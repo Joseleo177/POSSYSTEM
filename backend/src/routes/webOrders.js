@@ -30,6 +30,7 @@ router.get ("/",            handle(req => svc.list(req, req.query)));
 router.get ("/:id",         handle(req => svc.detail(req, req.params.id)));
 router.put ("/:id/charges", handle(req => svc.ajustar(req, req.params.id, req.body)));
 router.post("/:id/accept",  handle(req => svc.aceptar(req, req.params.id, req.body)));
+router.post("/:id/stage",   handle(req => svc.avanzar(req, req.params.id, req.body)));
 router.post("/:id/reject",  handle(req => svc.rechazar(req, req.params.id, req.body)));
 
 module.exports = router;

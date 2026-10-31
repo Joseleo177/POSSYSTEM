@@ -23,7 +23,7 @@ const EMPTY = {
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
-    visible_in_catalog: false, sellable: true, has_variants: false,
+    visible_in_catalog: false, sellable: true, has_variants: false, kitchen_prep: false,
     // Control por piezas (módulo Fábrica). Las medidas van como se escriben; al guardar se
     // pasan a milímetros.
     piece_mode: "", piece_w: "", piece_l: "",
@@ -36,6 +36,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
+    const cocinaEnabled = !!company?.cocina_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -118,6 +119,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     // Los productos creados antes de que existiera la marca vienen sin el
                     // campo: se asumen vendibles, que es como se comportaban.
                     sellable: editData.sellable !== false,
+                    kitchen_prep: !!editData.kitchen_prep,
                     has_variants: !!editData.is_variant_parent,
                     piece_mode: editData.piece_mode || "",
                     piece_w: editData.piece_width_mm ? fromMm(editData.piece_width_mm, pieceUnit) : "",
@@ -401,6 +403,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         } else {
             delete submissionForm.piece_mode;
         }
+        // Solo con cocina se manda: sin el campo, el servidor conserva lo que tenía.
+        if (!cocinaEnabled) delete submissionForm.kitchen_prep;
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
         savingRef.current = true;
         setSaving(true);
@@ -832,6 +836,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 checked={form.visible_in_catalog && form.sellable}
                                 disabled={!form.sellable}
                                 onChange={e => set("visible_in_catalog", e.target.checked)}
+                            />
+                        )}
+                        {/* Pedidos web: al aceptar uno, los productos marcados salen elegidos para
+                            la comanda. Lo que solo se empaca (empanadas del exhibidor, un refresco)
+                            no se marca y no ocupa el tablero de cocina. */}
+                        {cocinaEnabled && form.sellable && (
+                            <Interruptor
+                                titulo="Se prepara en cocina"
+                                detalle="Al aceptar un pedido del catálogo, este producto va al tablero de cocina. Desmárcalo si solo se empaca y se entrega."
+                                checked={!!form.kitchen_prep}
+                                onChange={e => set("kitchen_prep", e.target.checked)}
                             />
                         )}
                     </div>

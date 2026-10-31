@@ -1046,9 +1046,17 @@ export function CartProvider({ children }) {
 
   // Recupera una cuenta al carrito para seguir agregándole productos o cobrarla.
   const takeHeldCart = useCallback(async (saleId) => {
-    const held = heldCarts.find(h => h.id === saleId);
-    if (!held) return;
     if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
+    // Si no está en la lista cargada (se abre desde Pedidos, o es de otra sucursal), se busca
+    // en el servidor. Antes se salía sin decir nada: "Ir a la caja" llevaba al POS vacío.
+    let held = heldCarts.find(h => h.id === saleId);
+    if (!held) {
+      try {
+        const res = await api.sales.getHeld({});
+        held = (res.data || []).find(h => h.id === saleId);
+      } catch { /* se avisa abajo */ }
+    }
+    if (!held) return notify("Esa cuenta ya no está en espera: puede que otra caja la haya cobrado", "err");
 
     try {
       // Las líneas guardadas solo traen product_id/precio/cantidad; hay que rehidratarlas

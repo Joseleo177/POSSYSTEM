@@ -95,8 +95,12 @@ module.exports = async function acceptWebOrder(saleId, { warehouse_id, serie_id,
     // Queda registrado quién lo aceptó: hasta ahora el pedido no tenía responsable.
     // La serie se fija ahora, no al cobrar: es lo que permite que el pago le asigne su
     // correlativo fiscal como a cualquier otra venta.
+    // Y arranca su despacho: aceptado → listo → en camino → entregado (ver webOrders.avanzar).
     await sale.update(
-      { status: "espera", warehouse_id, serie_id: serie.id, employee_id: employee_id || null },
+      {
+        status: "espera", warehouse_id, serie_id: serie.id, employee_id: employee_id || null,
+        ...(sale.web_customer_name ? { fulfillment_status: "aceptado", fulfillment_status_at: new Date() } : {}),
+      },
       { transaction }
     );
 

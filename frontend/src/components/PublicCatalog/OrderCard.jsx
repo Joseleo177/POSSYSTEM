@@ -13,7 +13,7 @@ export function StageMark({ stage, label, pill = false }) {
             {t.check ? (
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" /></svg>
             ) : (
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.dot} ${stage === "enviado" || stage === "confirmado" ? "animate-pulse" : ""}`} />
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${t.dot} ${["enviado", "confirmado", "en_camino"].includes(stage) ? "animate-pulse" : ""}`} />
             )}
             {label}
         </span>
@@ -22,7 +22,7 @@ export function StageMark({ stage, label, pill = false }) {
 
 // Lo que sigue su curso: el cliente todavía espera algo de la tienda (confirmarlo, prepararlo,
 // cobrarlo). Lo demás es historial.
-export const EN_CURSO = ["enviado", "confirmado", "facturado"];
+export const EN_CURSO = ["enviado", "confirmado", "facturado", "listo", "en_camino"];
 
 export const horaDe = (iso) => new Date(iso).toLocaleTimeString("es-VE", { hour: "numeric", minute: "2-digit" });
 
@@ -103,7 +103,7 @@ export default function OrderCard({ order, fmt, baseCur, onSelect, skin = sheetS
 
             {enCurso && (
                 <div className="mt-3 space-y-1.5">
-                    <OrderProgress stage={order.stage} skin={skin} compact />
+                    <OrderProgress stage={order.stage} fulfillment={order.fulfillment} skin={skin} compact />
                     {order.stage_detail && !debe && <p className={`text-[12px] ${skin.subtle}`}>{order.stage_detail}</p>}
                 </div>
             )}

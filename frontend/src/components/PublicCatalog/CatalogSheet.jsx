@@ -118,17 +118,29 @@ export function SheetHeader({ skin, icon, eyebrow, title, subtitle, actions, onC
     );
 }
 
-// Progreso de un pedido en cuatro pasos. `compact`: la barra de la fila en "Mis pedidos";
-// sin él, el paso a paso con nombres del detalle. Anulado y no procesado no avanzan: no se
-// pinta ninguna barra, el estado ya lo dice en rojo o gris.
-const PASOS = [
+// Progreso de un pedido. `compact`: la barra de la fila en "Mis pedidos"; sin él, el paso a
+// paso con nombres del detalle. Anulado y no procesado no avanzan: no se pinta ninguna barra,
+// el estado ya lo dice en rojo o gris.
+//
+// Un pedido web sigue su despacho: Enviado → Confirmado → Listo → En camino (delivery) →
+// Entregado (si ya pagó va aparte, en el detalle). Las ventas de la caja que el cliente ve en
+// "Mis pedidos" (y los pedidos de antes de las etapas) siguen con el paso a paso del cobro.
+const PASOS_COBRO = [
     { stage: "enviado", label: "Enviado" },
     { stage: "confirmado", label: "Confirmado" },
     { stage: "facturado", label: "Facturado" },
     { stage: "pagado", label: "Pagado" },
 ];
+const pasosDe = (stage, fulfillment) => (["facturado", "pagado"].includes(stage) || !fulfillment ? PASOS_COBRO : [
+    { stage: "enviado", label: "Enviado" },
+    { stage: "confirmado", label: "Confirmado" },
+    { stage: "listo", label: fulfillment === "delivery" ? "Listo" : "Para retirar" },
+    ...(fulfillment === "delivery" ? [{ stage: "en_camino", label: "En camino" }] : []),
+    { stage: "entregado", label: "Entregado" },
+]);
 
-export function OrderProgress({ stage, skin, compact = false }) {
+export function OrderProgress({ stage, fulfillment = null, skin, compact = false }) {
+    const PASOS = pasosDe(stage, fulfillment);
     const idx = PASOS.findIndex(p => p.stage === stage);
     if (idx < 0) return null;
     const hecho = idx === PASOS.length - 1;
@@ -146,7 +158,7 @@ export function OrderProgress({ stage, skin, compact = false }) {
     }
 
     return (
-        <ol className="grid grid-cols-4" aria-label="Progreso del pedido">
+        <ol className="grid" style={{ gridTemplateColumns: `repeat(${PASOS.length}, minmax(0, 1fr))` }} aria-label="Progreso del pedido">
             {PASOS.map((p, i) => {
                 const listo = i <= idx;
                 const actual = i === idx && !hecho;
