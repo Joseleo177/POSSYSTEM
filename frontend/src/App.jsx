@@ -1,7 +1,7 @@
 // src/App.jsx
 import { lazy, Suspense } from "react";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { getPublicCatalogRoute, getMesaRoute } from "./publicRoutes";
+import { getPublicCatalogRoute, getMesaRoute, getLegalRoute } from "./publicRoutes";
 
 // El proyecto no usa react-router: PosApp maneja toda la navegación interna. Para el
 // catálogo público basta con mirar la URL una vez, antes de montar nada.
@@ -32,13 +32,16 @@ const cargar = (importar) => lazy(() => importar().then(
 const ErpApp = cargar(() => import("./ErpApp"));
 const PublicCatalogPage = cargar(() => import("./pages/PublicCatalogPage"));
 const MesaPublicPage = cargar(() => import("./pages/MesaPublicPage"));
+const PublicLegalPage = cargar(() => import("./pages/PublicLegalPage"));
 
 export default function App() {
     const catalogRoute = getPublicCatalogRoute();
     const mesaToken = getMesaRoute();
+    const legalSlug = getLegalRoute();
 
     let page;
     if (mesaToken) page = <MesaPublicPage token={mesaToken} />;
+    else if (legalSlug) page = <PublicLegalPage token={legalSlug} />;
     else if (catalogRoute) page = <PublicCatalogPage token={catalogRoute.slug} initialProductId={catalogRoute.productId} />;
     else page = <ErpApp />;
 

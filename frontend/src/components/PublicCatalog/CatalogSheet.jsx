@@ -79,7 +79,7 @@ export default function CatalogSheet({ skin, onClose, label, z = "z-50", width =
         <div className={`fixed inset-0 ${z} flex items-end sm:items-center sm:justify-center sm:p-4`}>
             <div className={`absolute inset-0 ${overlay || `${skin.carta ? "bg-black/65" : "bg-black/50"} backdrop-blur-[3px]`} catalog-overlay-in`} onClick={onClose || undefined} />
             <div role="dialog" aria-modal="true" aria-label={label}
-                className={`relative w-full ${width} max-h-[92vh] rounded-t-[28px] overflow-hidden shadow-2xl shadow-black/40 flex flex-col catalog-sheet-in ${skin.sheet}`}
+                className={`relative w-full ${width} alto-hoja-92 rounded-t-[28px] overflow-hidden shadow-2xl shadow-black/40 flex flex-col catalog-sheet-in ${skin.sheet}`}
                 style={skin.style}>
                 <div className="sm:hidden pt-2.5 flex justify-center shrink-0" aria-hidden="true">
                     <span className={`w-10 h-1 rounded-full ${skin.handle}`} />

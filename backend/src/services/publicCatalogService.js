@@ -121,9 +121,11 @@ async function resolveCompany(slug) {
 }
 
 // Datos de cabecera de la tienda. Se exponen solo campos de vitrina: nombre, logo y
-// contacto. Nada de RIF, correo interno, planes ni configuración operativa.
+// contacto. Nada de correo interno, planes ni configuración operativa. El RIF sí (desde
+// 31-10-2026): lo pide el aviso legal de la vitrina para identificar al titular, y de todos
+// modos sale impreso en cada factura.
 const PUBLIC_SETTING_KEYS = [
-  "store_name", "store_slogan", "store_address", "store_city",
+  "store_name", "store_slogan", "store_address", "store_city", "store_rif",
   "store_phone", "store_phone2", "logo_filename",
   "catalog_whatsapp", "catalog_orders_enabled",
   "brand_color", "catalog_brand_color", "catalog_theme", "catalog_panel_color", "catalog_bg_color",
@@ -296,6 +298,7 @@ async function getStore(token, { warehouse_id } = {}) {
         slogan: s.store_slogan || null,
         address: [s.store_address, s.store_city].filter(Boolean).join(", ") || null,
         phone: [s.store_phone, s.store_phone2].filter(Boolean).join(" / ") || null,
+        rif: String(s.store_rif || "").trim() || null,
         logo_url: s.logo_filename
           ? (s.logo_filename.startsWith("http") ? s.logo_filename : `/uploads/${s.logo_filename}`)
           : null,

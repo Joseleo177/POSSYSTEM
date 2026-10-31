@@ -2,6 +2,7 @@ import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useIdentityGate } from "../../hooks/useIdentityGate";
 import CatalogSheet, { sheetSkin } from "./CatalogSheet";
 import { DOC_PREFIXES, docMaxLen } from "./shared";
+import LegalLink from "./LegalLink";
 
 // Bienvenida del catálogo público (empezó en el tema de menú y la usan los tres temas): identificarse y elegir sucursal como hojas ENCIMA de la carta,
 // no como pantallas sueltas. Antes eran las puertas claras del tema estándar —un logo sobre
@@ -155,7 +156,7 @@ export function IdentitySheet({ token, store, onIdentified, panel = "#FFFFFF", l
                                 ))}
                             </ul>
                             <p className={`flex items-center justify-center gap-1.5 text-[11px] ${skin.subtle}`}>
-                                <Ico d={I.lock} className="w-3.5 h-3.5" /> Tus datos solo los ve esta tienda.
+                                <Ico d={I.lock} className="w-3.5 h-3.5" /> Tus datos solo los ve esta tienda. <LegalLink nueva>Privacidad</LegalLink>
                             </p>
                         </>
                     )}

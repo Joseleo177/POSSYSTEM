@@ -7,6 +7,7 @@ import CatalogSheet, { SheetHeader, sheetSkin } from "./CatalogSheet";
 import MapPicker, { direccionDePunto } from "./MapPicker";
 import { toNameCase } from "../../helpers";
 import CountUp from "./CountUp";
+import LegalLink from "./LegalLink";
 
 // Paso final del pedido: cómo lo recibe (retiro, o delivery con su dirección y su punto en el
 // mapa, que es de donde sale el costo: se cobra por distancia desde la sucursal)
@@ -354,6 +355,9 @@ export default function CheckoutSheet({
                             </>
                         )}
                     </button>
+                    <p className={`text-center text-[11px] ${skin.subtle}`}>
+                        Al enviar aceptas la <LegalLink nueva>política de privacidad</LegalLink> de la tienda.
+                    </p>
                 </div>
         </CatalogSheet>
     );

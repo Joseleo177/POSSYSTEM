@@ -21,4 +21,13 @@ export function getMesaRoute() {
     return m ? m[1] : null;
 }
 
-export const isPublicRoute = () => Boolean(getPublicCatalogRoute() || getMesaRoute());
+// Privacidad y aviso legal de una tienda (/catalogo/<tienda>/legal). Va aparte de la vitrina:
+// no necesita productos, sucursal ni identificación.
+export function getLegalRoute() {
+    const m = window.location.pathname.match(/^\/catalogo\/([A-Za-z0-9-]+)\/legal\/?$/);
+    return m ? m[1].toLowerCase() : null;
+}
+
+export const legalHref = (slug) => `/catalogo/${slug}/legal`;
+
+export const isPublicRoute = () => Boolean(getPublicCatalogRoute() || getMesaRoute() || getLegalRoute());

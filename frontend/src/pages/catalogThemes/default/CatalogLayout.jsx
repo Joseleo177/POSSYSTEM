@@ -8,6 +8,7 @@ import CartDrawer from "../../../components/PublicCatalog/CartDrawer";
 import MyOrdersModal from "../../../components/PublicCatalog/MyOrdersModal";
 import ProfileModal from "../../../components/PublicCatalog/ProfileModal";
 import StoreWhatsAppButton from "../../../components/PublicCatalog/StoreWhatsAppButton";
+import LegalLink from "../../../components/PublicCatalog/LegalLink";
 
 // Vitrina estándar: la que ve cualquier tienda que no haya elegido un tema propio.
 //
@@ -111,6 +112,9 @@ export default function CatalogLayout({ catalog, token }) {
                 {store?.address && (
                     <p className="text-[11px] font-bold text-content-muted">{store.address}</p>
                 )}
+                <p className="pt-2 text-[12px] text-content-subtle">
+                    <LegalLink />
+                </p>
                 {/* Hueco para que el carrito flotante no tape el pie de página */}
                 {ordersEnabled && <div className="h-20" />}
             </footer>

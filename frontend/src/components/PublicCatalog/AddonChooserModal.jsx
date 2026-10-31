@@ -22,7 +22,7 @@ export default function AddonChooserModal({ product, onClose, onPick, fmt, baseC
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center sm:justify-center sm:p-4">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
             <div role="dialog" aria-modal="true" aria-label={product.name}
-                className="relative w-full sm:max-w-md max-h-[90vh] bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-2xl border-t sm:border border-border/60 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col z-10">
+                className="relative w-full sm:max-w-md alto-hoja-90 bg-surface dark:bg-surface-dark-2 rounded-t-3xl sm:rounded-2xl border-t sm:border border-border/60 dark:border-white/10 overflow-hidden shadow-2xl flex flex-col z-10">
                 <div className="sm:hidden pt-2.5 flex justify-center" aria-hidden="true">
                     <span className="w-10 h-1 rounded-full bg-border dark:bg-white/20" />
                 </div>

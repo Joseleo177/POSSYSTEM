@@ -1,6 +1,7 @@
 import StoreLogo from "./StoreLogo";
 import { getSocialLinks } from "./socialLinks";
 import { toNameCase } from "../../../helpers";
+import LegalLink from "../../../components/PublicCatalog/LegalLink";
 
 // Pie de tienda: una sola franja, no un bloque de tres columnas.
 //
@@ -58,6 +59,7 @@ export default function StoreFooter({ store, pegado = false, flotantes = false }
                             </a>
                         )}
                         <span>© {anio} {nombre}</span>
+                        <LegalLink className="hover:text-content dark:hover:text-white" />
                     </div>
                 </div>
 

@@ -69,7 +69,7 @@ export default function ProductAddModal({ product, existing, onClose, onConfirm,
             <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] catalog-overlay-in" onClick={onClose} />
 
             <div
-                className="relative w-full sm:max-w-md max-h-[92vh] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col catalog-sheet-in shadow-2xl shadow-black/40"
+                className="relative w-full sm:max-w-md alto-hoja-92 rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col catalog-sheet-in shadow-2xl shadow-black/40"
                 style={{ backgroundColor: panelColor || PANEL_POR_DEFECTO }}
             >
                 <div className="overflow-y-auto">

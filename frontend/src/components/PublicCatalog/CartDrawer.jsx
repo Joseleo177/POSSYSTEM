@@ -7,6 +7,7 @@ import { sheetSkin } from "./CatalogSheet";
 import { useEffect, useRef, useState } from "react";
 import CountUp, { IconoPapelera } from "./CountUp";
 import Celebracion from "./Celebracion";
+import LegalLink from "./LegalLink";
 
 // Cuánto tarda una línea en irse: se desliza a un lado y la lista se cierra sobre su hueco.
 // Recién al terminar se quita del carrito; si se quitara antes, la lista saltaría de golpe.
@@ -326,7 +327,7 @@ export default function CartDrawer({
 
                                 <p className={`text-[12px] ${skin.subtle} leading-relaxed`}>
                                     {canSubmit
-                                        ? (usesCheckout ? "En el siguiente paso eliges cómo lo recibes y cómo pagas." : "Al enviarlo, la tienda lo confirma y te contacta para coordinar el pago y la entrega.")
+                                        ? (usesCheckout ? "En el siguiente paso eliges cómo lo recibes y cómo pagas." : <>Al enviarlo, la tienda lo confirma y te contacta para coordinar el pago y la entrega. Al enviar aceptas su <LegalLink nueva>política de privacidad</LegalLink>.</>)
                                         : "Completa cédula, nombre y teléfono para poder enviarlo."}
                                 </p>
 

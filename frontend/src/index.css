@@ -105,6 +105,14 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 @keyframes word-in { from { opacity: 0; transform: translateY(.45em); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes swash-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+/* Alto máximo de las hojas de la vitrina. En iPhone (Safari y Brave) 100vh es la pantalla SIN
+   la barra del navegador: con la barra visible, una hoja de 92vh quedaba más alta que lo que se
+   ve, su cabecera se iba por arriba y no había X para cerrarla ("Mis pedidos", el detalle).
+   dvh es lo visible de verdad; vh queda de respaldo para los navegadores que no lo conocen
+   (la segunda declaración solo gana si el navegador la entiende). */
+.alto-hoja-92 { max-height: 92vh; max-height: 92dvh; }
+.alto-hoja-90 { max-height: 90vh; max-height: 90dvh; }
+
 /* Esqueleto de carga de la vitrina. Antes era bg-surface-2 sobre una página bg-surface-2: el
    bloque no se veía y la sección parecía rota (un título y una flecha sobre la nada). Ahora
    es un gris que sí se distingue, con un brillo que lo recorre para que se lea "cargando". */

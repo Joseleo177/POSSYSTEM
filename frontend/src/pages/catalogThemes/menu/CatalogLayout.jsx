@@ -3,6 +3,7 @@ import LogoutConfirm from "../../../components/PublicCatalog/LogoutConfirm";
 import OrderDetailModal from "../../../components/PublicCatalog/OrderDetailModal";
 import MyOrdersModal from "../../../components/PublicCatalog/MyOrdersModal";
 import StoreWhatsAppButton from "../../../components/PublicCatalog/StoreWhatsAppButton";
+import LegalLink from "../../../components/PublicCatalog/LegalLink";
 import FloatingCart from "../../../components/PublicCatalog/FloatingCart";
 import ProductDetail from "../boutique/ProductDetail";
 
@@ -146,6 +147,9 @@ export default function CatalogLayout({ catalog, token }) {
                         <CategoryTiles categories={categories} onPick={setCategory} />
                     </>
                 )}
+                <p className="pt-10 text-center text-[12px] text-white/50">
+                    <LegalLink />
+                </p>
             </div>
 
             {dialogs()}

@@ -99,12 +99,15 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
         JOIN v s ON s.id = si.sale_id
         LEFT JOIN products p ON p.id = si.product_id
         CROSS JOIN LATERAL (SELECT ${unitCost} AS uc) u
-        LEFT JOIN LATERAL (
-          SELECT SUM(ri.qty) AS qty, SUM(ri.subtotal) AS sub
+        -- Lo devuelto por línea, agrupado una sola vez: como LATERAL corría una búsqueda por
+        -- cada línea vendida (70.000 en un historial de prueba).
+        LEFT JOIN (
+          SELECT ri.sale_item_id, SUM(ri.qty) AS qty, SUM(ri.subtotal) AS sub
             FROM return_items ri
             JOIN returns r ON r.id = ri.return_id
-           WHERE ri.sale_item_id = si.id AND r.status <> 'anulado'
-        ) dv ON TRUE
+           WHERE r.status <> 'anulado' AND r.sale_id IN (SELECT id FROM v)
+           GROUP BY ri.sale_item_id
+        ) dv ON dv.sale_item_id = si.id
        WHERE si.quantity - COALESCE(dv.qty, 0) > 0
     ),
     vs AS (
