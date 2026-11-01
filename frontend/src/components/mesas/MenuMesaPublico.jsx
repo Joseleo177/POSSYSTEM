@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { publicApi } from "../../services/api";
 import { resolveImageUrl } from "../../helpers/image";
+import { pintarFondo } from "../../helpers/fondoPagina";
 import AddonPicker, { faltante, precioExtras } from "./AddonPicker";
 import { flyToCart, CART_BUMP_EVENT, CART_TARGET_ATTR } from "../PublicCatalog/flyToCart";
 
@@ -263,13 +264,15 @@ function EnCurso({ grupos, papel }) {
 }
 
 // "Los favoritos de la casa": un carril de tarjetas con foto grande.
-function Favoritos({ platos, sym, enCarrito, tinta, onOpen }) {
+// También sirve para "Para ti" (31-10-2026): cada tarjeta puede llevar su etiqueta ("Lo de
+// siempre", "A esta hora", "Pruébalo").
+function Favoritos({ platos, sym, enCarrito, tinta, onOpen, titulo = "Los favoritos de la casa", detalle = "Lo más pedido" }) {
     if (!platos.length) return null;
     return (
         <section className="pt-6">
-            <div className="px-4 flex items-baseline justify-between">
-                <h2 className={`font-display text-[20px] font-bold tracking-tight ${tinta.fuerte}`}>Los favoritos de la casa</h2>
-                <span className={`text-[12px] ${tinta.suave}`}>Lo más pedido</span>
+            <div className="px-4 flex items-baseline justify-between gap-3">
+                <h2 className={`font-display text-[20px] font-bold tracking-tight truncate ${tinta.fuerte}`}>{titulo}</h2>
+                {detalle && <span className={`shrink-0 text-[12px] ${tinta.suave}`}>{detalle}</span>}
             </div>
             <div className="mt-3 flex gap-3 overflow-x-auto scrollbar-hide snap-x snap-mandatory px-4 pb-2">
                 {platos.map((p, i) => {
@@ -279,6 +282,7 @@ function Favoritos({ platos, sym, enCarrito, tinta, onOpen }) {
                             className="card-in snap-start shrink-0 w-[148px] text-left rounded-[20px] overflow-hidden relative aspect-[4/5] bg-neutral-200 active:scale-[0.98] transition-transform">
                             <Foto src={p.image_url} />
                             <span className="absolute inset-x-0 bottom-0 h-3/5 bg-gradient-to-t from-black/80 to-transparent" aria-hidden="true" />
+                            {p.etiqueta && <span className="absolute top-2 left-2 max-w-[calc(100%-3.25rem)] truncate leading-6 h-6 px-2 rounded-full bg-black/55 backdrop-blur text-white text-[11px] font-medium">{p.etiqueta}</span>}
                             <span className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center shadow-[0_2px_8px_rgba(0,0,0,.18)] ${n > 0 ? "bg-brand-500 text-brand-ink" : "bg-white text-neutral-900"}`}>
                                 {n > 0 ? <span key={n} className="badge-pop text-[12px] font-bold tabular-nums">{n}</span> : <Mas className="w-3.5 h-3.5" />}
                             </span>
@@ -294,7 +298,7 @@ function Favoritos({ platos, sym, enCarrito, tinta, onOpen }) {
     );
 }
 
-export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, modo, enCurso = [], onClose, onEnviado }) {
+export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, modo, enCurso = [], cliente = null, saludo = null, extraPedido = null, onClose, onEnviado }) {
     const [menu, setMenu] = useState(null);
     const [secciones, setSecciones] = useState([]);
     const [favIds, setFavIds] = useState([]);
@@ -342,6 +346,29 @@ export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, mo
         return nombres.map(s => ({ ...s, platos: platos.filter(p => p.category === s.name) })).filter(s => s.platos.length);
     }, [platos, secciones]);
     const favoritos = useMemo(() => favIds.map(id => platos.find(p => p.id === id)).filter(Boolean), [favIds, platos]);
+    // "Para ti" (cliente reconocido, ver services/mesaClientes.js): lo de siempre, lo que suele
+    // pedir a esta hora y los favoritos de la casa que todavía no ha probado. Solo lo que hoy
+    // está en la carta de esta sucursal y no se agotó.
+    const paraTi = useMemo(() => {
+        const s = cliente?.suggestions;
+        if (!s) return [];
+        const vistos = new Set();
+        const out = [];
+        const poner = (ids, etiqueta, max) => {
+            for (const id of ids || []) {
+                if (out.filter(x => x.etiqueta === etiqueta).length >= max) break;
+                const p = platos.find(x => x.id === id && !x.agotado);
+                if (!p || vistos.has(id)) continue;
+                vistos.add(id);
+                out.push({ ...p, etiqueta });
+            }
+        };
+        poner(s.usual, "Lo de siempre", 3);
+        poner(s.now, "A esta hora", 3);
+        const probados = new Set(s.tried || []);
+        poner(favIds.filter(id => !probados.has(id)), "Pruébalo", 3);
+        return out;
+    }, [cliente, platos, favIds]);
     const resultados = useMemo(() => {
         const t = sinAcentos(q.trim());
         if (!t) return null;
@@ -414,6 +441,7 @@ export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, mo
             const r = await publicApi.mesaPedir(token, {
                 items: carrito.map(l => ({ product_id: l.product_id, qty: l.qty, note: l.note || null, options: l.options })),
                 note: nota || null,
+                ...(extraPedido || {}),
             });
             // Se borra del navegador AQUÍ y no solo por setCarrito: onEnviado cierra la carta en
             // el mismo instante y React descarta la actualización pendiente de un componente que
@@ -428,6 +456,22 @@ export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, mo
     };
 
     const cerrarBusqueda = () => { setBuscando(false); setQ(""); };
+
+    // Mientras la carta está abierta, el documento y la barra del navegador van en el fondo de la
+    // tienda (al cerrarla vuelve el de la página de la mesa). Ver helpers/fondoPagina.js.
+    useEffect(() => pintarFondo(fondo), [fondo]);
+
+    // La franja de la hora y la batería: Brave en el iPhone la pinta OPACA con el theme-color de
+    // la página, encima de lo que haya debajo. Con el fondo oscuro de la tienda salía una franja
+    // negra sobre la portada naranja (31-10-2026). Mientras se ve la portada va en su color; al
+    // bajar, con la barra fija arriba, en el del fondo.
+    const colorPortada = store.cover_url ? "#171717" : store.brand_color ? `#${String(store.brand_color).replace("#", "")}` : fondo;
+    useEffect(() => {
+        document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute("content", compacto ? fondo : colorPortada));
+    }, [compacto, fondo, colorPortada]);
+
+    // La carta siempre abre desde arriba, con la portada y "Mi mesa" a la vista.
+    useEffect(() => { scrollRef.current?.scrollTo(0, 0); }, []);
 
     return (
         <div ref={scrollRef} className="fixed inset-0 z-50 overflow-y-auto overscroll-contain catalog-sheet-in" style={{ backgroundColor: fondo, "--papel": papel }}>
@@ -471,7 +515,8 @@ export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, mo
                 <div className="max-w-[640px] mx-auto">
                     {compacto && !buscando && (
                         <div className="px-4 pt-[max(0.5rem,env(safe-area-inset-top))] h-12 box-content flex items-center gap-2.5 rise-in">
-                            <button onClick={onClose} aria-label="Volver a mi mesa" className={`w-9 h-9 -ml-1.5 rounded-full flex items-center justify-center ${tinta.fuerte} active:scale-90 transition-transform`}><Atras /></button>
+                            {/* El mismo "Mi mesa" de la portada, completo y no solo la flecha (31-10-2026). */}
+                            <button onClick={onClose} className={`shrink-0 h-9 pl-2 pr-3.5 rounded-full text-[13px] font-semibold flex items-center gap-1 ${tinta.pildora} active:scale-95 transition-transform`}><Atras className="w-[18px] h-[18px]" /> Mi mesa</button>
                             <span className={`flex-1 min-w-0 truncate text-[15px] font-semibold ${tinta.fuerte}`}>{store.name}</span>
                             <span className={`text-[12px] ${tinta.suave}`}>{mesa}</span>
                         </div>
@@ -542,7 +587,12 @@ export default function MenuMesaPublico({ token, mesa, area, store = {}, sym, mo
                 ) : (
                     <>
                         <EnCurso grupos={enCurso} papel={papel} />
-                        <Favoritos platos={favoritos} sym={sym} enCarrito={enCarrito} tinta={tinta} onOpen={setPlato} />
+                        {paraTi.length > 0 && (
+                            <Favoritos platos={paraTi} sym={sym} enCarrito={enCarrito} tinta={tinta} onOpen={setPlato}
+                                titulo={`Para ti, ${saludo || cliente.customer.name}`}
+                                detalle={cliente.suggestions.visits > 1 ? `${cliente.suggestions.visits} visitas` : null} />
+                        )}
+                        <Favoritos platos={paraTi.length ? favoritos.filter(f => !paraTi.some(x => x.id === f.id)) : favoritos} sym={sym} enCarrito={enCarrito} tinta={tinta} onOpen={setPlato} />
                         {grupos.map((g, i) => (
                             // Sin el banner de foto por sección (31-10-2026, "más limpio"): la foto
                             // de cada categoría ya va en su píldora de la barra.

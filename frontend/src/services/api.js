@@ -875,4 +875,16 @@ export const publicApi = {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }),
+  // Quién es el cliente en la mesa (por el código de su aparato), "sí/no soy yo" y su cédula.
+  mesaYo:          (token, device) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/yo?d=${encodeURIComponent(device)}`),
+  mesaConfirmar:   (token, device, yes) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/yo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device, yes }),
+  }),
+  mesaIdentificar: (token, device, document) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/identificar`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ device, document }),
+  }),
 };

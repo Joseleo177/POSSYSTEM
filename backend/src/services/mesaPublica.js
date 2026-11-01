@@ -62,7 +62,7 @@ const HUELLA_SQL = `
     COALESCE((SELECT string_agg(o.id || ':' || o.status, ',' ORDER BY o.id) FROM table_orders o
                WHERE o.table_id = t.id AND o.created_at > NOW() - INTERVAL '3 hours'), '')
     || '|' ||
-    COALESCE((SELECT st.value FROM settings st WHERE st.company_id = t.company_id AND st.key = 'mesa_qr_pedidos'), '')
+    COALESCE((SELECT string_agg(st.key || '=' || st.value, ',' ORDER BY st.key) FROM settings st WHERE st.company_id = t.company_id AND st.key IN ('mesa_qr_pedidos', 'mesa_clientes')), '')
   ) AS v
     FROM dining_tables t
    WHERE t.public_token = :token AND t.active`;
@@ -87,7 +87,7 @@ async function armar(token) {
     const ajustes = Object.fromEntries((await Setting.findAll({
       where: {
         company_id: cid,
-        key: { [Op.in]: ["store_name", "store_slogan", "logo_filename", "brand_color", "catalog_brand_color", "catalog_bg_color", "catalog_panel_color", SLUG_KEY, MODO_KEY] },
+        key: { [Op.in]: ["store_name", "store_slogan", "logo_filename", "brand_color", "catalog_brand_color", "catalog_bg_color", "catalog_panel_color", "mesa_clientes", SLUG_KEY, MODO_KEY] },
       },
       attributes: ["key", "value"],
     })).map(s => [s.key, s.value]));
@@ -187,6 +187,8 @@ async function armar(token) {
         lines: [...pedido.values()].map(p => ({ name: p.name, quantity: p.quantity, subtotal: round2(p.subtotal) })),
         total,
         currency: { symbol: base?.symbol || "Ref.", bs_symbol: bs?.symbol || null, bs_rate: tasa },
+        // Reconocer al cliente en la mesa (services/mesaClientes.js), extra apagado por defecto.
+        customers: ajustes.mesa_clientes === "true",
         // Si se puede pedir desde el QR: 'confirmar' (lo acepta el mesonero) o 'directo'.
         ordering: leerModo(ajustes[MODO_KEY]) === "apagado" ? null : leerModo(ajustes[MODO_KEY]),
         qr_orders: pedidosQr.map(o => ({
@@ -383,11 +385,17 @@ async function pedir(token, body = {}) {
       resumen.push(`${l.qty} × ${p.name}${r.cocina ? ` (${r.cocina})` : ""}`);
     }
 
+    // El aparato que pide (ver services/mesaClientes.js): con él se reconoce al cliente después.
+    const clientes = require("./mesaClientes");
+    const aparato = clientes.huellaDe(body.device);
     const pedido = await TableOrder.create({
       company_id: cid, table_id: mesa.id, warehouse_id: wid,
       items: lineas, summary: resumen.join(", ").slice(0, 500), estimate: round2(estimado),
       note: String(body.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null,
+      device_hash: aparato,
     });
+    // Si se registró en la mesa (cédula nueva + nombre), su ficha nace con su primer pedido.
+    if (aparato && body.registro && typeof body.registro === "object") await clientes.alPedir(cid, aparato, body.registro);
     if (modo === "directo") directo = { id: pedido.id, cid };
     // El mesonero lo ve en la siguiente vuelta del mapa, sin esperar el caché de la huella.
     olvidar(`mesas:${cid}:`);
@@ -399,4 +407,4 @@ async function pedir(token, body = {}) {
   return ver(token);
 }
 
-module.exports = { ver, pedirCuenta, menu, adicionales, pedir, MODO_KEY, leerModo };
+module.exports = { ver, pedirCuenta, menu, adicionales, pedir, mesaDe, MODO_KEY, leerModo };

@@ -524,6 +524,14 @@ export default function SettingsTab({ notify }) {
                                             onChange={v => setSettings(p => ({ ...p, mesa_qr_pedidos: v }))}
                                             options={[{ key: "confirmar", label: "Confirmar" }, { key: "directo", label: "Directo" }, { key: "apagado", label: "Apagado" }]} />
                                     </div>
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    {/* Reconocer al cliente en el QR (services/mesaClientes.js). Apagado por defecto. */}
+                                    <Interruptor
+                                        titulo="Reconocer al cliente en la mesa"
+                                        detalle="El QR saluda al cliente por su nombre y le sugiere lo que suele pedir. Si no lo reconoce, le pide su cédula (puede decir «Ahora no»). Un teléfono queda ligado al cliente cuando escribe su cédula o cuando se le cobra una cuenta pedida desde ese teléfono."
+                                        checked={settings.mesa_clientes === "true"}
+                                        onChange={() => setSettings(p => ({ ...p, mesa_clientes: p.mesa_clientes === "true" ? "false" : "true" }))}
+                                    />
                                 </div>
                             </Seccion>
                         )}

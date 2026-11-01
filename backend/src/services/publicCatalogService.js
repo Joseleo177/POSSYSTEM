@@ -1527,6 +1527,6 @@ async function sitemapStore(slug) {
 }
 
 module.exports = {
-  getStore, getProducts, getProduct, getMeta, sitemapStores, sitemapStore, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote,
+  getStore, getProducts, getProduct, getMeta, sitemapStores, sitemapStore, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote, parseDocument,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };

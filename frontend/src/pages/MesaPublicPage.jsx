@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { publicApi } from "../services/api";
 import { fmtTime } from "../helpers/dates";
 import { resolveImageUrl } from "../helpers/image";
 import { applyBrandColor } from "../helpers/brandColor";
+import { pintarFondo, fijarDocumento } from "../helpers/fondoPagina";
 import MenuMesaPublico from "../components/mesas/MenuMesaPublico";
+import MedidorDebug from "../components/mesas/MedidorDebug";
+import QuienSoy, { aparato, leerRegistro, guardarRegistro, omitido, nombreDePila } from "../components/mesas/QuienSoy";
 
 // La página del QR de la mesa (/mesa/<código>): el cliente, desde su teléfono, ve cómo va cada
 // ronda en la cocina, lo que lleva pedido y cuánto va la cuenta, y la pide sin levantar la
@@ -175,6 +178,16 @@ export default function MesaPublicPage({ token }) {
         }
     }, [token]);
 
+    // El botón de actualizar (junto a "En vivo"): la misma consulta de cada 15 s, con la huella,
+    // así que si nada cambió cuesta lo mismo de poco. El giro dura al menos medio segundo para
+    // que el cliente vea que hizo algo aunque la respuesta sea instantánea.
+    const [actualizando, setActualizando] = useState(false);
+    const actualizar = async () => {
+        setActualizando(true);
+        await Promise.all([cargar(), new Promise(r => setTimeout(r, 600))]);
+        setActualizando(false);
+    };
+
     useEffect(() => {
         cargar();
         const t = setInterval(() => { if (document.visibilityState === "visible") cargar(); }, CADA);
@@ -186,6 +199,23 @@ export default function MesaPublicPage({ token }) {
     useEffect(() => {
         if (d?.table?.name) document.title = `${d.table.name} · ${d.store?.name || ""}`;
     }, [d?.table?.name, d?.store?.name]);
+
+    // El fondo del documento y la barra del navegador, del color de esta página: en un iPhone en
+    // modo oscuro quedaba una franja negra sobre la barra de abajo (ver helpers/fondoPagina.js).
+    // Y el documento no se desplaza: la página lo hace en su propio contenedor (ver fijarDocumento).
+    useEffect(() => {
+        const soltarFondo = pintarFondo("#F6F4F1");
+        const soltarDocumento = fijarDocumento();
+        return () => { soltarDocumento(); soltarFondo(); };
+    }, []);
+    const contenedorRef = useRef(null);
+    // La barra del navegador (la zona de la hora en Safari) en el color de la cabecera, que ahora
+    // llega hasta arriba. Al salir, pintarFondo deja las etiquetas como estaban.
+    const colorCabecera = d ? (d.store.cover_url ? "#171717" : d.store.brand_color ? `#${String(d.store.brand_color).replace("#", "")}` : null) : null;
+    useEffect(() => {
+        if (!colorCabecera || menuAbierto) return;
+        document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute("content", colorCabecera));
+    }, [colorCabecera, menuAbierto]);
 
     // El color de la tienda, el mismo que pinta su catálogo.
     useEffect(() => {
@@ -203,6 +233,56 @@ export default function MesaPublicPage({ token }) {
         }
         listasAntes.current = ahora;
     }, [d]);
+
+    // ── Quién es el cliente (31-10-2026, services/mesaClientes.js) ──────────────────────────
+    // Solo si la tienda lo encendió. Reconocido sin confirmar → "¿Eres José?". Sin reconocer →
+    // se prueba con su identidad del catálogo (mismo dominio) y, si no, "¿Quién eres?" con su
+    // cédula. Siempre se puede decir "Ahora no".
+    const disp = useMemo(() => aparato(), []);
+    const clientesOn = !!d?.customers;
+    const tienda = d?.store?.name || token;
+    const [yo, setYo] = useState(null);           // { customer: { name, confirmed }, suggestions }
+    const [registro, setRegistro] = useState(null);
+    const [hoja, setHoja] = useState(null);       // "eres" | "quien" | null
+    const yaPregunto = useRef(false);
+
+    useEffect(() => {
+        if (!clientesOn || !disp || yaPregunto.current) return;
+        yaPregunto.current = true;
+        (async () => {
+            let y = null;
+            try { y = (await publicApi.mesaYo(token, disp)).data; setYo(y); } catch { return; }
+            if (y?.customer) { if (!y.customer.confirmed) setHoja("eres"); return; }
+            const reg = leerRegistro(tienda);
+            if (reg) { setRegistro(reg); return; }
+            // Ya se identificó en el catálogo de la tienda desde este teléfono: no se le pregunta.
+            const slug = String(d.store.menu_url || "").split("/catalogo/")[1];
+            let delCatalogo = null;
+            try { delCatalogo = slug ? JSON.parse(localStorage.getItem(`catalog_identity_${slug}`) || "null") : null; } catch { /* nada */ }
+            if (delCatalogo?.document) {
+                try {
+                    const r = await publicApi.mesaIdentificar(token, disp, delCatalogo.document);
+                    if (r.data?.found) { setYo(r.data); return; }
+                } catch { /* se pregunta */ }
+            }
+            if (!omitido(tienda)) setHoja("quien");
+        })();
+    }, [clientesOn, disp]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const confirmado = yo?.customer?.confirmed ? yo : null;
+    const saludo = confirmado ? confirmado.customer.name : registro ? nombreDePila(registro.name) : null;
+    const hojaQuien = hoja && (
+        <QuienSoy modo={hoja} nombre={yo?.customer?.name} tienda={tienda}
+            onSi={async () => setYo((await publicApi.mesaConfirmar(token, disp, true)).data)}
+            onNo={async () => setYo((await publicApi.mesaConfirmar(token, disp, false)).data)}
+            onCedula={async (doc) => {
+                const r = (await publicApi.mesaIdentificar(token, disp, doc)).data;
+                if (r.found) { setYo(r); return { found: true, name: r.customer?.name }; }
+                return { found: false, document: r.document };
+            }}
+            onRegistro={(reg) => { guardarRegistro(tienda, reg); setRegistro(reg); }}
+            onClose={() => setHoja(null)} />
+    );
 
     const pedirCuenta = async () => {
         setPidiendo(true);
@@ -255,14 +335,17 @@ export default function MesaPublicPage({ token }) {
     ];
 
     return (
-        <div className="min-h-[100dvh] bg-[#F6F4F1] text-neutral-900">
+        // La página se desplaza en su propio contenedor, no el documento (ver fijarDocumento): en
+        // Brave del iPhone el documento se corría 71 px y la cabecera quedaba bajo la hora. La
+        // cabecera va de borde a borde arriba.
+        <div ref={contenedorRef} className="fixed inset-0 overflow-y-auto overscroll-contain bg-[#F6F4F1] text-neutral-900 pb-[env(safe-area-inset-bottom)]">
             <div className="max-w-[560px] mx-auto px-4 pb-12">
                 {/* Cabecera: la tienda y la mesa, en el color de la tienda, con el "en vivo"
                     que dice que esto se mueve solo. */}
                 {/* 31-10-2026, "más limpio": sin círculos de adorno ni el nombre repetido al lado
                     del logo. El logo (o el nombre, si no hay logo) y el "en vivo" arriba; la mesa
                     y cómo va, abajo. */}
-                <header className={`rise-in relative mt-4 mb-4 rounded-[28px] overflow-hidden px-5 pt-4 pb-5 ${d.store.cover_url ? "bg-neutral-900 text-white" : "bg-brand-500 text-brand-ink"}`}>
+                <header className={`rise-in relative -mx-4 mb-4 rounded-b-[28px] overflow-hidden px-5 pt-[calc(env(safe-area-inset-top)+1rem)] pb-5 ${d.store.cover_url ? "bg-neutral-900 text-white" : "bg-brand-500 text-brand-ink"}`}>
                     {/* Con foto del local (la portada de su catálogo), la cabecera es esa foto. */}
                     {d.store.cover_url ? (
                         <>
@@ -280,19 +363,36 @@ export default function MesaPublicPage({ token }) {
                         ) : (
                             <span className="text-[14px] font-semibold truncate">{d.store.name}</span>
                         )}
-                        <span className="shrink-0 inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-black/15 text-[12px] font-medium">
-                            <span className="relative flex w-1.5 h-1.5">
-                                <span className="absolute inset-0 rounded-full bg-emerald-300 animate-ping" />
-                                <span className="relative w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                        <span className="shrink-0 flex items-center gap-1.5">
+                            <span className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-full bg-black/15 text-[12px] font-medium">
+                                <span className="relative flex w-1.5 h-1.5">
+                                    <span className="absolute inset-0 rounded-full bg-emerald-300 animate-ping" />
+                                    <span className="relative w-1.5 h-1.5 rounded-full bg-emerald-300" />
+                                </span>
+                                En vivo
                             </span>
-                            En vivo
+                            {/* Actualizar a mano: la página ya no se refresca deslizando hacia abajo
+                                (el documento está fijo, ver fijarDocumento). */}
+                            <button type="button" onClick={actualizar} disabled={actualizando} aria-label="Actualizar"
+                                className="w-8 h-8 rounded-full bg-black/15 flex items-center justify-center active:scale-90 transition-transform disabled:opacity-80">
+                                <svg className={`w-4 h-4 ${actualizando ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M20 12a8 8 0 01-14.3 4.9M4 12a8 8 0 0114.3-4.9M18.5 3v4.2h-4.2M5.5 21v-4.2h4.2" />
+                                </svg>
+                            </button>
                         </span>
                     </div>
                     <div className="relative mt-7">
+                        {/* El saludo: tocarlo pregunta "¿Eres José?" (por si el teléfono es de otro).
+                            Sin reconocer, la invitación a identificarse. */}
+                        {clientesOn && (saludo ? (
+                            <button type="button" onClick={() => yo?.customer && setHoja("eres")} className="block mb-1.5 text-[15px] font-medium opacity-90">Hola, {saludo}</button>
+                        ) : (
+                            <button type="button" onClick={() => setHoja("quien")} className="block mb-1.5 text-[13px] font-medium opacity-85 underline underline-offset-4 decoration-current/40">¿Quién eres? Identifícate</button>
+                        ))}
                         <h1 className="font-display text-[36px] font-bold tracking-tight leading-none">{d.table.name}</h1>
                         <div className="mt-2 text-[14px] opacity-85">
                             {d.table.area ? `${d.table.area} · ` : ""}
-                            {porConfirmar && !enCocina && !hayListas ? "Pedido por confirmar" : !d.open ? "Bienvenido" : hayListas ? "Tu pedido está listo" : enCocina > 0 ? `${enCocina} ${enCocina === 1 ? "ronda" : "rondas"} en la cocina` : "Todo servido"}
+                            {porConfirmar && !enCocina && !hayListas ? "Pedido por confirmar" : !d.open ? (clientesOn && saludo ? "¿Qué vas a pedir hoy?" : "Bienvenido") : hayListas ? "Tu pedido está listo" : enCocina > 0 ? `${enCocina} ${enCocina === 1 ? "ronda" : "rondas"} en la cocina` : "Todo servido"}
                         </div>
                     </div>
                 </header>
@@ -432,15 +532,27 @@ export default function MesaPublicPage({ token }) {
 
             {menuAbierto && (
                 <MenuMesaPublico token={token} mesa={d.table.name} area={d.table.area} store={d.store} sym={sym} modo={d.ordering} enCurso={enCurso}
+                    cliente={confirmado} saludo={saludo}
+                    // Con el pedido va el aparato (para reconocerlo después) y, si se registró en la
+                    // mesa, sus datos: su ficha nace con este primer pedido.
+                    extraPedido={clientesOn && disp ? { device: disp, ...(registro && !yo?.customer ? { registro } : {}) } : null}
                     onClose={() => setMenuAbierto(false)}
                     onEnviado={(r) => {
                         huella.current = r.v || null;
                         setD(r.data);
                         setMenuAbierto(false);
                         setEnviado(d.ordering === "directo" ? "Tu pedido salió a la cocina." : "Pedido enviado: el mesonero lo confirma en un momento.");
-                        window.scrollTo({ top: 0, behavior: "smooth" });
+                        contenedorRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+                        if (registro && clientesOn) {
+                            guardarRegistro(tienda, null);
+                            setRegistro(null);
+                            publicApi.mesaYo(token, disp).then(x => setYo(x.data)).catch(() => {});
+                        }
                     }} />
             )}
+            {hojaQuien}
+            {/* TEMPORAL: medidor con ?debug=1 (ver MedidorDebug). */}
+            {new URLSearchParams(window.location.search).has("debug") && <MedidorDebug />}
         </div>
     );
 }

@@ -18,6 +18,8 @@ module.exports = (sequelize, DataTypes) => {
     reason:       { type: DataTypes.STRING(200), allowNull: true },
     sale_id:      { type: DataTypes.INTEGER, allowNull: true },
     ticket_id:    { type: DataTypes.INTEGER, allowNull: true },
+    // Desde qué aparato (huella del código del navegador) se pidió. Ver services/mesaClientes.js.
+    device_hash:  { type: DataTypes.STRING(64), allowNull: true },
     resolved_by:  { type: DataTypes.INTEGER, allowNull: true },
     resolved_at:  { type: DataTypes.DATE, allowNull: true },
     created_at:   { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
