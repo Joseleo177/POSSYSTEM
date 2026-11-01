@@ -5,7 +5,6 @@ import { resolveImageUrl } from "../helpers/image";
 import { applyBrandColor } from "../helpers/brandColor";
 import { pintarFondo, fijarDocumento } from "../helpers/fondoPagina";
 import MenuMesaPublico from "../components/mesas/MenuMesaPublico";
-import MedidorDebug from "../components/mesas/MedidorDebug";
 import QuienSoy, { aparato, leerRegistro, guardarRegistro, omitido, nombreDePila } from "../components/mesas/QuienSoy";
 
 // La página del QR de la mesa (/mesa/<código>): el cliente, desde su teléfono, ve cómo va cada
@@ -551,8 +550,6 @@ export default function MesaPublicPage({ token }) {
                     }} />
             )}
             {hojaQuien}
-            {/* TEMPORAL: medidor con ?debug=1 (ver MedidorDebug). */}
-            {new URLSearchParams(window.location.search).has("debug") && <MedidorDebug />}
         </div>
     );
 }
