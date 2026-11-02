@@ -37,6 +37,11 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
   });
 }
 
+// Arrancó: los archivos de la página existen. Se apaga la recarga automática de index.html
+// (ver index.html) y se libera su marca para un próximo despliegue.
+window.__nxusArranco = true;
+try { sessionStorage.removeItem("nxus_recarga_html"); } catch { /* modo privado */ }
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <App />

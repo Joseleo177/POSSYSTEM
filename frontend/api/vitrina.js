@@ -29,21 +29,37 @@ const ESPERA_MS = 2500;
 const CACHE_OK = "public, max-age=0, s-maxage=300, stale-while-revalidate=86400";
 const CACHE_404 = "public, max-age=0, s-maxage=60";
 
-let plantilla = null; // index.html del despliegue: no cambia mientras viva la instancia
+// index.html del sitio, guardado en la instancia. NO es "para siempre": Vercel reutiliza la
+// instancia de una función entre despliegues cuando su código no cambió, y la que guardaba la
+// plantilla de por vida siguió entregando el index.html del despliegue anterior, con nombres de
+// JS y CSS que ya no existían: la vitrina quedaba en blanco (02-11-2026). Ahora se relee cada
+// VIDA_PLANTILLA_MS, sin caché (?v=), y solo se guarda si su JS existe en el sitio.
+const VIDA_PLANTILLA_MS = 60 * 1000;
+let plantilla = null;
+let leidaEn = 0;
 
-async function conEspera(url) {
+async function conEspera(url, metodo = "GET") {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ESPERA_MS);
-  try { return await fetch(url, { signal: ctrl.signal, headers: { accept: "application/json, text/html" } }); }
+  try { return await fetch(url, { method: metodo, signal: ctrl.signal, headers: { accept: "application/json, text/html" } }); }
   finally { clearTimeout(t); }
 }
 
+// { html, fiable }. Sin fiable (el JS que nombra no está, p. ej. justo durante un cambio de
+// despliegue) la página se entrega igual pero sin caché en la CDN, y la próxima visita la relee.
 async function leerPlantilla(origen) {
-  if (plantilla) return plantilla;
-  const res = await conEspera(`${origen}/index.html`);
+  if (plantilla && Date.now() - leidaEn < VIDA_PLANTILLA_MS) return { html: plantilla, fiable: true };
+  const res = await conEspera(`${origen}/index.html?v=${Date.now()}`);
   if (!res.ok) throw new Error(`index.html ${res.status}`);
-  plantilla = await res.text();
-  return plantilla;
+  const html = await res.text();
+  const entrada = html.match(/src="(\/assets\/[^"]+\.js)"/);
+  let fiable = true;
+  if (entrada) {
+    try { fiable = (await conEspera(`${origen}${entrada[1]}`, "HEAD")).ok; }
+    catch { fiable = false; }
+  }
+  if (fiable) { plantilla = html; leidaEn = Date.now(); }
+  return { html, fiable };
 }
 
 const esc = (s) => String(s ?? "")
@@ -202,8 +218,9 @@ module.exports = async (req, res) => {
   const pid = req.query.p ? String(req.query.p) : null;
 
   let html;
+  let fiable;
   try {
-    html = await leerPlantilla(origen);
+    ({ html, fiable } = await leerPlantilla(origen));
   } catch (err) {
     // Sin plantilla no hay nada que servir: que reintente el navegador.
     console.error("[vitrina] index.html", err.message);
@@ -215,7 +232,7 @@ module.exports = async (req, res) => {
   const enviar = (status, cuerpo, cache) => {
     res.statusCode = status;
     res.setHeader("Content-Type", "text/html; charset=utf-8");
-    res.setHeader("Cache-Control", cache);
+    res.setHeader("Cache-Control", fiable ? cache : "no-store");
     res.end(cuerpo);
   };
 

@@ -31,6 +31,33 @@
         }
       })();
     </script>
+    <!-- Esta página puede venir de una caché con los nombres de JS y CSS de un despliegue
+         anterior, que ya no existen (la vitrina pasa por la CDN de Vercel): la pantalla queda en
+         blanco. Si falla uno de esos archivos se recarga UNA vez con ?_v=, que no está en
+         ninguna caché. La marca la quita main.jsx cuando la app arranca. -->
+    <script>
+      (function () {
+        var MARCA = "nxus_recarga_html";
+        try {
+          var u = new URL(location.href);
+          if (u.searchParams.has("_v")) { u.searchParams.delete("_v"); history.replaceState(history.state, "", u.toString()); }
+        } catch (_) { /* navegador viejo */ }
+        window.addEventListener("error", function (e) {
+          var t = e.target;
+          // Ya arrancada, lo que falle es de una pantalla perezosa: eso lo resuelve App.jsx.
+          if (window.__nxusArranco) return;
+          if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK")) return;
+          if (String(t.src || t.href || "").indexOf("/assets/") === -1) return;
+          try {
+            if (sessionStorage.getItem(MARCA)) return;
+            sessionStorage.setItem(MARCA, "1");
+            var u = new URL(location.href);
+            u.searchParams.set("_v", Date.now());
+            location.replace(u.toString());
+          } catch (_) { /* modo privado: sin recarga automática */ }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
