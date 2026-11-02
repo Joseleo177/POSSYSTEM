@@ -335,6 +335,21 @@ export const api = {
       if (imageFile) fd.append("image", imageFile); else fd.append("remove", "true");
       return request(`/products/${id}/variant-image`, { method: "PUT", body: fd });
     },
+    // Fotos adicionales de la ficha de la vitrina. Una por petición: varias juntas pasarían el
+    // tope de 4,5 MB de Vercel.
+    images: {
+      list:      (id)                 => request(`/products/${id}/images`),
+      add:       (id, file, label)    => {
+        const fd = new FormData();
+        fd.append("image", file);
+        if (label) fd.append("label", label);
+        return request(`/products/${id}/images`, { method: "POST", body: fd });
+      },
+      rename:    (id, imageId, label) => request(`/products/${id}/images/${imageId}`, { method: "PATCH", body: JSON.stringify({ label }) }),
+      order:     (id, ids)            => request(`/products/${id}/images/order`, { method: "PUT", body: JSON.stringify({ ids }) }),
+      principal: (id, imageId)        => request(`/products/${id}/images/${imageId}/principal`, { method: "POST" }),
+      remove:    (id, imageId)        => request(`/products/${id}/images/${imageId}`, { method: "DELETE" }),
+    },
     // Publica u oculta varios productos del catálogo público en una sola llamada
     setCatalogVisibility: (ids, visible) =>
       request("/products/catalog-visibility", { method: "PATCH", body: JSON.stringify({ ids, visible }) }),

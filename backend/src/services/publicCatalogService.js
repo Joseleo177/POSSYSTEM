@@ -881,6 +881,8 @@ async function getProduct(token, productId, { warehouse_id } = {}) {
       image_url: p.image_filename
         ? (p.image_filename.startsWith("http") ? p.image_filename : `/uploads/${p.image_filename}`)
         : null,
+      // Fotos adicionales, solo en la ficha: la grilla sigue pidiendo una sola por producto.
+      images: await require("./products/productImages").paraVitrina(p.id),
       // El booleano, nunca la cantidad: mismo trato que el listado.
       available,
       has_variants: !!p.is_variant_parent,

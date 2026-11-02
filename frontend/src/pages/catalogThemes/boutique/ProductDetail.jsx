@@ -3,6 +3,7 @@ import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../../helpers";
 import { fmtQtyUnit } from "../../../helpers/unitFormatter";
 import VariantOptions, { useVariantSelection, lineaDeVariante } from "../../../components/PublicCatalog/VariantOptions";
 import AddToCartButton from "../../../components/PublicCatalog/AddToCartButton";
+import ProductGallery from "../../../components/PublicCatalog/ProductGallery";
 
 // Página propia del producto: /catalogo/<tienda>/p/<id>. Es lo que la tienda comparte por
 // WhatsApp o Instagram — el enlace de un producto suelto, no de la vitrina entera — así que
@@ -62,6 +63,11 @@ export default function ProductDetail({
     const enOferta = hasPrice && precioDe.price_before != null;
     const disponible = elegida ? elegida.available : p.available;
     const foto = (conVariantes && v.foto) || p.image_url;
+    // La principal (o la del color elegido) y después las adicionales que cargó la tienda.
+    const fotos = [
+        ...(foto ? [{ url: foto, label: null }] : []),
+        ...(p.images || []),
+    ];
     // Con variantes, "en el carrito" es esa talla y color, no el modelo.
     const enCarrito = conVariantes ? (elegida ? cart.find(it => it.id === elegida.id) : null) : inCart;
     const listoParaAgregar = disponible && hasPrice && (!conVariantes || !!elegida);
@@ -110,20 +116,8 @@ export default function ProductDetail({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 md:items-start">
                 {/* Fija en escritorio mientras se baja por la descripción y el kit: la foto
                     sigue a la vista junto al texto que la describe. */}
-                <div className={`md:sticky md:top-40 aspect-square rounded-2xl bg-surface-2 dark:bg-white/[0.04] border border-border/40 dark:border-white/[0.06] relative overflow-hidden ${!p.available ? "opacity-60" : ""}`}>
-                    {foto ? (
-                        <img
-                            key={foto}
-                            src={resolveImageUrl(foto)}
-                            alt={p.name}
-                            onError={imgRetryOnError}
-                            className="absolute inset-0 w-full h-full object-cover modal-in"
-                        />
-                    ) : (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-6xl font-black text-brand-500/25 select-none">{p.name.charAt(0)}</span>
-                        </div>
-                    )}
+                <div className="md:sticky md:top-40 min-w-0">
+                    <ProductGallery fotos={fotos} alt={p.name} apagada={!p.available} inicial={p.name.charAt(0)} />
                 </div>
 
                 {/* Orden de la columna: primero lo que decide la compra (qué es, cuánto

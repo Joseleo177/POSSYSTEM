@@ -14,6 +14,13 @@ router.post("/import", auth, permit("products.create"), permit("products.edit"),
 router.get("/:id/variants", auth, permit("products.view", "sales.create"), require("../controllers/productAttributes").variants);
 // Foto por color de un modelo con variantes.
 router.put("/:id/variant-image", auth, permit("products.edit"), upload.single("image"), ctrl.variantImage);
+// Fotos adicionales (la principal va con el producto). "order" antes de ":imageId".
+router.get("/:id/images",                     auth, permit("products.view"), ctrl.images.listar);
+router.post("/:id/images",                    auth, permit("products.edit"), upload.single("image"), ctrl.images.agregar);
+router.put("/:id/images/order",               auth, permit("products.edit"), ctrl.images.ordenar);
+router.patch("/:id/images/:imageId",          auth, permit("products.edit"), ctrl.images.renombrar);
+router.post("/:id/images/:imageId/principal", auth, permit("products.edit"), ctrl.images.hacerPrincipal);
+router.delete("/:id/images/:imageId",         auth, permit("products.edit"), ctrl.images.eliminar);
 router.get("/:id",    auth, permit("products.view"), ctrl.getOne);
 router.post("/",      auth, permit("products.create"), upload.single("image"), ctrl.create);
 router.put("/:id",    auth, permit("products.edit"), upload.single("image"), ctrl.update);

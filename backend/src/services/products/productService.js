@@ -1044,9 +1044,13 @@ async function deleteProduct(id, company_id) {
     const e = new Error("No se puede eliminar: tiene historial en Fábrica (piezas, órdenes o recetas)"); e.status = 400; throw e;
   }
 
+  // Las fotos adicionales se van con el producto (ON DELETE CASCADE); sus archivos, después.
+  const fotos = require("./productImages");
+  const adicionales = await fotos.archivosDe(product.id);
   await handleImageDelete(product.image_filename, product.id);
   await ProductStock.destroy({ where: { product_id: id } });
   await product.destroy();
+  await fotos.borrarArchivos(adicionales);
   return { message: "Producto eliminado exitosamente" };
 }
 

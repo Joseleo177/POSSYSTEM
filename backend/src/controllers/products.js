@@ -47,7 +47,30 @@ const wrap = (fn, status = 200) => async (req, res) => {
   }
 };
 
+// Fotos adicionales. Todas pasan por el acceso a la sucursal del producto, y company_id va a
+// mano porque la subida lleva multer (ver services/products/productImages.js).
+const fotos = require("../services/products/productImages");
+const conFoto = (fn) => wrap(async req => {
+  await assertProductAccess(req, req.params.id);
+  const args = {
+    productId: parseInt(req.params.id, 10),
+    imageId: parseInt(req.params.imageId, 10) || null,
+    company_id: req.employee?.company_id ?? null,
+  };
+  const result = await fn(args, req);
+  if (req.method !== "GET") broadcast(args.company_id ?? 0, 'products:updated', {});
+  return result;
+});
+
 module.exports = {
+  images: {
+    listar:         conFoto(a => fotos.listar(a.productId, a.company_id)),
+    agregar:        conFoto((a, req) => fotos.agregar({ ...a, file: req.file, label: req.body?.label })),
+    renombrar:      conFoto((a, req) => fotos.renombrar({ ...a, label: req.body?.label })),
+    ordenar:        conFoto((a, req) => fotos.ordenar({ ...a, ids: req.body?.ids })),
+    hacerPrincipal: conFoto(a => fotos.hacerPrincipal(a)),
+    eliminar:       conFoto(a => fotos.eliminar(a)),
+  },
   // Foto por color de un modelo con variantes (multer: company_id a mano).
   variantImage: wrap(async req => {
     await assertProductAccess(req, req.params.id);

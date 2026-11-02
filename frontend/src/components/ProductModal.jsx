@@ -9,6 +9,7 @@ import { Spinner } from "./ui/Spinner";
 import ComboItemsEditor from "./ComboItemsEditor";
 import BenefitTagPicker from "./BenefitTagPicker";
 import VariantsEditor from "./VariantsEditor";
+import ProductPhotos from "./ProductPhotos";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import Segmented from "./ui/Segmented";
@@ -898,6 +899,21 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 space-y-3 mt-1">
                         {form.visible_in_catalog && form.sellable ? (
                             <>
+                                {/* Varias fotos: los demás modelos de un producto que no usa
+                                    variantes. Una variante suelta no tiene ficha propia en la
+                                    vitrina, así que no las lleva. */}
+                                {!editData?.parent_id && (
+                                    <ProductPhotos
+                                        productId={editData?.id || null}
+                                        mainUrl={imagePreview}
+                                        notify={notify}
+                                        onMainChange={(url) => {
+                                            setImagePreview(resolveImageUrl(url) || null);
+                                            setImageFile(null);
+                                            setRemoveImage(false);
+                                        }}
+                                    />
+                                )}
                                 <div>
                                     <label className="label">Marca o línea</label>
                                     <input
