@@ -1,4 +1,4 @@
-const { Product, ProductImage, sequelize } = require("../../models");
+const { Product, ProductImage, Sequelize, sequelize } = require("../../models");
 const { imageUrl, saveImage, deleteImage } = require("../../utils/imageStorage");
 const { runWithoutTenant } = require("../../utils/tenantStorage");
 
@@ -12,6 +12,7 @@ const { runWithoutTenant } = require("../../utils/tenantStorage");
 // company_id va a mano en todas las consultas: la subida pasa por multer, que rompe el
 // contexto del que depende el filtro por empresa (ver controllers/catalogBanners.js).
 
+const { Op } = Sequelize;
 const MAX_FOTOS = 12;
 
 const fallo = (status, message) => Object.assign(new Error(message), { status, isOperational: true });
@@ -169,7 +170,28 @@ async function paraVitrina(productId) {
   return fotos.map((f) => ({ url: imageUrl(f.image_filename), label: f.label || null }));
 }
 
+// La grilla de la vitrina: las tarjetas pasan sus fotos al poner el cursor encima. Una sola
+// consulta para toda la página y como mucho POR_TARJETA por producto, solo la URL: el nombre y
+// el resto quedan para la ficha.
+const POR_TARJETA = 4;
+async function paraGrilla(productIds) {
+  const mapa = new Map();
+  if (!productIds.length) return mapa;
+  const fotos = await ProductImage.findAll({
+    where: { product_id: { [Op.in]: productIds } },
+    attributes: ["product_id", "image_filename"],
+    order: [["product_id", "ASC"], ["position", "ASC"], ["id", "ASC"]],
+    raw: true,
+  });
+  for (const f of fotos) {
+    const lista = mapa.get(f.product_id) || [];
+    if (lista.length < POR_TARJETA) lista.push(imageUrl(f.image_filename));
+    mapa.set(f.product_id, lista);
+  }
+  return mapa;
+}
+
 module.exports = {
   MAX_FOTOS, listar, agregar, renombrar, ordenar, hacerPrincipal, eliminar,
-  archivosDe, borrarArchivos, paraVitrina,
+  archivosDe, borrarArchivos, paraVitrina, paraGrilla,
 };

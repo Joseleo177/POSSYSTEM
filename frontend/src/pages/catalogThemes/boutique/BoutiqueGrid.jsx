@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { resolveImageUrl, imgRetryOnError } from "../../../helpers";
 import { fmtQtyUnit, WEIGHTED_UNITS } from "../../../helpers/unitFormatter";
 import { toNameCase } from "../../../helpers";
@@ -75,13 +75,7 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, onQty, 
                     !p.available ? "opacity-50" : "",
                 ].join(" ")}>
                 {p.image_url ? (
-                    <img
-                        src={resolveImageUrl(p.image_url)}
-                        alt={p.name}
-                        loading="lazy"
-                        onError={imgRetryOnError}
-                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-out [@media(hover:hover)]:group-hover:scale-105"
-                    />
+                    <FotosTarjeta principal={p.image_url} extras={p.more_images} alt={p.name} />
                 ) : (
                     <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-500/5 to-brand-500/[0.12]">
                         <span className="text-4xl font-black text-brand-500/25 select-none">{p.name.charAt(0)}</span>
@@ -197,6 +191,69 @@ export function Card({ p, inCart, fmt, baseCur, altCur, canOrder, onAdd, onQty, 
                 )}
             </div>
         </article>
+    );
+}
+
+// La foto de la tarjeta. Si el producto tiene fotos adicionales (los modelos de una joya, por
+// ejemplo), al poner el cursor encima van pasando solas, con unas rayitas abajo que dicen
+// cuántas son; al salir vuelve la principal. Las adicionales no se descargan hasta el primer
+// paso del cursor: una grilla de 40 productos no tiene por qué bajar 160 fotos.
+//
+// Solo con mouse (pointerType): en el teléfono un toque también dispara pointerenter y la
+// foto cambiaría justo antes de abrir la ficha. Ahí las fotos se ven en la ficha.
+const PASO_FOTO = 1400;
+
+function FotosTarjeta({ principal, extras, alt }) {
+    const fotos = extras?.length ? [principal, ...extras] : [principal];
+    const varias = fotos.length > 1;
+    const [encima, setEncima] = useState(false);
+    const [vista, setVista] = useState(false);
+    const [actual, setActual] = useState(0);
+
+    useEffect(() => {
+        if (!encima || !varias) { setActual(0); return; }
+        // La segunda entra enseguida: si tarda, parece que el cursor no hizo nada.
+        let siguiente;
+        const primera = setTimeout(() => {
+            setActual(1);
+            siguiente = setInterval(() => setActual(i => (i + 1) % fotos.length), PASO_FOTO);
+        }, 350);
+        return () => { clearTimeout(primera); clearInterval(siguiente); };
+    }, [encima, varias, fotos.length]);
+
+    const entrar = (e) => {
+        if (e.pointerType !== "mouse" || !varias) return;
+        setVista(true);
+        setEncima(true);
+    };
+
+    return (
+        <div className="absolute inset-0" onPointerEnter={entrar} onPointerLeave={() => setEncima(false)}>
+            {fotos.map((url, i) => (i === 0 || vista) && (
+                <img
+                    key={`${url}-${i}`}
+                    src={resolveImageUrl(url)}
+                    alt={i === 0 ? alt : ""}
+                    loading="lazy"
+                    onError={imgRetryOnError}
+                    className={`absolute inset-0 w-full h-full object-cover transition-[opacity,transform] duration-500 ease-out [@media(hover:hover)]:group-hover:scale-105 ${i === actual ? "opacity-100" : "opacity-0"}`}
+                />
+            ))}
+            {varias && encima && (
+                // Sobre su pastilla oscura: casi todas las fotos de producto van sobre blanco y
+                // las rayitas blancas solas no se veían.
+                <div className="pointer-events-none absolute inset-x-0 bottom-2.5 flex justify-center rise-in">
+                    <div className="flex items-center gap-1 px-2 py-1.5 rounded-full bg-black/40 backdrop-blur-sm">
+                        {fotos.map((url, i) => (
+                            <span
+                                key={`${url}-${i}`}
+                                className={`h-[3px] rounded-full transition-all duration-300 ${i === actual ? "w-4 bg-white" : "w-1.5 bg-white/50"}`}
+                            />
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }
 

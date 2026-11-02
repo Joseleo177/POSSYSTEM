@@ -674,6 +674,9 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
     const modelos = await modelosDisponibles(rows.filter((r) => r.is_variant_parent).map((r) => r.id), whId);
     // Adicionales (restaurante): término, contorno, extras. Con ellos, "Agregar" abre la ficha.
     const adicionales = await addons.paraVarios(rows.map((r) => r.id), whId);
+    // Fotos adicionales: la tarjeta las pasa al poner el cursor encima.
+    const masFotos = await require("./products/productImages")
+      .paraGrilla(rows.filter((r) => r.image_filename && !r.is_variant_parent).map((r) => r.id));
 
     return {
       total: count,
@@ -720,6 +723,7 @@ async function getProducts(token, { search, category_id, limit = 40, offset = 0,
           image_url: foto
             ? (foto.startsWith("http") ? foto : `/uploads/${foto}`)
             : null,
+          more_images: masFotos.get(j.id) || [],
           // Se publica el booleano, nunca la cantidad: el inventario real no sale de casa.
           available,
           // Con variantes, "Agregar" abre el selector de talla y color en vez de sumarlo.
