@@ -20,7 +20,7 @@ import { toNameCase, printKitchenOrder, resolveImageUrl } from "../helpers";
 // aceptarlo pasa al POS como cuenta en espera, donde se cobra como siempre.
 //
 // Después de aceptarlo el pedido se sigue aquí (30-10-2026): al aceptar se elige qué va a
-// cocina (salen marcados los productos con "Se prepara en cocina"), y luego avanza su
+// cocina (salen marcados como la última vez que se aceptó cada producto), y luego avanza su
 // despacho —Listo, En camino (delivery), Entregado— con un botón por paso. El cobro sigue en
 // la caja: "Cobrar en la caja" abre ESA cuenta en el POS. "En curso" guarda lo que falta
 // entregar o cobrar, sin límite de días.
@@ -277,7 +277,8 @@ function Detalle({ id, onChanged, onClose }) {
                 reason: r.data.extra_charge_reason || "",
             });
             setSerie(r.data.series?.length === 1 ? String(r.data.series[0].id) : "");
-            // Salen marcados los productos que se preparan; quien acepta puede cambiarlo.
+            // Salen marcados como se mandaron la última vez (lo recuerda el servidor al aceptar);
+            // quien acepta puede cambiarlo.
             setCocina(new Set((r.data.items || []).filter(i => i.kitchen_prep && !i.is_addon).map(i => i.id)));
         } catch (e) { notify(e.message, "err"); onClose(); }
     }, [id, notify, onClose]);
@@ -305,6 +306,9 @@ function Detalle({ id, onChanged, onClose }) {
     );
     const confirmados = (o.payment_reports || []).filter(r => r.status === "confirmado").length;
     const conCocina = nuevo && o.cocina_enabled;
+    // Lo que se puede mandar a cocina: los adicionales van con su plato.
+    const platos = (o.items || []).filter(i => !i.is_addon);
+    const todoACocina = platos.length > 0 && platos.every(i => cocina.has(i.id));
     const paso = !nuevo && o.status !== "anulado" ? siguiente(o) : null;
     const porCobrar = !nuevo && ["espera", "borrador"].includes(o.status);
 
@@ -455,9 +459,13 @@ function Detalle({ id, onChanged, onClose }) {
                 )}
 
                 {/* Productos */}
-                <Seccion titulo="Productos" aside={<span className="text-[12px] text-content-subtle">
-                    {conCocina ? (cocina.size ? `${cocina.size} a cocina` : "Nada va a cocina") : `${o.items.length} ${o.items.length === 1 ? "línea" : "líneas"}`}
-                </span>}>
+                <Seccion titulo="Productos" aside={conCocina && platos.length ? (
+                    // Atajo: mandar o quitar todo de una vez, sin ir casilla por casilla.
+                    <button type="button" onClick={() => setCocina(todoACocina ? new Set() : new Set(platos.map(i => i.id)))}
+                        className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium inline-flex items-center gap-1.5">
+                        {todoACocina ? "Nada a cocina" : "Todo a cocina"}
+                    </button>
+                ) : <span className="text-[12px] text-content-subtle">{`${o.items.length} ${o.items.length === 1 ? "línea" : "líneas"}`}</span>}>
                     <div className={`${CARD} divide-y divide-border/60 dark:divide-white/[0.06]`}>
                         {o.items.map(i => (
                             <div key={i.id} className="px-4 py-3 flex items-center gap-3">
@@ -484,7 +492,7 @@ function Detalle({ id, onChanged, onClose }) {
                     </div>
                     {conCocina && (
                         <p className="mt-2 text-[12px] text-content-subtle leading-snug">
-                            Se marcan solos los productos con "Se prepara en cocina" (Catálogo → producto). Lo que solo se empaca, déjalo sin marcar.
+                            {cocina.size ? `${cocina.size} de ${platos.length} a cocina. ` : "Nada va a cocina. "}Lo que solo se empaca, déjalo sin marcar: se recuerda para el próximo pedido.
                         </p>
                     )}
                 </Seccion>
@@ -574,7 +582,7 @@ function Detalle({ id, onChanged, onClose }) {
                     {nuevo && (
                         <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={aceptar}
                             disabled={o.series?.length > 1 && !serie}>
-                            Aceptar · {ref(totalVista)}
+                            {conCocina && cocina.size ? "Aceptar y enviar a cocina" : "Aceptar"} · {ref(totalVista)}
                         </Button>
                     )}
                     {paso && (

@@ -37,7 +37,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
-    const cocinaEnabled = !!company?.cocina_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -409,7 +408,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             delete submissionForm.piece_mode;
         }
         // Solo con cocina se manda: sin el campo, el servidor conserva lo que tenía.
-        if (!cocinaEnabled) delete submissionForm.kitchen_prep;
+        // Lo aprende Pedidos al aceptar (webOrders.recordarCocina): la ficha no lo pisa.
+        delete submissionForm.kitchen_prep;
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
         // Producto nuevo sin foto principal pero con fotos adicionales: la primera hace de
         // principal, para que la grilla y la caja no queden sin imagen.
@@ -866,17 +866,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 onChange={e => set("visible_in_catalog", e.target.checked)}
                             />
                         )}
-                        {/* Pedidos web: al aceptar uno, los productos marcados salen elegidos para
-                            la comanda. Lo que solo se empaca (empanadas del exhibidor, un refresco)
-                            no se marca y no ocupa el tablero de cocina. */}
-                        {cocinaEnabled && form.sellable && (
-                            <Interruptor
-                                titulo="Se prepara en cocina"
-                                detalle="Al aceptar un pedido del catálogo, este producto va al tablero de cocina. Desmárcalo si solo se empaca y se entrega."
-                                checked={!!form.kitchen_prep}
-                                onChange={e => set("kitchen_prep", e.target.checked)}
-                            />
-                        )}
+                        {/* "Se prepara en cocina" ya no se marca aquí (02-11-2026): con muchos platos
+                            era trabajo de más. Se elige al aceptar el pedido y el sistema lo recuerda
+                            (ver webOrders.recordarCocina). */}
                     </div>
                 )}
 

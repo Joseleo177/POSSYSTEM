@@ -256,6 +256,7 @@ async function aceptar(req, id, body = {}) {
   }
   const venta = await acceptWebOrder(sale.id, { warehouse_id: warehouseId, serie_id: serieId, employee_id: req.employee.id });
   const comanda = await mandarACocina(req, sale, body.cocina, warehouseId);
+  await recordarCocina(sale, body.cocina);
   return { data: { ...venta, kitchen_sent: comanda } };
 }
 
@@ -299,6 +300,33 @@ async function mandarACocina(req, sale, ids, warehouseId) {
     note: venta.web_note,
   }, t));
   return items.length;
+}
+
+/**
+ * Lo que se mandó (o no) a cocina al aceptar queda como lo de siempre de cada producto
+ * (products.kitchen_prep): el próximo pedido sale ya marcado igual. Antes había que marcarlo en
+ * la ficha de cada producto, y con una carta larga nadie lo hacía (pedido del usuario, 02-11).
+ * Solo con cocina: sin ella no se eligió nada y no hay qué aprender. Los adicionales van con su
+ * plato y no se tocan.
+ */
+async function recordarCocina(sale, ids) {
+  const empresa = await Company.findByPk(sale.company_id, { attributes: ["cocina_enabled"] });
+  if (!empresa?.cocina_enabled) return;
+  const elegidos = new Set((Array.isArray(ids) ? ids : []).map(n => parseInt(n, 10)).filter(Boolean));
+  const lineas = await SaleItem.findAll({
+    where: { sale_id: sale.id },
+    attributes: ["id", "product_id"],
+    include: [{ model: Product, attributes: ["is_addon"], required: false }],
+  });
+  const si = new Set(), no = new Set();
+  for (const l of lineas) {
+    if (!l.product_id || l.Product?.is_addon) continue;
+    (elegidos.has(l.id) ? si : no).add(l.product_id);
+  }
+  // El mismo producto en dos líneas (uno a cocina, otro para llevar tal cual): gana "a cocina".
+  for (const id of si) no.delete(id);
+  if (si.size) await Product.update({ kitchen_prep: true }, { where: { id: [...si] } });
+  if (no.size) await Product.update({ kitchen_prep: false }, { where: { id: [...no] } });
 }
 
 // Etapas del despacho, en orden. "en_camino" solo existe para delivery.
