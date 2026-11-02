@@ -282,16 +282,20 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         setShowProductModal(true);
     };
 
+    // Devuelve el producto creado: el modal sube con él las fotos adicionales.
     const handleProductSaved = async (form, imageFile) => {
         setSavingNew(true);
+        let creado = null;
         try {
             const res = await api.products.create(form, imageFile);
             const newProd = res.data || res;
+            creado = newProd;
             setShowProductModal(false);
             setSearch("");
             handleSelectProduct({ ...newProd, stock: newProd.stock ?? 0, cost_price: newProd.cost_price || 0 });
         } catch (e) { alert(e.message); }
         setSavingNew(false);
+        return creado;
     };
 
     // Una línea vale si tiene cuántos empaques entran y cuánto costó cada uno. Sin costo, la

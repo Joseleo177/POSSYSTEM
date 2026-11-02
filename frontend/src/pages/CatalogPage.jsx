@@ -87,17 +87,21 @@ export default function CatalogPage() {
     const selectedWarehouseName = availableWarehouses.find(w => w.id === warehouseId)?.name;
     const totalPages = Math.ceil(totalProducts / limit);
 
+    // Al crear devuelve el producto: el modal lo necesita para subir después las fotos
+    // adicionales que se eligieron antes de que existiera.
     const saveProduct = async (form, imageFile, removeImage) => {
         try {
+            let creado = null;
             if (productEditData) {
                 await api.products.update(productEditData.id, form, imageFile, removeImage);
                 notify("Producto actualizado");
             } else {
-                await api.products.create(form, imageFile);
+                creado = (await api.products.create(form, imageFile))?.data || null;
                 notify("Producto creado");
             }
             setProductModal(false);
             loadProducts(page, warehouseId);
+            return creado;
         } catch (e) { notify(e.message, "err"); }
     };
 

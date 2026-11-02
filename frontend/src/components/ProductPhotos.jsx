@@ -8,16 +8,16 @@ const MAX_FOTOS = 12;
 
 // Fotos adicionales de un producto, para la ficha de la vitrina. Las pidió una tienda de
 // anillos, pulseras y relojes que no trabaja con variantes: los modelos comparten precio y
-// existencias, así que
-// cargan un solo producto y muestran aquí todas las piezas que entran en él.
+// existencias, así que cargan un solo producto y muestran aquí todas las piezas que entran en él.
 //
-// Cada acción se guarda al momento (subir, nombrar, ordenar, quitar), igual que la foto por
-// color de las variantes: no espera al "Guardar cambios" de la ficha. Por eso el producto
-// tiene que existir: al crearlo se avisa que vuelva a abrirlo.
+// Con el producto ya guardado, cada acción se guarda al momento (subir, nombrar, ordenar,
+// quitar), igual que la foto por color de las variantes: no espera al "Guardar cambios".
+// Al CREAR el producto todavía no hay a dónde subirlas: se eligen igual, quedan en
+// `pendientes` (las tiene el modal) y el modal las sube apenas el producto existe.
 //
 // `mainUrl` es la foto principal (la de arriba en la ficha). Cuando una de estas pasa a ser
 // la principal, `onMainChange` le avisa al modal para que actualice la suya.
-export default function ProductPhotos({ productId, mainUrl, onMainChange, notify }) {
+export default function ProductPhotos({ productId, mainUrl, onMainChange, notify, pendientes = [], onPendientesChange }) {
     const [fotos, setFotos] = useState([]);
     const [cargando, setCargando] = useState(true);
     // Cuántas se están subiendo todavía: una casilla con spinner por cada una.
@@ -42,13 +42,7 @@ export default function ProductPhotos({ productId, mainUrl, onMainChange, notify
     useEffect(() => { cargar(); }, [cargar]);
 
     if (!productId) {
-        return (
-            <Marco total={null}>
-                <p className="text-[12px] text-content-subtle">
-                    Crea el producto y vuelve a abrirlo para agregar más fotos: los demás modelos, otros ángulos o la pieza puesta.
-                </p>
-            </Marco>
-        );
+        return <PorSubir mainUrl={mainUrl} pendientes={pendientes} onChange={onPendientesChange} notify={notify} />;
     }
 
     // Una por una y en orden: varias juntas en una sola petición pasarían el tope de Vercel, y
@@ -206,6 +200,93 @@ export default function ProductPhotos({ productId, mainUrl, onMainChange, notify
                 onConfirm={quitar}
                 onCancel={() => setPorQuitar(null)}
             />
+        </Marco>
+    );
+}
+
+// Las fotos elegidas mientras se crea el producto. Solo viven en el navegador hasta guardar:
+// cada una es { file, url (vista previa), label }. Sin foto principal, la primera hará de
+// principal (lo decide el modal al crear).
+function PorSubir({ mainUrl, pendientes, onChange, notify }) {
+    const agregar = (archivos) => {
+        const lugar = MAX_FOTOS - pendientes.length;
+        const lista = archivos.slice(0, Math.max(lugar, 0));
+        if (archivos.length > lista.length) notify?.(`Caben ${MAX_FOTOS} fotos adicionales; se agregan las primeras ${lista.length}`, "err");
+        if (!lista.length) return;
+        onChange?.([...pendientes, ...lista.map(file => ({ file, url: URL.createObjectURL(file), label: "" }))]);
+    };
+    const cambiar = (i, label) => onChange?.(pendientes.map((p, j) => (j === i ? { ...p, label } : p)));
+    const mover = (i, paso) => {
+        const d = i + paso;
+        if (d < 0 || d >= pendientes.length) return;
+        const nuevas = [...pendientes];
+        [nuevas[i], nuevas[d]] = [nuevas[d], nuevas[i]];
+        onChange?.(nuevas);
+    };
+    const quitar = (i) => {
+        URL.revokeObjectURL(pendientes[i].url);
+        onChange?.(pendientes.filter((_, j) => j !== i));
+    };
+
+    return (
+        <Marco total={pendientes.length}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {mainUrl && (
+                    <div className="min-w-0">
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08]">
+                            <img src={resolveImageUrl(mainUrl)} alt="Foto principal" className="w-full h-full object-cover" />
+                        </div>
+                        <p className="mt-1.5 text-[12px] font-medium text-content dark:text-white">Principal</p>
+                        <p className="text-[12px] text-content-subtle">La de la grilla y la caja</p>
+                    </div>
+                )}
+                {pendientes.map((p, i) => (
+                    <div key={p.url} className="min-w-0">
+                        <div className="relative aspect-square rounded-xl overflow-hidden bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08]">
+                            <img src={p.url} alt={p.label || `Foto ${i + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                        {!mainUrl && i === 0 ? (
+                            <p className="mt-1.5 text-[12px] text-content-subtle h-9 flex items-center">Será la principal</p>
+                        ) : (
+                            <input
+                                value={p.label}
+                                onChange={e => cambiar(i, e.target.value)}
+                                maxLength={60}
+                                autoComplete="off"
+                                placeholder="Nombre (opcional)"
+                                className="input !h-9 mt-1.5"
+                            />
+                        )}
+                        <div className="mt-1 flex items-center gap-0.5">
+                            <IconBtn title="Mover antes" disabled={i === 0} onClick={() => mover(i, -1)}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                            </IconBtn>
+                            <IconBtn title="Mover después" disabled={i === pendientes.length - 1} onClick={() => mover(i, 1)}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                            </IconBtn>
+                            <IconBtn title="Quitar foto" tone="red" onClick={() => quitar(i)} className="ml-auto">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </IconBtn>
+                        </div>
+                    </div>
+                ))}
+                {pendientes.length < MAX_FOTOS && (
+                    <label className="aspect-square rounded-xl border border-dashed border-border dark:border-white/15 bg-surface-2 dark:bg-white/[0.04] flex flex-col items-center justify-center gap-1 text-content-subtle cursor-pointer hover:border-content-subtle/60 transition-colors">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 5v14M5 12h14" /></svg>
+                        <span className="text-[12px] font-medium">Agregar fotos</span>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="hidden"
+                            onChange={e => { const lista = Array.from(e.target.files || []); e.target.value = ""; agregar(lista); }}
+                        />
+                    </label>
+                )}
+            </div>
+            {pendientes.length > 0 && (
+                <p className="mt-3 text-[12px] text-content-subtle">Se suben al crear el producto.</p>
+            )}
         </Marco>
     );
 }

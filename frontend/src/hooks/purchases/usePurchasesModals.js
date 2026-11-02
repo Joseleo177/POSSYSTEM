@@ -102,6 +102,8 @@ export function usePurchasesModals({
             if (r?.data) selectProduct?.(r.data); // lo coloca en el formulario
             closeProductModal();
             clearProductSearch?.();
+            // El modal sube con esto las fotos adicionales elegidas al crearlo.
+            return r?.data || null;
         } catch (e) {
             notify?.(e.message, "err");
         } finally {

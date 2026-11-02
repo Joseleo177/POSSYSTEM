@@ -55,6 +55,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const [imageFile, setImageFile] = useState(null);
     const [imagePreview, setImagePreview] = useState(null);
     const [removeImage, setRemoveImage] = useState(false);
+    // Fotos adicionales elegidas mientras se CREA el producto: se suben cuando ya existe (ver
+    // handleSave). Al editar no se usan: ProductPhotos sube cada una al momento.
+    const [fotosPendientes, setFotosPendientes] = useState([]);
     // El modal creció campo a campo hasta volverse una sola pantalla larga —tipo, costos,
     // vitrina, todo apilado—. Se reparte en pestañas para que abrir la ficha no sea siempre
     // desplazar hasta el fondo a buscar el margen o el texto de la vitrina; el nombre, la
@@ -149,6 +152,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             }
             setImageFile(null);
             setRemoveImage(false);
+            setFotosPendientes([]);
             setPriceCurrency("base");
             if (editData && exchangeRate > 0) {
                 setPriceInBs((parseFloat(editData.price) * exchangeRate).toFixed(2));
@@ -407,14 +411,37 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         // Solo con cocina se manda: sin el campo, el servidor conserva lo que tenía.
         if (!cocinaEnabled) delete submissionForm.kitchen_prep;
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
+        // Producto nuevo sin foto principal pero con fotos adicionales: la primera hace de
+        // principal, para que la grilla y la caja no queden sin imagen.
+        const esNuevo = !editData;
+        let principal = imageFile;
+        let extras = esNuevo ? fotosPendientes : [];
+        if (esNuevo && !principal && extras.length) {
+            principal = extras[0].file;
+            extras = extras.slice(1);
+        }
         savingRef.current = true;
         setSaving(true);
         try {
-            await onSave(submissionForm, imageFile, removeImage);
+            const creado = await onSave(submissionForm, principal, removeImage);
+            // El modal ya se cerró; las fotos siguen subiendo y al final se avisa.
+            if (esNuevo && creado?.id && extras.length) subirPendientes(creado.id, extras);
         } finally {
             savingRef.current = false;
             setSaving(false);
         }
+    };
+
+    // Una por una, en el orden elegido: juntas pasarían el tope de 4,5 MB por petición de Vercel.
+    const subirPendientes = async (productId, lista) => {
+        let fallidas = 0;
+        for (const p of lista) {
+            try { await api.products.images.add(productId, p.file, p.label.trim()); }
+            catch { fallidas++; }
+        }
+        const subidas = lista.length - fallidas;
+        if (subidas) notify(subidas === 1 ? "Se agregó 1 foto adicional" : `Se agregaron ${subidas} fotos adicionales`);
+        if (fallidas) notify(`No se pudieron subir ${fallidas} de las fotos. Abre el producto para agregarlas.`, "err");
     };
 
     const busy = loading || saving;
@@ -907,6 +934,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         productId={editData?.id || null}
                                         mainUrl={imagePreview}
                                         notify={notify}
+                                        pendientes={fotosPendientes}
+                                        onPendientesChange={setFotosPendientes}
                                         onMainChange={(url) => {
                                             setImagePreview(resolveImageUrl(url) || null);
                                             setImageFile(null);

@@ -126,6 +126,8 @@ export default function OrderFormModal({ open, order = null, warehouses, materia
             pickProduct(r.data || r);
             notify("Producto creado");
             setCreating(null);
+            // El modal sube con esto las fotos adicionales elegidas al crearlo.
+            return r.data || r;
         } catch (e) { notify(errMsg(e), "err"); }
     };
     const saveNewCustomer = async (body) => {
