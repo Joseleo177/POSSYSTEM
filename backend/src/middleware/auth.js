@@ -29,11 +29,13 @@ const auth = async (req, res, next) => {
   // token valía sus 12 h completas. Con el 401 la app intenta renovar, /auth/refresh también lo
   // rechaza y la caja vuelve al login. El intento queda anotado (una vez, no por request).
   try {
-    const { active, fresh } = await isEmployeeActive(decoded.id);
+    const { active, permissions, fresh } = await isEmployeeActive(decoded.id);
     if (!active) {
       if (fresh) await recordLoginEvent(req, { employee: decoded, kind: "session", result: RESULT.INACTIVE });
       return res.status(401).json({ ok: false, message: "Tu usuario fue desactivado. Habla con el administrador." });
     }
+    // Permisos al día (rol + excepciones de la persona), no los que se firmaron en el token.
+    if (permissions) req.employee = { ...decoded, permissions };
   } catch (err) {
     // Mismo criterio que la suscripción: un tropiezo de la base no deja sin sistema a la caja.
     console.error("Auth employee check error:", err.message);
@@ -94,6 +96,9 @@ const auth = async (req, res, next) => {
 const hasPermission = (permissions, perm) => {
   if (!permissions) return false;
   if (permissions.all) return true;              // administrador
+  // Quitado a esta persona aunque su rol lo tenga (permisos por usuario): manda sobre todo
+  // lo de abajo, incluido el formato viejo.
+  if (permissions[perm] === false) return false;
   if (permissions[perm]) return true;            // concedido tal cual se pidió
 
   if (perm === "admin") return false;           // solo el admin, y ya se comprobó arriba

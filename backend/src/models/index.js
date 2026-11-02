@@ -49,7 +49,8 @@ const tenantModels = [
   'CashAdvance', 'DiningArea', 'DiningTable', 'KitchenTicket',
   'ModifierGroup', 'ModifierOption', 'ProductModifierGroup', 'RecipeSheet',
   'PreparationItem', 'ProductionBatch', 'ProductionBatchItem', 'TableOrder',
-  'PaymentReport', 'ProductImage',
+  'PaymentReport', 'ProductImage', 'Seller', 'CommissionPayout',
+  'CasheaSettlement',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -332,6 +333,9 @@ if (Warehouse) {
   if (KitchenTicket && KitchenTicketItem) {
     KitchenTicket.hasMany(KitchenTicketItem, { foreignKey: 'ticket_id', as: 'items' });
   }
+  // Vendedor que gana la comisión, aparte del cajero (employee_id) y del mesonero (waiter_id).
+  const { Seller } = db;
+  if (Seller) Sale.belongsTo(Seller, { foreignKey: 'seller_id', as: 'Seller' });
 }
 
 if (Sale && Serie && SerieRange) {

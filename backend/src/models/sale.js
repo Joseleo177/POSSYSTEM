@@ -103,6 +103,10 @@ module.exports = (sequelize, DataTypes) => {
     // sus ventas por employee_id.
     table_id:           { type: DataTypes.INTEGER,     allowNull: true },
     waiter_id:          { type: DataTypes.INTEGER,     allowNull: true },
+    // Vendedor que gana la comisión (ver migración 20261105100000-comisiones) y su % al vender:
+    // se copia para que cambiar el % del vendedor no altere lo ya vendido.
+    seller_id:          { type: DataTypes.INTEGER,     allowNull: true },
+    seller_pct:         { type: DataTypes.DECIMAL(5, 2), allowNull: true },
     // "Pidió la cuenta" (ver migración 20261031150000-pedir-cuenta): lo marca el mesonero y la
     // caja lo ve en el mapa.
     bill_requested_at:  { type: DataTypes.DATE,        allowNull: true },

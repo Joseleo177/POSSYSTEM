@@ -302,7 +302,9 @@ export function AppProvider({ children }) {
   // ── Derived ────────────────────────────────────────────────
   const baseCurrency     = currencies.find(c => c.is_base);
   const activeCurrencies = currencies.filter(c => c.active);
-  const activeJournals   = journals.filter(j => j.active);
+  // El diario Cashea no es una caja: guarda lo que Cashea debe y solo se mueve al vender con
+  // Cashea o al liquidar (services/cashea). No se ofrece para cobrar, pagar ni registrar nada.
+  const activeJournals   = journals.filter(j => j.active && j.type !== "cashea");
   const activeBanks      = banks.filter(b => b.active);
   const activePaymentMethods = paymentMethods.filter(m => m.active);
   // Sentido de cada caja: lo dice el DIARIO (allows_inflow / allows_outflow). Si el backend

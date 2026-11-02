@@ -13,6 +13,8 @@ module.exports = (sequelize, DataTypes) => {
     email: { type: DataTypes.STRING(150), unique: true },
     phone: { type: DataTypes.STRING(20) },
     role_id: { type: DataTypes.INTEGER, allowNull: false },
+    // Diferencias de esta persona con su rol: true da, false quita (ver effectivePermissions).
+    permission_overrides: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     is_superuser: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

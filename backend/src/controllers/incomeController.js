@@ -5,6 +5,7 @@ const { resolveMethod } = require("../utils/journalMethod");
 const { scopeWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { anularAvance } = require('../services/cashAdvances');
+const { anularLiquidacion } = require('../services/cashea');
 
 exports.getAll = async (req, res, next) => {
   try {
@@ -154,6 +155,11 @@ exports.voidIncome = async (req, res, next) => {
     if (income.cash_advance_id) {
       await anularAvance(income.cash_advance_id);
       return res.json({ ok: true, message: 'Avance de efectivo anulado completo (egreso, avance y comisión)' });
+    }
+    // Parte de una liquidación de Cashea: se anula entera y sus ventas vuelven a deberse.
+    if (income.cashea_settlement_id) {
+      await anularLiquidacion(income.cashea_settlement_id);
+      return res.json({ ok: true, message: 'Liquidación de Cashea anulada completa: sus ventas vuelven a estar por liquidar' });
     }
     await income.update({ status: 'anulado' });
     res.json({ ok: true, message: 'Ingreso anulado' });

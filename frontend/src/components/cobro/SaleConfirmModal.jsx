@@ -2,6 +2,7 @@ import { Button } from "../ui/Button";
 import ReceiptModal, { printReceipt } from "../ReceiptModal";
 import PaymentFormModal from "../PaymentFormModal";
 import ImmediatePayPicker from "./ImmediatePayPicker";
+import CasheaModal from "./CasheaModal";
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
 import { marcarLista } from "../../services/offline/outbox";
@@ -23,7 +24,7 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
-    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth, company } = useApp();
+    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth, company, settings } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
@@ -35,6 +36,9 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const [lockedMethod, setLockedMethod] = useState(null);
     const [creditLoading, setCreditLoading] = useState(false);
     const [printing, setPrinting] = useState(false);
+    // Venta con Cashea (ver CasheaModal): `casheaHecho` = ya se anotó lo financiado.
+    const [showCashea, setShowCashea] = useState(false);
+    const [casheaHecho, setCasheaHecho] = useState(false);
 
     // Entrega a crédito: el backend asigna el correlativo fiscal y deja la venta en
     // 'pendiente'. Sin esto la venta fiada se quedaba en borrador y no aparecía ni en el
@@ -231,9 +235,17 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // Una exonerada tampoco se cobra: su saldo ya se dio por perdido.
     const canSettle     = !["pagado", "exonerado"].includes(currentStatus);
     const canGiveCredit = canSettle && isUnresolved && !offline;
+    // Con Cashea: opción de la empresa, una sola vez por venta y sin tasa de divisas (es una
+    // rebaja de contado en divisas; Cashea vende a precio normal).
+    const canCashea = settings?.pos_cashea === "true" && canSettle && !offline && !tasaFx
+        && !casheaHecho && currentBalance > 0.01;
+    // "A crédito" emite la factura SIN cerrar el modal (para imprimirla después); la salida
+    // también la deja a crédito, pero se llama "Siguiente venta": con las dos diciendo "crédito"
+    // el modal se leía repetido (pedido del usuario, 02-11-2026).
     const actionKeys = [
         canSettle && "pay",
         canGiveCredit && "credit",
+        canCashea && "cashea",
         "print",
         "ticket",
         "next",
@@ -329,13 +341,14 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     const runAction = (key) => {
         if (key === "pay")    return setShowPicker(true);
         if (key === "credit") return creditLoading ? undefined : confirmCredit();
+        if (key === "cashea") return setShowCashea(true);
         if (key === "print")  return printDirect();
         if (key === "ticket") return setShowReceiptModal(true);
         if (key === "next")   return salir();
     };
 
     useEffect(() => {
-        if (showReceiptModal || showPayModal || showPicker) return; // los sub-modales manejan su propio Escape
+        if (showReceiptModal || showPayModal || showPicker || showCashea) return; // los sub-modales manejan su propio Escape
         const handler = (e) => {
             // Nunca robar teclas a un campo de texto: si alguien escribe una nota, el "2" es
             // parte de lo que teclea, no un atajo.
@@ -364,7 +377,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         // eslint-disable-next-line react-hooks/exhaustive-deps
         // `printing` va en las dependencias: sin él, el handler quedaba capturado con el valor
         // viejo y dos pulsaciones seguidas del atajo lanzaban dos impresiones.
-    }, [onNext, showReceiptModal, showPayModal, showPicker, actionKeys.join(","), creditLoading, printing, isUnresolved, undoing]);
+    }, [onNext, showReceiptModal, showPayModal, showPicker, showCashea, actionKeys.join(","), creditLoading, printing, isUnresolved, undoing]);
     // Mismo lenguaje que las tablas (ui/StatusMark): saldada va en gris con su check; lo que
     // aún espera dinero lleva punto de color. Antes toda la cabecera se teñía de rojo, y una
     // venta a crédito —algo normal— se leía como un error.
@@ -537,29 +550,46 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         El flex-1 va solo desde sm: en columna fija la base del alto en 0 y el
                         botón se aplastaba a la altura del texto, más bajo que "Imprimir". */}
                     {canSettle && (
+                        <Button
+                            variant={principal === "pay" ? "primary" : "ghost"}
+                            onClick={() => setShowPicker(true)}
+                            className="min-w-0 h-12 sm:h-10"
+                        >
+                            <KeyHint n={numOf("pay")} />
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
+                            Cobrar ahora
+                        </Button>
+                    )}
+                    {(canGiveCredit || canCashea) && (
                         <div className="flex flex-col sm:flex-row gap-2">
-                            <Button
-                                variant={principal === "pay" ? "primary" : "ghost"}
-                                onClick={() => setShowPicker(true)}
-                                className="sm:flex-1 min-w-0 h-12 sm:h-10"
-                            >
-                                <KeyHint n={numOf("pay")} />
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z" /></svg>
-                                Cobrar ahora
-                            </Button>
-                            {/* Solo tiene sentido antes de facturar: una venta ya confirmada
-                                (pendiente/parcial) no debe volver a consumir correlativo. */}
+                            {/* Solo antes de facturar: emite la factura y deja el modal abierto
+                                para imprimirla. Una venta ya confirmada no vuelve a consumir
+                                correlativo. */}
                             {canGiveCredit && (
                                 <Button
                                     variant="ghost"
                                     onClick={confirmCredit}
                                     disabled={creditLoading}
                                     className="sm:flex-1 min-w-0 h-12 sm:h-10"
-                                    title="Entregar a crédito: emite la factura y queda por cobrar"
+                                    title="Emite la factura a crédito y sigues aquí para imprimirla"
                                 >
                                     <KeyHint n={numOf("credit")} />
                                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                                     {creditLoading ? "..." : "A crédito"}
+                                </Button>
+                            )}
+                            {/* Cashea financia parte de la venta: aquí se anota la inicial y
+                                después se cobra con "Cobrar ahora". */}
+                            {canCashea && (
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => setShowCashea(true)}
+                                    className="sm:flex-1 min-w-0 h-12 sm:h-10"
+                                    title="El cliente paga la inicial y Cashea financia el resto"
+                                >
+                                    <KeyHint n={numOf("cashea")} />
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                    Cashea
                                 </Button>
                             )}
                         </div>
@@ -598,7 +628,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         >
                             <KeyHint n={numOf("next")} />
                             {isUnresolved
-                                ? (offline ? "Volver al carrito" : (creditLoading ? "..." : "Dejar a crédito"))
+                                ? (offline ? "Volver al carrito" : (creditLoading ? "..." : "Siguiente venta"))
                                 : "Siguiente venta"}
                             <svg className="w-4 h-4 -mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
                         </Button>
@@ -633,7 +663,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     que esta fila —y los chips numerados de los botones— no aparecen. */}
                 <div className="shrink-0 hidden sm:flex px-6 py-3 border-t border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.02] items-center justify-center gap-4 text-[12px] text-content-subtle">
                     <span className="inline-flex items-center gap-1.5"><Kbd>1</Kbd>–<Kbd>{actionKeys.length}</Kbd> elegir</span>
-                    <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? (offline ? "volver al carrito" : "dejar a crédito") : "siguiente venta"}</span>
+                    <span className="inline-flex items-center gap-1.5"><Kbd>Enter</Kbd><Kbd>Esc</Kbd> {isUnresolved ? (offline ? "volver al carrito" : "siguiente venta") : "siguiente venta"}</span>
                 </div>
             </div>
 
@@ -654,6 +684,26 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     payments: receiptPayments,
                 }}
             />
+
+            {showCashea && (
+                <CasheaModal
+                    sale={receipt}
+                    saldo={currentBalance}
+                    baseSymbol={baseCurrency?.symbol || "Ref."}
+                    alt={(() => {
+                        const bs = (activeCurrencies || []).find(c => !c.is_base);
+                        return bs ? { symbol: bs.symbol, rate: parseFloat(bs.exchange_rate) || 0 } : null;
+                    })()}
+                    onClose={() => setShowCashea(false)}
+                    onDone={(res, { inicial }) => {
+                        setShowCashea(false);
+                        setCasheaHecho(true);
+                        onPay(res);
+                        // Queda la inicial: se cobra enseguida, con la botonera de siempre.
+                        if (inicial > 0) setShowPicker(true);
+                    }}
+                />
+            )}
 
             {showPicker && (
                 <ImmediatePayPicker

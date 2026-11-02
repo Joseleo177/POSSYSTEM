@@ -13,6 +13,7 @@
  */
 // Perezoso: middleware/auth carga este archivo y los modelos no deben entrar en ese ciclo.
 const db = () => require("../models").sequelize;
+const { effectivePermissions } = require("../config/permissions");
 
 // Resultados posibles. El frontend los traduce (EmployeeAccessModal).
 const RESULT = {
@@ -70,23 +71,30 @@ const TTL_MS = 30 * 1000;
 // una escritura por request a la base del pooler sería justo lo que la tumbó en septiembre.
 const SEEN_EVERY_MS = 5 * 60 * 1000;
 
-const cache   = new Map(); // employee_id -> { active, expires }
+const cache   = new Map(); // employee_id -> { active, permissions, expires }
 const touched = new Map(); // employee_id -> ms de la última escritura de last_seen_at
 
-// Devuelve { active, fresh }: `fresh` dice que se acaba de consultar la base, para que quien
-// llama anote el rechazo una sola vez y no en cada request de la ráfaga.
+// Devuelve { active, permissions, fresh }: `fresh` dice que se acaba de consultar la base, para
+// que quien llama anote el rechazo una sola vez y no en cada request de la ráfaga.
+//
+// `permissions` son los del momento (rol + excepciones de la persona), no los del token: el
+// token se firma al entrar y vive 12 h, así que un permiso dado o quitado desde Empleados no
+// llegaba hasta volver a entrar. Viene en la misma consulta que ya se hacía, con la misma caché.
 async function isEmployeeActive(employeeId) {
   const hit = cache.get(employeeId);
-  if (hit && hit.expires > Date.now()) return { active: hit.active, fresh: false };
+  if (hit && hit.expires > Date.now()) return { active: hit.active, permissions: hit.permissions, fresh: false };
 
   const sequelize = db();
   const [row] = await sequelize.query(
-    `SELECT active, last_seen_at FROM employees WHERE id = :id`,
+    `SELECT e.active, e.last_seen_at, e.permission_overrides, r.permissions AS role_permissions
+       FROM employees e LEFT JOIN roles r ON r.id = e.role_id
+      WHERE e.id = :id`,
     { replacements: { id: employeeId }, type: sequelize.QueryTypes.SELECT }
   );
   // Borrado cuenta como inactivo: su token no debe seguir sirviendo.
   const active = !!row?.active;
-  cache.set(employeeId, { active, expires: Date.now() + TTL_MS });
+  const permissions = row?.role_permissions ? effectivePermissions(row.role_permissions, row.permission_overrides) : null;
+  cache.set(employeeId, { active, permissions, expires: Date.now() + TTL_MS });
 
   if (active) {
     const last = Math.max(touched.get(employeeId) || 0, row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0);
@@ -95,11 +103,16 @@ async function isEmployeeActive(employeeId) {
       await sequelize.query(`UPDATE employees SET last_seen_at = NOW() WHERE id = :id`, { replacements: { id: employeeId } });
     }
   }
-  return { active, fresh: true };
+  return { active, permissions, fresh: true };
 }
 
 function invalidateEmployee(employeeId) {
   cache.delete(Number(employeeId));
 }
 
-module.exports = { RESULT, recordLoginEvent, isEmployeeActive, invalidateEmployee };
+// Al editar un rol cambian los permisos de todos los que lo tienen.
+function invalidateAllEmployees() {
+  cache.clear();
+}
+
+module.exports = { RESULT, recordLoginEvent, isEmployeeActive, invalidateEmployee, invalidateAllEmployees };

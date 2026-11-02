@@ -147,6 +147,14 @@ export function CartProvider({ children }) {
   // ── Cliente seleccionado ───────────────────────────────────
   const [selectedCustomer, setSelectedCustomer] = useState(null);
 
+  // ── Vendedor (comisiones) ──────────────────────────────────
+  // Quien atendió al cliente y gana la comisión; no es el cajero (ver services/commissions en
+  // el backend). Solo existe con el extra de la empresa: sin él la venta no lo nombra, para no
+  // borrarle el vendedor a una cuenta que se abrió cuando el extra estaba encendido.
+  const [selectedSeller, setSelectedSeller] = useState(null);
+  const comisiones = !!company?.comisiones_enabled;
+  const vendedorPayload = () => (comisiones ? { seller_id: selectedSeller?.id || null } : {});
+
   // ── Almacén activo ─────────────────────────────────────────
   const [employeeWarehouses, setEmployeeWarehouses] = useState([]);
   const [activeWarehouse, setActiveWarehouse] = useState(null);
@@ -211,6 +219,7 @@ export function CartProvider({ children }) {
     skipSaveRef.current = true;
     setCart(saved.cart);
     setSelectedCustomer(saved.customer || null);
+    setSelectedSeller(saved.seller || null);
     setDiscountEnabled(!!saved.discountEnabled);
     setDiscountPct(saved.discountPct ?? "");
     setDiscountMode(saved.discountMode || "pct");
@@ -226,13 +235,13 @@ export function CartProvider({ children }) {
     try {
       if (!cart.length || heldSaleId || quotationId) { localStorage.removeItem(cartStorageKey); return; }
       localStorage.setItem(cartStorageKey, JSON.stringify({
-        cart, customer: selectedCustomer,
+        cart, customer: selectedCustomer, seller: selectedSeller,
         discountEnabled, discountPct, discountMode,
         chargeEnabled, chargeInput, chargeMode, chargeLabel,
         pendingKey: pendingKeyRef.current,
       }));
     } catch { /* almacenamiento lleno o bloqueado: el carrito sigue en pantalla */ }
-  }, [cartStorageKey, cart, selectedCustomer, heldSaleId, quotationId,
+  }, [cartStorageKey, cart, selectedCustomer, selectedSeller, heldSaleId, quotationId,
     discountEnabled, discountPct, discountMode, chargeEnabled, chargeInput, chargeMode, chargeLabel]);
 
   useEffect(() => {
@@ -506,6 +515,7 @@ export function CartProvider({ children }) {
     setCart([]);
     setCartTable(null);
     setSelectedCustomer(null);
+    setSelectedSeller(null);
     // La moneda NO se resetea: es la preferencia de visualización del cajero y se mantiene
     // entre ventas. El cliente y la serie sí, porque pertenecen a la venta que se cerró.
     setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
@@ -979,6 +989,7 @@ export function CartProvider({ children }) {
         service_charge: chargeAmountBase,
         service_charge_label: chargeLabel,
         table_id: cartTable?.id || null,
+        ...vendedorPayload(),
         hold: true,
       });
 
@@ -1002,6 +1013,7 @@ export function CartProvider({ children }) {
             exchange_rate: exchangeRate,
             serie_id: selectedSerieId,
             table_id: cartTable?.id ?? null,
+            ...vendedorPayload(),
           });
         } catch (e) {
           // Otra caja la eliminó o la cobró mientras se atendía: se guarda como cuenta
@@ -1026,9 +1038,9 @@ export function CartProvider({ children }) {
     } finally {
       setLoading(false);
     }
-  }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, employee,
+  }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, selectedSeller, employee,
     currentCurrency, exchangeRate, discountAmount, chargeAmountBase, chargeLabel, cartTable,
-    clearCart, loadHeldCarts, notify]);
+    clearCart, loadHeldCarts, notify, comisiones]);
 
   // Dos cajas pueden acabar sobre la misma cuenta en espera: una la recupera y otra la
   // elimina o la cobra antes de que la primera termine. Ahí el PATCH devuelve SALE_GONE
@@ -1171,6 +1183,7 @@ export function CartProvider({ children }) {
       if (held.customer_id) {
         setSelectedCustomer({ id: held.customer_id, name: held.customer_name, rif: held.customer_rif });
       }
+      setSelectedSeller(held.seller_id ? { id: held.seller_id, name: held.seller_name } : null);
       if (held.serie_id) setSelectedSerieId(held.serie_id);
 
       // El descuento vuelve con la cuenta, por lo mismo que el recargo: se guardó como monto
@@ -1292,6 +1305,11 @@ export function CartProvider({ children }) {
     if (!activeWarehouse) return notify("Selecciona una sucursal antes de continuar", "err");
     if (!selectedCustomer) return notify("El cliente es requerido", "err");
     if (!selectedSerieId) return notify("La serie es requerida", "err");
+    // Configuración → Punto de venta: la empresa que paga comisiones puede exigir el vendedor.
+    // Pausar (F4) no lo pide, igual que el cliente.
+    if (comisiones && settings?.pos_require_seller === "true" && !selectedSeller) {
+      return notify("Elige el vendedor de esta venta (F7)", "err");
+    }
 
     submittingRef.current = true;
     setLoading(true);
@@ -1340,6 +1358,7 @@ export function CartProvider({ children }) {
         customer_id: selectedCustomer?.id || null, customer_name: selectedCustomer?.name || null,
         customer_rif: selectedCustomer?.rif || null,
         employee_id: employee?.id || null, employee_name: employee?.full_name || null,
+        seller_id: comisiones ? selectedSeller?.id || null : null, seller_name: comisiones ? selectedSeller?.name || null : null,
         warehouse_id: activeWarehouse.id, warehouse_name: activeWarehouse.name,
         serie_id: selectedSerieId, serie_name: serie?.name || null,
         currency_symbol: currentCurrency?.symbol || null, currency_code: currentCurrency?.code || null,
@@ -1360,11 +1379,12 @@ export function CartProvider({ children }) {
             ...fx,
             service_charge: recargo,
             service_charge_label: recargoLabel,
+            ...vendedorPayload(),
             items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo, line_discount: l.manual })),
           },
           receipt: venta,
           // Para volver al carrito si la venta no llega a cobrarse.
-          cart, customer: selectedCustomer,
+          cart, customer: selectedCustomer, seller: selectedSeller,
         });
       } catch {
         throw new Error("No se pudo guardar la venta en este equipo. Revisa que el navegador no esté en modo privado.");
@@ -1417,6 +1437,7 @@ export function CartProvider({ children }) {
         idempotency_key: pendingKeyRef.current,
         quotation_id: quotationId || null,
         table_id: cartTable?.id || null,
+        ...vendedorPayload(),
       });
 
       let res;
@@ -1436,6 +1457,7 @@ export function CartProvider({ children }) {
             currency_id: currentCurrency?.id || null,
             exchange_rate: exchangeRate,
             serie_id: selectedSerieId,
+            ...vendedorPayload(),
           });
         } catch (e) {
           // Otra caja eliminó o cobró esta cuenta mientras se atendía. En vez de dejar al
@@ -1500,7 +1522,7 @@ export function CartProvider({ children }) {
     }
     // discountAmount y el recargo van en la lista: sin ellos, cambiar el descuento o la
     // propina y cobrar sin volver a tocar el carrito enviaba los valores del render anterior.
-  }, [cart, activeWarehouse, selectedCustomer, selectedSerieId,
+  }, [cart, activeWarehouse, selectedCustomer, selectedSeller, comisiones, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     discountAmount, chargeAmountBase, chargeLabel, quotationId,
     mySeries, notify, clearCart, saveCart, activePromos, fxDiscount, fxRate, avanceEfectivo, avancePct, cartTable,
@@ -1513,6 +1535,7 @@ export function CartProvider({ children }) {
     if (e) {
       setCart(e.cart || []);
       setSelectedCustomer(e.customer || null);
+      setSelectedSeller(e.seller || null);
       descontarDeCatalogo(e.warehouse_id, (e.receipt?.items || []).map(l => ({ ...l, quantity: -l.quantity }))).catch(() => {});
     }
     setReceipt(null);
@@ -1547,6 +1570,8 @@ export function CartProvider({ children }) {
       activePromos, loadActivePromos, promoLineDiscount, promoDiscount,
       // Cliente
       selectedCustomer, setSelectedCustomer,
+      // Vendedor (comisiones)
+      selectedSeller, setSelectedSeller, comisiones,
       // Almacén
       employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
       // Checkout

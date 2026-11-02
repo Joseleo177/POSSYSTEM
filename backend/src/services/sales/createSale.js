@@ -14,13 +14,14 @@ const {
   sequelize,
   PAYMENT_METHODS,
 } = require("./shared");
-const { Quotation, QuotationItem } = require("../../models");
+const { Quotation, QuotationItem, Seller } = require("../../models");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
 const { componentesConStock } = require("../products/comboStock");
 const { vendeSinInsumo, fotoConsumo } = require("../products/recipeStock");
+const { sellerForSale } = require("../commissions");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -32,6 +33,7 @@ async function formatSale(saleId) {
       { model: Currency, attributes: ["symbol", "code"] },
       { model: Warehouse, attributes: ["name"] },
       { model: Serie, attributes: ["name", "prefix", "padding"] },
+      { model: Seller, as: "Seller", attributes: ["name", "code"], required: false },
       { model: SaleItem },
     ],
   });
@@ -44,6 +46,7 @@ async function formatSale(saleId) {
   data.currency_code = data.Currency?.code ?? null;
   data.warehouse_name = data.Warehouse?.name ?? null;
   data.serie_name = data.Serie?.name ?? null;
+  data.seller_name = data.Seller?.name ?? null;
   data.items = data.SaleItems ?? [];
   // Suma precisa de líneas (precio completo sin truncar a 2 dec) — igual que getOneSale.js.
   // Sin esto, "Registrar pago inmediato" (que usa esta respuesta) mostraba un Bs distinto al que
@@ -51,7 +54,7 @@ async function formatSale(saleId) {
   data.total_precise = parseFloat(
     data.items.reduce((s, si) => s + parseFloat(si.subtotal || 0), 0).toFixed(5)
   );
-  ["Customer", "Employee", "Currency", "Warehouse", "Serie", "SaleItems"].forEach((k) => delete data[k]);
+  ["Customer", "Employee", "Currency", "Warehouse", "Serie", "Seller", "SaleItems"].forEach((k) => delete data[k]);
   // Con tasa de divisas: si ya entró algún cobro en divisas (una venta recién creada, no; la
   // devuelta por un reintento, quizá).
   data.fx_pago_divisas = parseFloat(data.fx_rate) > 0 ? await tienePagoEnDivisas(data) : false;
@@ -135,6 +138,10 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
 
     // Mesa de la cuenta (mapa de mesas). Tiene que ser de la misma sucursal que la venta.
     const mesa = !offline && body.table_id ? await assertTable(body.table_id, warehouse_id, transaction) : null;
+
+    // Vendedor que gana la comisión, con su % de hoy copiado (ver services/commissions). Aparte
+    // del cajero: employee_id sigue siendo quien cobra.
+    const vendedor = await sellerForSale(body.seller_id, transaction, { offline: !!offline });
 
     const method = PAYMENT_METHODS.includes(payment_method) ? payment_method : "efectivo";
     const discAmt = parseFloat(discount_amount) || 0;
@@ -350,6 +357,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         status: hold ? 'espera' : 'borrador',
         table_id: mesa ? mesa.id : null,
         waiter_id: waiterId,
+        ...vendedor,
         idempotency_key: idempotency_key || null,
         // created_at queda en la hora en que llega: es cuando se factura y toma correlativo,
         // así los números siguen el orden de las fechas. La hora real de la venta va aparte.

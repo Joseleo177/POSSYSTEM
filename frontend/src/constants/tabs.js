@@ -21,6 +21,9 @@ export const ALL_TABS = [
     { key: "Recetas",       label: "Recetas",       mobileLabel: "Recetas",    perm: "products.view",   companyFlag: "cocina_enabled",  color: "from-lime-500 to-lime-700" },
     // Mismo interruptor de restaurante que Cocina.
     { key: "Mesas",        label: "Mesas",         mobileLabel: "Mesas",      perm: "tables.view",     companyFlag: "cocina_enabled",  color: "from-orange-500 to-orange-700" },
+    // Comisiones por vendedor: extra por empresa. Elegir el vendedor en la caja no pide este
+    // permiso (va con cobrar); la pantalla es del dueño.
+    { key: "Comisiones",    label: "Comisiones",    mobileLabel: "Comisiones", perm: "commissions.view", companyFlag: "comisiones_enabled", color: "from-fuchsia-500 to-fuchsia-700" },
     { key: "Contabilidad",  label: "Contabilidad",  mobileLabel: "Contab.",    perm: "accounting.view", color: "from-green-500 to-green-700" },
     { key: "Reportes",      label: "Reportes",      mobileLabel: "Reportes",   perm: "reports.view",    color: "from-indigo-500 to-indigo-700" },
     // Deja de ser exclusivo del admin: con el permiso `employees` un encargado gestiona el

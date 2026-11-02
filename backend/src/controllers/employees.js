@@ -2,7 +2,7 @@ const bcrypt = require("bcryptjs");
 const { Employee, Role, EmployeeWarehouse, Warehouse, Sequelize } = require("../models");
 const { isAdmin, employeeWarehouseIds } = require("../middleware/auth");
 const { MODULES, ALL_KEYS } = require("../config/permissions");
-const { invalidateEmployee } = require("../utils/loginEvents");
+const { invalidateEmployee, invalidateAllEmployees } = require("../utils/loginEvents");
 
 const { Op } = Sequelize;
 
@@ -113,18 +113,19 @@ const getAll = async (req, res) => {
 // Fábrica y Cocina solo se ofrecen a la empresa que tiene el módulo: en las demás serían
 // casillas que no abren nada.
 const getPermissionCatalog = async (req, res) => {
-  let fabrica = false, cocina = false, pedidosWeb = false;
+  let fabrica = false, cocina = false, pedidosWeb = false, comisiones = false;
   try {
     if (req.company_id) {
       const { Company } = require("../models");
-      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled'] });
+      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled'] });
       fabrica = !!c?.fabrica_enabled;
       cocina = !!c?.cocina_enabled;
       pedidosWeb = !!c?.pedidos_web_enabled;
+      comisiones = !!c?.comisiones_enabled;
     }
   } catch { /* sin la empresa, el catálogo sale sin los módulos extra */ }
   const data = MODULES
-    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina))
+    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina) && (m.key !== 'commissions' || comisiones))
     // Confirmar pagos reportados es del extra de pedidos web: sin él la casilla no abriría nada.
     .map(m => (m.key === 'accounting' && !pedidosWeb ? { ...m, actions: m.actions.filter(a => a.key !== 'confirm') } : m));
   res.json({ ok: true, data });
@@ -316,6 +317,9 @@ const updateRole = async (req, res) => {
     }
 
     await role.update(updates);
+    // Los permisos se leen al día en cada petición (con caché de 30 s): que los de este rol
+    // cambien ya, no cuando venza la caché de cada uno.
+    invalidateAllEmployees();
     res.json({ ok: true, data: role });
   } catch (err) {
     console.error(err);
@@ -323,4 +327,28 @@ const updateRole = async (req, res) => {
   }
 };
 
-module.exports = { getAll, getRoles, create, update, remove, updateRole, getPermissionCatalog, getAccess };
+// PUT /api/employees/:id/permissions — excepciones de una persona sobre su rol.
+// Llega { overrides: { "sales.discount": true, "sales.void": false } }: solo lo que difiere del
+// rol (true da, false quita). Mismo criterio que editar un rol: lo hace el admin, porque es
+// repartir llaves; un encargado con employees.edit podría dárselas por interpuesta persona.
+const updatePermissions = async (req, res) => {
+  try {
+    const employee = await Employee.findByPk(req.params.id, { include: [{ model: Role, attributes: ['permissions', 'label'] }] });
+    if (!employee) return res.status(404).json({ ok: false, message: "Empleado no encontrado" });
+    if (roleIsAdmin(employee.Role)) {
+      return res.status(400).json({ ok: false, message: "Un administrador ya tiene todos los permisos" });
+    }
+    const overrides = {};
+    for (const [k, v] of Object.entries(req.body?.overrides || {})) {
+      if (ALL_KEYS.includes(k) && typeof v === 'boolean') overrides[k] = v;
+    }
+    await employee.update({ permission_overrides: overrides });
+    invalidateEmployee(employee.id);
+    res.json({ ok: true, data: { id: employee.id, permission_overrides: overrides } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al guardar los permisos" });
+  }
+};
+
+module.exports = { getAll, getRoles, create, update, remove, updateRole, getPermissionCatalog, getAccess, updatePermissions };

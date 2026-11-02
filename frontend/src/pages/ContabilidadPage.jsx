@@ -22,8 +22,9 @@ import CuentasPorPagarTab from "../components/Contabilidad/CuentasPorPagarTab";
 import CuentasPorCobrarTab from "../components/Contabilidad/CuentasPorCobrarTab";
 import ConciliacionTab from "../components/Contabilidad/conciliacion/ConciliacionTab";
 import PagosReportadosTab from "../components/Contabilidad/PagosReportadosTab";
+import CasheaTab from "../components/Contabilidad/CasheaTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Por Pagar", "Pagos", "Pagos reportados", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Cashea", "Por Pagar", "Pagos", "Pagos reportados", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -33,7 +34,7 @@ export default function ContabilidadPage() {
  banks, loadBanks,
  paymentMethods, loadPaymentMethods,
  pendingAction, setPendingAction,
- company,
+ company, settings,
  } = useApp();
 
  const [allSeries, setAllSeries] = useState([]);
@@ -84,6 +85,9 @@ export default function ContabilidadPage() {
  const canReconcile   = can("accounting.reconcile");
  // Pagos que los clientes reportan desde el catálogo: los revisa quien puede confirmarlos.
  const canConfirmPay  = can("accounting.confirm") && !!company?.pedidos_web_enabled;
+ // Lo que debe Cashea por las ventas financiadas: con la opción encendida (Configuración → Punto
+ // de venta) y a quien ve la contabilidad.
+ const canCashea      = settings?.pos_cashea === "true" && can("accounting.view");
 
  useEffect(() => {
  if (!canConfig) return;
@@ -122,8 +126,9 @@ export default function ContabilidadPage() {
    { label: "Ventas",      items: ["Facturas", "Notas de Crédito", "Cotizaciones"] },
    // Lo que nos deben y lo que se debe. Cada una responde al permiso de lo que lee: Por
    // Cobrar a ver ventas (o contabilidad), Por Pagar a ver compras.
-   ...((canReceivables || canPayables) ? [{ label: "Cuentas", items: [
+   ...((canReceivables || canPayables || canCashea) ? [{ label: "Cuentas", items: [
      ...(canReceivables ? ["Por Cobrar"] : []),
+     ...(canCashea      ? ["Cashea"]     : []),
      ...(canPayables    ? ["Por Pagar"]  : []),
    ] }] : []),
    // Con permiso para confirmar pagos del catálogo, "Pagos" se abre en los registrados y los
@@ -155,7 +160,7 @@ export default function ContabilidadPage() {
  notify={notify}
  can={can}
  fmtPrice={fmtPrice}
- journals={journals}
+ journals={journals.filter(j => j.type !== "cashea")}
  />
  );
  case "Egresos":
@@ -197,6 +202,8 @@ export default function ContabilidadPage() {
  );
  case "Por Cobrar":
  return <CuentasPorCobrarTab notify={notify} fmtPrice={fmtPrice} />;
+ case "Cashea":
+ return <CasheaTab notify={notify} />;
  case "Por Pagar":
  return <CuentasPorPagarTab notify={notify} fmtPrice={fmtPrice} />;
  case "Pagos":

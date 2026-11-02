@@ -45,6 +45,8 @@ export const LEGACY_MAP = {
 export function hasPermission(permissions, perm) {
   if (!permissions) return false;
   if (permissions.all) return true;
+  // Quitado a esta persona aunque su rol lo tenga (permisos por usuario).
+  if (permissions[perm] === false) return false;
   if (permissions[perm]) return true;
   if (perm === "admin") return false;
 

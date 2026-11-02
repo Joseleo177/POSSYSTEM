@@ -11,8 +11,10 @@ import { ledgerRow, stopRow, LedgerEmpty, RowIcon, ICONS } from "./ui/Ledger";
 import { useApp } from "../context/AppContext";
 import { toNameCase } from "../helpers";
 import EmployeeAccessModal, { haceCuanto } from "./EmployeeAccessModal";
+import EmployeePermissionsModal from "./EmployeePermissionsModal";
 
 const CLOCK = "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z";
+const KEY   = "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z";
 
 const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
 
@@ -39,6 +41,8 @@ export default function EmployeesTab({ notify }) {
     const [modal, setModal]         = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState(null);
     const [accessOf, setAccessOf] = useState(null);
+    // Permisos de una persona por encima de su rol (solo el admin, como los roles).
+    const [permsOf, setPermsOf] = useState(null);
     const nameRef = useRef(null);
 
     const load = async () => {
@@ -172,6 +176,14 @@ export default function EmployeesTab({ notify }) {
         </div>
     );
 
+    // "+2 permisos · −1": lo que esta persona tiene distinto de su rol, para verlo sin abrirla.
+    const excepciones = (e) => {
+        if (e.is_admin) return null;
+        const vals = Object.values(e.permission_overrides || {});
+        const mas = vals.filter(v => v === true).length, menos = vals.filter(v => v === false).length;
+        if (!mas && !menos) return null;
+        return [mas && `+${mas} ${mas === 1 ? "permiso" : "permisos"}`, menos && `−${menos} ${menos === 1 ? "quitado" : "quitados"}`].filter(Boolean).join(" · ");
+    };
     const iniciales = (nombre) => (nombre || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
     const sucursalesDe = (e) => {
         const ws = e.warehouses || [];
@@ -212,6 +224,7 @@ export default function EmployeesTab({ notify }) {
     // Acciones siempre a la vista: en una tablet no hay hover que las descubra.
     const acciones = (e) => (
         <div className="flex items-center justify-end gap-0.5" onClick={stopRow}>
+            {iAmAdmin && !e.is_admin && <RowIcon icon={KEY} title="Permisos de esta persona" onClick={() => setPermsOf(e)} />}
             <RowIcon icon={CLOCK} title="Ver accesos" onClick={() => setAccessOf(e)} />
             <RowIcon icon="edit" title="Editar empleado" onClick={() => openEdit(e)} />
             <RowIcon icon="trash" tone="danger" title="Eliminar empleado" onClick={() => setDeleteConfirm(e)} />
@@ -260,7 +273,10 @@ export default function EmployeesTab({ notify }) {
                                                 </div>
                                             </div>
                                         </td>
-                                        <td><span className="text-[13px] text-content dark:text-white whitespace-nowrap">{e.role_label || "—"}</span></td>
+                                        <td>
+                                            <span className="text-[13px] text-content dark:text-white whitespace-nowrap">{e.role_label || "—"}</span>
+                                            {excepciones(e) && <div className="text-[12px] text-content-subtle whitespace-nowrap tabular-nums">{excepciones(e)}</div>}
+                                        </td>
                                         <td className="max-w-0">
                                             <span className="block text-[13px] text-content-subtle truncate" title={(e.warehouses || []).map(w => w.name).join(", ") || undefined}>
                                                 {sucursalesDe(e)}
@@ -298,7 +314,7 @@ export default function EmployeesTab({ notify }) {
                                 {avatar(e)}
                                 <div className="min-w-0 flex-1">
                                     <div className={`text-[14px] font-semibold truncate ${e.active ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(e.full_name)}</div>
-                                    <div className="text-[12px] text-content-subtle truncate">{e.role_label || "Sin rol"} · @{e.username}</div>
+                                    <div className="text-[12px] text-content-subtle truncate">{e.role_label || "Sin rol"}{excepciones(e) ? ` (${excepciones(e)})` : ""} · @{e.username}</div>
                                     <div className="text-[12px] text-content-subtle tabular-nums truncate">
                                         {(() => { const h = haceCuanto(e.last_seen_at || e.last_login_at); return h ? `Último acceso: ${h}` : "Sin accesos registrados"; })()}
                                     </div>
@@ -522,6 +538,19 @@ export default function EmployeesTab({ notify }) {
                             placeholder="Elegir rol…"
                             className="w-full"
                         />
+                        {/* Excepciones de esta persona sobre el rol: se guardan aparte (y al momento),
+                            por eso el acceso solo aparece al editar a alguien que ya existe. */}
+                        {editId && iAmAdmin && (() => {
+                            const emp = employees.find(x => x.id === editId);
+                            if (!emp || emp.is_admin || String(emp.role_id) !== String(form.role_id)) return null;
+                            return (
+                                <button type="button" onClick={() => { closeModal(); setPermsOf(emp); }}
+                                    className="mt-2 w-full flex items-center justify-between gap-3 rounded-lg border border-dashed border-border dark:border-white/15 px-3 h-10 text-left hover:bg-surface-2/70 dark:hover:bg-white/[0.03] transition-colors">
+                                    <span className="text-[13px] text-content dark:text-white">Permisos de esta persona</span>
+                                    <span className="text-[12px] text-content-subtle tabular-nums truncate">{excepciones(emp) || "Igual al rol"} ›</span>
+                                </button>
+                            );
+                        })()}
                     </Campo>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -609,6 +638,15 @@ export default function EmployeesTab({ notify }) {
             </Modal>
 
             <EmployeeAccessModal employee={accessOf} onClose={() => setAccessOf(null)} />
+
+            <EmployeePermissionsModal
+                employee={permsOf}
+                role={roles.find(r => String(r.id) === String(permsOf?.role_id))}
+                catalog={catalog}
+                notify={notify}
+                onClose={() => setPermsOf(null)}
+                onSaved={async () => { setPermsOf(null); await load(); }}
+            />
 
             <ConfirmModal
                 isOpen={!!deleteConfirm}

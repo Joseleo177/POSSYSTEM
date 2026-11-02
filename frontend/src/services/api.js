@@ -464,6 +464,8 @@ export const api = {
     remove:      (id)        => request(`/employees/${id}`,      { method: "DELETE" }),
     getAccess:   (id)        => request(`/employees/${id}/access`),
     updateRole:  (id, body)  => request(`/employees/roles/${id}`,{ method: "PUT",    body: JSON.stringify(body) }),
+    // Excepciones de una persona sobre su rol: { overrides: { "sales.discount": true, ... } }.
+    updatePermissions: (id, body) => request(`/employees/${id}/permissions`, { method: "PUT", body: JSON.stringify(body) }),
   },
   currencies: {
     getAll:       ()         => request("/currencies"),
@@ -598,6 +600,14 @@ export const api = {
   // Avance de efectivo suelto (con venta va dentro del cobro: payments.create, `cash_advance`).
   cashAdvances: {
     create: (body) => request("/cash-advances", { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Ventas con Cashea: lo financiado de una venta y las liquidaciones (ver services/cashea).
+  cashea: {
+    registerSale: (saleId, body) => request(`/cashea/sales/${saleId}`, { method: "POST", body: JSON.stringify(body) }),
+    pending:      () => request("/cashea/pending"),
+    settlements:  (params = {}) => request("/cashea/settlements?" + new URLSearchParams(params)),
+    settle:       (body) => request("/cashea/settlements", { method: "POST", body: JSON.stringify(body) }),
+    voidSettlement: (id) => request(`/cashea/settlements/${id}`, { method: "DELETE" }),
   },
   payments: {
     getAll:     (params={}) => request("/payments?"        + new URLSearchParams(params)),
@@ -743,6 +753,16 @@ export const api = {
     setStatus: (id, status)    => request(`/kitchen/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     // Lo que la caja acaba de cobrar, a cocina (restaurante donde se paga antes de pedir).
     fromSale:  (saleId, body)  => request(`/kitchen/sales/${saleId}/ticket`, { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Comisiones por vendedor (extra por empresa). La caja solo usa `sellers`.
+  commissions: {
+    sellers:      (all = false)   => request(`/commissions/sellers${all ? "?all=1" : ""}`),
+    createSeller: (body)          => request("/commissions/sellers", { method: "POST", body: JSON.stringify(body) }),
+    updateSeller: (id, body)      => request(`/commissions/sellers/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    report:       (params = {})   => request("/commissions/report?" + new URLSearchParams(params)),
+    statement:    (id, params={}) => request(`/commissions/sellers/${id}/statement?` + new URLSearchParams(params)),
+    pay:          (id, body)      => request(`/commissions/sellers/${id}/payouts`, { method: "POST", body: JSON.stringify(body) }),
+    voidPayout:   (id)            => request(`/commissions/payouts/${id}`, { method: "DELETE" }),
   },
   // Adicionales de los platos (Catálogo → Adicionales).
   addons: {

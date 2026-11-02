@@ -21,6 +21,7 @@ import PosAddonModal       from "../components/cobro/PosAddonModal";
 import { cartKey }         from "../helpers/cartLine";
 import PendingSalesModal   from "../components/cobro/PendingSalesModal";
 import ReturnableSalesModal from "../components/cobro/ReturnableSalesModal";
+import SellerPickerModal from "../components/cobro/SellerPickerModal";
 import CashAdvanceModal from "../components/cobro/CashAdvanceModal";
 import AperturaCajaModal   from "../components/AperturaCajaModal";
 import CierreCajaModal     from "../components/CierreCajaModal";
@@ -54,6 +55,7 @@ export default function CobroPage() {
         setLineDiscount, lineManualDiscountDisplay,
         selectedSerieId, selectSerie, mySeries, loadMySeries,
         selectedCustomer, setSelectedCustomer,
+        selectedSeller, setSelectedSeller, comisiones,
         employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
         checkout, saveQuotation, loading, receipt, setReceipt, deshacerVentaSinConexion,
         heldCarts, holdCart, takeHeldCart, removeHeldCart, releaseHeldCart, loadHeldCarts, acceptWebOrder, heldSaleId,
@@ -106,6 +108,8 @@ export default function CobroPage() {
     const openProduct = (p) => (p?.is_variant_parent ? setVariantModel(p) : p?.has_addons ? setAddonPick({ product: p, qty: 1 }) : setQtyModalItem(p));
     const [showPendingSales, setShowPendingSales]  = useState(false);
     const [showReturns, setShowReturns]            = useState(false);
+    // Quién vendió (comisiones por vendedor, extra de la empresa).
+    const [showSellerPicker, setShowSellerPicker]  = useState(false);
     // Avance de efectivo sin venta: opción de la empresa, permiso propio y turno abierto (el
     // efectivo sale de la gaveta y tiene que caer en un arqueo).
     const [showAdvance, setShowAdvance]            = useState(false);
@@ -198,7 +202,7 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!variantModel || !!addonPick || !!customer.debtAlert || showHeldModal || showTables || showReturns || showAdvance || showConfirmCheckout,
+        modalOpen: !!qtyModalItem || !!variantModel || !!addonPick || !!customer.debtAlert || showHeldModal || showTables || showReturns || showSellerPicker || showAdvance || showConfirmCheckout,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
@@ -206,6 +210,7 @@ export default function CobroPage() {
         // Sin turno abierto tampoco: el botón no se muestra y el reembolso, que sale de la
         // caja, tiene que caer en un arqueo.
         setShowReturns: can("sales.return") && session.cashSession ? setShowReturns : undefined,
+        setShowSellerPicker: comisiones ? setShowSellerPicker : undefined,
     });
 
     // ── Facturar / cotizar ─────────────────────────────────────
@@ -340,6 +345,8 @@ export default function CobroPage() {
                 cartTable={conMesas ? cartTable : null}
                 onOpenTables={conMesas ? () => setShowTables(true) : undefined}
                 onClearTable={() => setCartTable(null)}
+                selectedSeller={selectedSeller} setSelectedSeller={setSelectedSeller}
+                setShowSellerPicker={comisiones ? setShowSellerPicker : undefined}
                 loading={loading}
                 setShowConfirmCheckout={setShowConfirmCheckout}
                 holdCart={holdCart}
@@ -430,6 +437,16 @@ export default function CobroPage() {
                 warehouseId={activeWarehouse?.id}
                 customer={selectedCustomer}
             />
+            {comisiones && (
+                <SellerPickerModal
+                    open={showSellerPicker}
+                    onClose={() => setShowSellerPicker(false)}
+                    onPick={setSelectedSeller}
+                    selected={selectedSeller}
+                    warehouseId={activeWarehouse?.id}
+                    notify={notify}
+                />
+            )}
             <ReturnableSalesModal
                 open={showReturns}
                 onClose={() => setShowReturns(false)}

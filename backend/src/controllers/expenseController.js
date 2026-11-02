@@ -7,6 +7,7 @@ const { scopeWarehouseIds, assertWarehouseAccess } = require('../middleware/auth
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { expenseRefSql } = require('../utils/expenseReference');
 const { anularAvance } = require('../services/cashAdvances');
+const { anularLiquidacion } = require('../services/cashea');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -184,6 +185,11 @@ exports.voidExpense = async (req, res, next) => {
     if (expense.cash_advance_id) {
       await anularAvance(expense.cash_advance_id);
       return res.json({ ok: true, message: 'Avance de efectivo anulado completo (egreso, avance y comisión)' });
+    }
+    // Parte de una liquidación de Cashea: se anula entera y sus ventas vuelven a deberse.
+    if (expense.cashea_settlement_id) {
+      await anularLiquidacion(expense.cashea_settlement_id);
+      return res.json({ ok: true, message: 'Liquidación de Cashea anulada completa: sus ventas vuelven a estar por liquidar' });
     }
 
     await expense.update({ status: 'anulado' });

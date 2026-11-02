@@ -27,6 +27,7 @@ export default function CartSidebar({
     setCustomerEditData, setCustomerModal,
     cashSession, setShowCierre, setShowApertura, setShowHeldModal, heldCarts, setShowPendingSales, setShowReturns,
     cartTable, onOpenTables, onClearTable,
+    selectedSeller, setSelectedSeller, setShowSellerPicker,
     setShowAdvance,
     loading, setShowConfirmCheckout, holdCart,
     openQtyModal,
@@ -433,6 +434,32 @@ export default function CartSidebar({
                         </div>
                     )}
                 </div>
+
+                {/* Vendedor que gana la comisión (extra de la empresa). Se elige con F7 o aquí;
+                    CobroPage solo pasa setShowSellerPicker si la empresa lo usa. */}
+                {setShowSellerPicker && (
+                    <div className="flex items-center gap-1.5">
+                        <button onClick={() => setShowSellerPicker(true)}
+                            className="btn-outline flex-1 min-w-0 h-10 px-3 rounded-xl flex items-center gap-2.5 text-left active:scale-[0.99]">
+                            <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.5 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6.5 6.5 0 0110.5-5.1M20.5 13.5l-5 6.5M15.8 14.2h.01M20.2 19.3h.01" /></svg>
+                            {selectedSeller ? (
+                                <span className="min-w-0 flex-1 flex items-baseline gap-1.5">
+                                    <span className="text-[12px] text-content-subtle shrink-0">Vendedor</span>
+                                    <span className="text-[13px] font-semibold text-content dark:text-white truncate">{toNameCase(selectedSeller.name)}</span>
+                                </span>
+                            ) : (
+                                <span className="flex-1 text-[13px] font-medium text-content-subtle">Elegir vendedor</span>
+                            )}
+                            <span className="hidden lg:inline text-[11px] text-content-subtle shrink-0">F7</span>
+                        </button>
+                        {selectedSeller && (
+                            <button onClick={() => setSelectedSeller(null)} title="Quitar el vendedor" aria-label="Quitar el vendedor"
+                                className="btn-outline w-10 h-10 shrink-0 rounded-xl flex items-center justify-center">
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 {/* Moneda + Serie */}
                 <div className="flex gap-2 lg:gap-3">

@@ -24,6 +24,14 @@ const DEVOLUCION = "Devolución de Crédito";
 // columna de la caja que lo entregó y se suma en la de la cuenta por la que entró (avance y
 // comisión). Así cada columna cuadra con su caja y con el banco, y el total del día solo crece
 // en la comisión. No es un egreso ni un "otro ingreso". Se reconoce por cash_advance_id.
+//
+// La liquidación de Cashea (services/cashea) va igual: lo financiado entró como cobro en la
+// columna Cashea el día de la venta, y el depósito lo pasa de esa columna a la del banco. Solo su
+// comisión es un egreso de verdad.
+const COMISION_CASHEA = "Comisión Cashea";
+const traspasoIn  = (a) => `(${a}.cash_advance_id IS NOT NULL OR ${a}.cashea_settlement_id IS NOT NULL)`;
+const traspasoOut = (a) => `(${a}.cash_advance_id IS NOT NULL OR (${a}.cashea_settlement_id IS NOT NULL
+  AND ${a}.category_id NOT IN (SELECT id FROM expense_categories WHERE name = :comisionCashea)))`;
 
 // "Factura 1234", "Nota de entrega 208432", "NE-55", "45020490"… El número del documento del
 // proveedor vive en el texto libre de la compra ("Notas o factura del proveedor") o en la
@@ -58,7 +66,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     const e = new Error("No tienes acceso a este almacén"); e.status = 403; e.isOperational = true; throw e;
   }
 
-  const rep = { cid: company_id, cambio: CAMBIO, compra: COMPRA, devolucion: DEVOLUCION };
+  const rep = { cid: company_id, cambio: CAMBIO, compra: COMPRA, devolucion: DEVOLUCION, comisionCashea: COMISION_CASHEA };
   const scoped = !!company_id;
   if (from) rep.dfrom = from;
   if (to)   rep.dto   = to;
@@ -127,22 +135,25 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
   // (ingresos del avance y de su comisión), por día y método.
   const avances = await q(`
     SELECT day, metodo, currency_id, SUM(amount_in_j)::float AS in_journal, SUM(amount_in_b)::float AS in_base,
-           SUM(amount_out_j)::float AS out_journal, SUM(amount_out_b)::float AS out_base
+           SUM(amount_out_j)::float AS out_journal, SUM(amount_out_b)::float AS out_base,
+           SUM(cashea_in_b)::float AS cashea_in_base, SUM(cashea_out_b)::float AS cashea_out_base
       FROM (
         SELECT ${diaManual("i")} AS day, ${metodo("i")} AS metodo, pj.currency_id,
-               i.amount * COALESCE(i.rate, 1) AS amount_in_j, i.amount AS amount_in_b, 0 AS amount_out_j, 0 AS amount_out_b
+               i.amount * COALESCE(i.rate, 1) AS amount_in_j, i.amount AS amount_in_b, 0 AS amount_out_j, 0 AS amount_out_b,
+               CASE WHEN i.cashea_settlement_id IS NOT NULL THEN i.amount ELSE 0 END AS cashea_in_b, 0 AS cashea_out_b
           FROM incomes i
           JOIN payment_journals pj ON pj.id = i.payment_journal_id
-         WHERE i.status = 'activo' AND i.cash_advance_id IS NOT NULL
+         WHERE i.status = 'activo' AND ${traspasoIn("i")}
            ${scoped ? "AND i.company_id = :cid" : ""}
            ${manualWh("i")}
            ${rango(diaManual("i"))}
         UNION ALL
         SELECT ${diaManual("e")}, ${metodo("e")}, pj.currency_id,
-               0, 0, e.amount * COALESCE(e.rate, 1), e.amount
+               0, 0, e.amount * COALESCE(e.rate, 1), e.amount,
+               0, CASE WHEN e.cashea_settlement_id IS NOT NULL THEN e.amount ELSE 0 END
           FROM expenses e
           JOIN payment_journals pj ON pj.id = e.payment_journal_id
-         WHERE e.status = 'activo' AND e.cash_advance_id IS NOT NULL
+         WHERE e.status = 'activo' AND ${traspasoOut("e")}
            ${scoped ? "AND e.company_id = :cid" : ""}
            ${manualWh("e")}
            ${rango(diaManual("e"))}
@@ -159,7 +170,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
       FROM incomes i
       LEFT JOIN payment_journals pj ON pj.id = i.payment_journal_id
       LEFT JOIN currencies c ON c.id = pj.currency_id
-     WHERE i.status = 'activo' AND i.cash_advance_id IS NULL
+     WHERE i.status = 'activo' AND NOT ${traspasoIn("i")}
        ${scoped ? "AND i.company_id = :cid" : ""}
        ${manualWh("i")}
        ${rango(diaManual("i"))}
@@ -185,7 +196,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
         JOIN expense_categories ec ON ec.id = e.category_id
         LEFT JOIN payment_journals pj ON pj.id = e.payment_journal_id
         LEFT JOIN banks b ON b.id = pj.bank_id
-       WHERE e.status = 'activo' AND ec.name <> :cambio AND e.cash_advance_id IS NULL
+       WHERE e.status = 'activo' AND ec.name <> :cambio AND NOT ${traspasoOut("e")}
          ${scoped ? "AND e.company_id = :cid" : ""}
          ${manualWh("e")}
          ${rango(diaManual("e"))}
@@ -379,6 +390,9 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     t.amount_base += e.amount_base; t.count += 1;
   }
 
+  const casheaIn  = avances.reduce((a, r) => a + (r.cashea_in_base || 0), 0);
+  const casheaOut = avances.reduce((a, r) => a + (r.cashea_out_base || 0), 0);
+
   return {
     base_symbol: base.symbol,
     local_symbol: (monedas.find(c => !c.is_base) || {}).symbol || "Bs.",
@@ -393,8 +407,11 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
       change_base: totals.change_base,
       // Avances de efectivo del período: lo entregado en billetes y lo que entró por el punto
       // (con la comisión). La diferencia es la comisión, lo único que suma al ingreso.
-      advance_out_base: totals.advance_out_base,
-      advance_in_base: totals.advance_in_base,
+      // Los depósitos de Cashea viajan en las mismas celdas (son traspasos), pero se nombran
+      // aparte: no salieron billetes de ninguna gaveta.
+      advance_out_base: Math.max(0, totals.advance_out_base - casheaOut),
+      advance_in_base: Math.max(0, totals.advance_in_base - casheaIn),
+      cashea_settled_base: casheaIn,
     },
     income: { columns, days: lista, totals },
     expenses: {

@@ -14,6 +14,7 @@ const {
   CashSessionJournal,
   Return,
   ReturnItem,
+  Seller,
   Sequelize,
   sequelize,
 } = require("../../models");
@@ -27,6 +28,8 @@ const SALE_INCLUDE = [
   { model: Currency, attributes: ["id", "symbol", "code"], required: false },
   { model: Warehouse, attributes: ["id", "name"], required: false },
   { model: Serie, attributes: ["id", "name", "prefix"], required: false },
+  // Vendedor de la comisión (ver services/commissions).
+  { model: Seller, as: "Seller", attributes: ["id", "name", "code"], required: false },
   { 
     model: SaleItem, 
     include: [

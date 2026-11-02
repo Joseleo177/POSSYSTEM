@@ -16,6 +16,7 @@ import CocinaPage from "../pages/CocinaPage";
 import MesasPage from "../pages/MesasPage";
 import RecetasPage from "../pages/RecetasPage";
 import PedidosPage from "../pages/PedidosPage";
+import ComisionesPage from "../pages/ComisionesPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
@@ -29,6 +30,7 @@ export const PAGE_COMPONENTS = {
     Mesas: MesasPage,
     Inventario: InventarioPage,
     Clientes: ClientesPage,
+    Comisiones: ComisionesPage,
     Contabilidad: ContabilidadPage,
     Reportes: ReportesPage,
     Empleados: EmpleadosPage,

@@ -15,6 +15,8 @@ router.get("/",            auth, permit("employees.view"),  ctrl.getAll);
 router.get("/:id/access",  auth, permit("employees.view"),  ctrl.getAccess);
 router.post("/",           auth, permit("employees.create"),  ctrl.create);
 router.put("/:id",         auth, permit("employees.edit"),  ctrl.update);
+// Permisos de una persona por encima de su rol: igual que editar un rol, solo el admin.
+router.put("/:id/permissions", auth, permit("admin"),       ctrl.updatePermissions);
 router.delete("/:id",      auth, permit("employees.delete"),  ctrl.remove);
 
 module.exports = router;

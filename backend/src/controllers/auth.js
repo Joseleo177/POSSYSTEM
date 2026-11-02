@@ -2,6 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt    = require("jsonwebtoken");
 const { Employee, Role, Warehouse, Company } = require("../models");
 const { recordLoginEvent, invalidateEmployee, RESULT } = require("../utils/loginEvents");
+const { effectivePermissions } = require("../config/permissions");
 
 const SECRET  = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -85,7 +86,8 @@ const login = async (req, res) => {
       full_name:    emp.full_name,
       role:         emp.Role?.name  ?? null,
       role_label:   emp.Role?.label ?? null,
-      permissions:  emp.Role?.permissions ?? {},
+      // Los del rol con las excepciones de esta persona (permisos por usuario).
+      permissions:  effectivePermissions(emp.Role?.permissions, emp.permission_overrides),
       warehouses:   emp.Warehouses || [],
       company_id:   emp.company_id,
       is_superuser: !!emp.is_superuser
@@ -119,13 +121,13 @@ const me = async (req, res) => {
     // Los almacenes también se leen de la base y no del token: el token se firma al entrar, y
     // un almacén creado o asignado después no aparecía en Catálogo hasta cerrar sesión.
     const emp = await Employee.findByPk(req.employee.id, {
-      attributes: ["id"], include: [
+      attributes: ["id", "permission_overrides"], include: [
         { model: Role, attributes: ["name", "label", "permissions"] },
         { model: Warehouse, attributes: ["id", "name", "active", "sells"], through: { attributes: [] } },
       ],
     });
     if (emp?.Role) {
-      const permissions = emp.Role.permissions || {};
+      const permissions = effectivePermissions(emp.Role.permissions, emp.permission_overrides);
       const sucursales = await sucursalesDe({
         company_id: req.company_id, is_superuser: req.is_superuser, permissions, warehouses: emp.Warehouses,
       });
@@ -192,7 +194,8 @@ const refresh = async (req, res) => {
       full_name:    emp.full_name,
       role:         emp.Role?.name  ?? null,
       role_label:   emp.Role?.label ?? null,
-      permissions:  emp.Role?.permissions ?? {},
+      // Los del rol con las excepciones de esta persona (permisos por usuario).
+      permissions:  effectivePermissions(emp.Role?.permissions, emp.permission_overrides),
       warehouses:   emp.Warehouses || [],
       company_id:   emp.company_id,
       is_superuser: !!emp.is_superuser

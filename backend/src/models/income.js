@@ -29,6 +29,8 @@ module.exports = (sequelize, DataTypes) => {
     warehouse_id: { type: DataTypes.INTEGER, allowNull: true },
     // Parte de un avance de efectivo (ver models/cashAdvance.js): se anula junto con él.
     cash_advance_id: { type: DataTypes.INTEGER, allowNull: true },
+    // Parte de una liquidación de Cashea (ver models/CasheaSettlement.js): se anula junto con ella.
+    cashea_settlement_id: { type: DataTypes.INTEGER, allowNull: true },
     notes:       { type: DataTypes.TEXT, allowNull: true },
     status:      { type: DataTypes.STRING(20), defaultValue: 'activo' },
     date:        { type: DataTypes.DATE, allowNull: true },

@@ -1,4 +1,4 @@
-const { Setting, Employee, Role } = require("../../models");
+const { Setting } = require("../../models");
 const { hasPermission } = require("../../middleware/auth");
 
 // Descuento manual por línea y el control de quién puede dar descuentos. Lo comparten
@@ -45,21 +45,15 @@ async function topeDescuento(company_id, transaction) {
 // Quien da un descuento —por línea o el global de la venta— necesita `sales.discount`, y si no
 // es administrador, quedarse dentro del tope de Configuración → Punto de venta.
 //
-// Los permisos se leen de la base y no del token: un permiso que se concede (o se quita) no
-// llega al token hasta el próximo login, y el día que entró `sales.discount` habría dejado a
-// cada cajero con sesión abierta sin poder dar el descuento que daba la víspera.
+// Los permisos son los vigentes, no los del token: el middleware de auth los vuelve a leer
+// (rol + excepciones de la persona, con caché de 30 s; ver utils/loginEvents). Antes esto hacía
+// su propia consulta por la misma razón: el día que entró `sales.discount` el token habría
+// dejado a cada cajero con sesión abierta sin el descuento que daba la víspera.
 //
 // `lineas`: [{ nombre, bruto, descuento }] solo con los descuentos MANUALES —las promociones
 // las configura quien administra, no se controlan aquí—. `subtotal` y `global` en moneda base.
-async function permisosVigentes(req, transaction) {
-  let perms = req?.employee?.permissions;
-  if (req?.employee?.id) {
-    const emp = await Employee.findByPk(req.employee.id, {
-      attributes: ["id"], include: [{ model: Role, attributes: ["permissions"] }], transaction,
-    });
-    if (emp?.Role) perms = emp.Role.permissions;
-  }
-  return perms;
+async function permisosVigentes(req) {
+  return req?.employee?.permissions;
 }
 
 async function assertDescuentosPermitidos(req, { lineas = [], subtotal = 0, global = 0 }, transaction) {

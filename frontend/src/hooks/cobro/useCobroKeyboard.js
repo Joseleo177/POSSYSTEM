@@ -10,7 +10,7 @@ export function useCobroKeyboard({
     customers, selectedCustIdx, setSelectedCustIdx,
     pickCustomer,
     openQtyModal, setScanPending, modalOpen, notify,
-    setShowHeldModal, setShowPendingSales, setShowReturns,
+    setShowHeldModal, setShowPendingSales, setShowReturns, setShowSellerPicker,
 }) {
     useEffect(() => {
         const handleKeyDown = (e) => {
@@ -25,6 +25,8 @@ export function useCobroKeyboard({
             if (e.key === "F5") { e.preventDefault(); setShowPendingSales?.(true); return; }
             // F6 abre devoluciones y cambios; sin sales.return llega undefined y no hace nada.
             if (e.key === "F6") { e.preventDefault(); setShowReturns?.(true); return; }
+            // F7: quién vendió (comisiones). Sin el extra de la empresa llega undefined.
+            if (e.key === "F7") { e.preventDefault(); setShowSellerPicker?.(true); return; }
 
             // Redirigir escritura al buscador si no hay ningún input enfocado
             const tag = e.target.tagName;

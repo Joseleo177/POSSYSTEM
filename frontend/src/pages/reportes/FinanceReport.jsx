@@ -170,6 +170,10 @@ export default function FinanceReport() {
                                                 // El que va en una factura entra con su cobro; solo el suelto tiene ingreso propio.
                                                 ? `avances de efectivo: ${fmtB(s.advance_out_base)} salieron en billetes${s.advance_in_base > 0 ? ` y ${fmtB(s.advance_in_base)} entraron sin factura` : ""}`
                                                 : null,
+                                            // El depósito de Cashea pasa lo financiado de la columna Cashea a la del banco.
+                                            s.cashea_settled_base > 0
+                                                ? `Cashea depositó ${fmtB(s.cashea_settled_base)}: sale de su columna y entra en la del banco`
+                                                : null,
                                         ].filter(Boolean).join("; ")}
                                     />
                                 </div>

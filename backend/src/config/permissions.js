@@ -156,6 +156,18 @@ const MODULES = [
     ],
   },
   {
+    // Comisiones por vendedor: solo en empresas con companies.comisiones_enabled (ver
+    // routes/commissions.js). Nuevo, fuera de todo LEGACY_MAP: de entrada solo el admin.
+    // Elegir el vendedor en la caja NO pide nada de esto: va con sales.create.
+    key: 'commissions',
+    label: 'Comisiones',
+    actions: [
+      { key: 'view',   label: 'Ver comisiones y estados de cuenta' },
+      { key: 'manage', label: 'Crear y editar vendedores' },
+      { key: 'pay',    label: 'Liquidar comisiones' },
+    ],
+  },
+  {
     key: 'reports',
     label: 'Reportes',
     actions: [
@@ -294,4 +306,18 @@ function expandLegacy(permissions = {}) {
   return out;
 }
 
-module.exports = { MODULES, ALL_KEYS, LEGACY_MAP, expandLegacy };
+// Permisos de una persona: los de su rol con sus excepciones encima (employees.
+// permission_overrides). Una excepción en true da la acción; en false la QUITA aunque el rol la
+// tenga, también si el rol todavía está en el formato viejo: hasPermission mira el false antes
+// que el mapa de compatibilidad. El administrador (all) no tiene excepciones: lo puede todo.
+function effectivePermissions(rolePerms, overrides) {
+  const base = rolePerms || {};
+  if (base.all) return { all: true };
+  const out = { ...base };
+  for (const [k, v] of Object.entries(overrides || {})) {
+    if (ALL_KEYS.includes(k) && typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+}
+
+module.exports = { MODULES, ALL_KEYS, LEGACY_MAP, expandLegacy, effectivePermissions };

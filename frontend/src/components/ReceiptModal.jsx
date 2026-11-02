@@ -50,6 +50,8 @@ function normalizeSale(sale) {
         customer_name: sale.customer_name || sale.customerName || null,
         customer_rif: sale.customer_rif || sale.customerRif || null,
         employee_name: sale.employee_name || null,
+        // Vendedor de la comisión, cuando la empresa las usa. El cajero sigue en employee_name.
+        seller_name: sale.seller_name || null,
         warehouse_name: sale.warehouse_name || null,
         journal_name: sale.journal_name || sale.journal?.name || null,
         journal_color: sale.journal_color || sale.journal?.color || null,
@@ -564,6 +566,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="meta-row"><span class="meta-label">Recibo:</span><span class="meta-value">${s.invoice_number || s.offline_ref || `#${s.id}`}</span></div>
         <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${dateStr}</span></div>
         ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${s.employee_name}</span></div>` : ""}
+        ${s.seller_name ? `<div class="meta-row"><span class="meta-label">Vendedor:</span><span class="meta-value">${s.seller_name}</span></div>` : ""}
         ${s.customer_name ? `<div class="meta-row"><span class="meta-label">Cliente:</span><span class="meta-value">${s.customer_name}</span></div>` : ""}
         ${s.customer_rif ? `<div class="meta-row"><span class="meta-label">C.I./RIF:</span><span class="meta-value">${s.customer_rif}</span></div>` : ""}
     </div>
@@ -734,7 +737,9 @@ export default function ReceiptModal({ open, onClose, sale }) {
             <div className="mb-4">
                 <Linea label="N°">{invoiceLabel}</Linea>
                 <Linea label="Fecha">{dateStr}</Linea>
-                {s.employee_name && <Linea label="Vendedor">{toNameCase(s.employee_name)}</Linea>}
+                {/* Con comisiones, quien vendió no es quien cobró: van los dos. */}
+                {s.employee_name && <Linea label={s.seller_name ? "Cajero" : "Vendedor"}>{toNameCase(s.employee_name)}</Linea>}
+                {s.seller_name && <Linea label="Vendedor">{toNameCase(s.seller_name)}</Linea>}
                 {(s.customer_name || s.customer_rif) && (
                     <Linea label="Cliente">
                         <span className="block truncate">{toNameCase(s.customer_name) || "—"}</span>

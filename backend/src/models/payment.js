@@ -32,6 +32,9 @@ module.exports = (sequelize, DataTypes) => {
     // monto. Contra la caja eso es UN movimiento, y por eso el diario los agrupa por esta
     // clave en vez de listar una línea por factura. Null en un cobro corriente.
     batch_id:           { type: DataTypes.STRING(64), allowNull: true },
+    // Cobro financiado por Cashea (diario type 'cashea') que Cashea ya pagó: la liquidación
+    // que lo saldó. Null mientras Cashea lo deba (ver services/cashea).
+    cashea_settlement_id: { type: DataTypes.INTEGER, allowNull: true },
     created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

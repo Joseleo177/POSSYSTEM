@@ -106,6 +106,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Una persona con un porcentaje: lo que gana cada vendedor.
+    Comisiones: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M9.5 11a3.5 3.5 0 100-7 3.5 3.5 0 000 7zM3 20a6.5 6.5 0 0110.5-5.1M20.5 13.5l-5 6.5M15.8 14.2h.01M20.2 19.3h.01"
+            />
+        </svg>
+    ),
     // Un libro de recetas abierto.
     Recetas: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">

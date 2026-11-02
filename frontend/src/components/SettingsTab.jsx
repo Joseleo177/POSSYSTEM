@@ -214,6 +214,8 @@ export default function SettingsTab({ notify }) {
     // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
+    // Comisiones: la venta no se factura sin vendedor. Apagado, el vendedor es opcional.
+    const exigirVendedorOn = settings.pos_require_seller === "true";
     const cocinaAlCobrarOn = settings.pos_kitchen_on_charge === "true";
     // Sin la clave guardada vale lo mismo que en el servidor: encendido en un restaurante (ver
     // services/products/recipeStock.js).
@@ -471,6 +473,17 @@ export default function SettingsTab({ notify }) {
                                     checked={reviewOn}
                                     onChange={() => setSettings(p => ({ ...p, pos_review_checkout: reviewOn ? "false" : "true" }))}
                                 />
+                                {company?.comisiones_enabled && (
+                                    <>
+                                        <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                        <Interruptor
+                                            titulo="Exigir el vendedor"
+                                            detalle="La venta no se factura sin decir quién vendió (F7). Pausarla sí se puede. Apagado, el vendedor es opcional y la venta sin vendedor no paga comisión."
+                                            checked={exigirVendedorOn}
+                                            onChange={() => setSettings(p => ({ ...p, pos_require_seller: exigirVendedorOn ? "false" : "true" }))}
+                                        />
+                                    </>
+                                )}
                             </div>
                         </Seccion>
 
@@ -572,6 +585,20 @@ export default function SettingsTab({ notify }) {
                                             className={`${INPUT} tabular-nums sm:max-w-[200px]`} />
                                     </Campo>
                                 )}
+                            </div>
+                        </Seccion>
+
+                        {/* Ventas con Cashea: apagadas por defecto. Sin la opción no aparece el
+                            botón en la caja ni la pestaña en Contabilidad, y el servidor las
+                            rechaza (services/cashea). */}
+                        <Seccion titulo="Cashea" detalle="Vender con financiamiento de Cashea." className="h-full">
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                <Interruptor
+                                    titulo="Permitir ventas con Cashea"
+                                    detalle="Al cobrar, el cajero escribe la inicial que le indica Cashea y la cobra como siempre; el resto queda por cobrar a Cashea, no al cliente. Cuando Cashea deposita, se registra en Contabilidad → Cuentas → Cashea y lo que no llegó queda como su comisión."
+                                    checked={settings.pos_cashea === "true"}
+                                    onChange={() => setSettings(p => ({ ...p, pos_cashea: p.pos_cashea === "true" ? "false" : "true" }))}
+                                />
                             </div>
                         </Seccion>
 

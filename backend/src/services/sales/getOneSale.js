@@ -20,6 +20,7 @@ module.exports = async function getOneSale(id, req) {
   item.currency_code = item.Currency?.code ?? null;
   item.warehouse_name = item.Warehouse?.name ?? null;
   item.serie_name = item.Serie?.name ?? null;
+  item.seller_name = item.Seller?.name ?? null;
   item.items = item.SaleItems?.map(si => {
     const returned_qty = si.ReturnItems?.reduce((acc, ri) => acc + parseFloat(ri.qty), 0) || 0;
     return {

@@ -124,9 +124,11 @@ app.use("/api/promotions",       require("./routes/promotions"));        // auth
 app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
 app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
 app.use("/api/cash-advances",    require("./routes/cashAdvances"));       // auth+permit dentro
+app.use("/api/cashea",           require("./routes/cashea"));             // auth+permit dentro
 app.use("/api/bank-reconciliations", require("./routes/bankReconciliation")); // auth+permit dentro
 app.use("/api/factory",          require("./routes/factory"));             // auth+permit+módulo dentro
 app.use("/api/kitchen",          require("./routes/kitchen"));             // auth+permit+módulo dentro
+app.use("/api/commissions",      require("./routes/commissions"));         // auth+permit+módulo dentro
 app.use("/api/tables",           require("./routes/tables"));              // auth+permit+módulo dentro
 app.use("/api/addons",           require("./routes/addons"));              // auth+permit+módulo dentro
 app.use("/api/recipes",          require("./routes/recipes"));             // auth+permit+módulo dentro

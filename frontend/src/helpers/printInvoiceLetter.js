@@ -151,6 +151,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
             <div class="meta-row"><span class="meta-label">Documento N°:</span><span class="meta-value">${esc(invoiceLabel)}</span></div>
             <div class="meta-row"><span class="meta-label">Fecha:</span><span class="meta-value">${esc(fmtDate(s.created_at))}</span></div>
             ${s.employee_name ? `<div class="meta-row"><span class="meta-label">Cajero:</span><span class="meta-value">${esc(s.employee_name)}</span></div>` : ""}
+            ${s.seller_name ? `<div class="meta-row"><span class="meta-label">Vendedor:</span><span class="meta-value">${esc(s.seller_name)}</span></div>` : ""}
         </div>
     </div>
 

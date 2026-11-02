@@ -9,6 +9,10 @@ module.exports = async function removePayment(id) {
   try {
     const payment = await Payment.findByPk(id, { transaction: t, lock: true });
     if (!payment) throw new Error("Pago no encontrado");
+    // Lo financiado por Cashea que Cashea ya pagó: quitarlo dejaría su liquidación descuadrada.
+    if (payment.cashea_settlement_id) {
+      throw Object.assign(new Error(`Cashea ya pagó este cobro (liquidación #${payment.cashea_settlement_id}). Anula primero la liquidación.`), { status: 400, isOperational: true });
+    }
 
     const sale = await Sale.findByPk(payment.sale_id, { transaction: t, lock: true });
     if (!sale) throw new Error("Factura no encontrada");

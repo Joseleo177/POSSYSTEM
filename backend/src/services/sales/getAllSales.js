@@ -1,5 +1,5 @@
 const { Sale, SaleItem, Customer, Employee, Currency, Warehouse, Serie, Sequelize, Op, PAYMENT_METHODS } = require("./shared");
-const { DiningTable } = require("../../models");
+const { DiningTable, Seller } = require("../../models");
 const { FX_PAGO_DIVISAS_SQL } = require("./fxRate");
 
 module.exports = async function getAllSales(query, tenant = {}) {
@@ -109,6 +109,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       { model: Serie, attributes: ["name", "prefix"], required: false },
       { model: DiningTable, as: "DiningTable", attributes: ["name"], required: false },
       { model: Employee, as: "Waiter", attributes: ["full_name"], required: false },
+      { model: Seller, as: "Seller", attributes: ["name"], required: false },
       { model: SaleItem, required: true },
     ],
     distinct: true,
@@ -126,6 +127,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.serie_name = item.Serie?.name ?? null;
     item.table_name = item.DiningTable?.name ?? null;
     item.waiter_name = item.Waiter?.full_name ?? null;
+    item.seller_name = item.Seller?.name ?? null;
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
     item.total_precise = parseFloat(item.total_precise || item.total || 0);
@@ -139,7 +141,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     // Igual que en getOneSale: una venta 'pagado' o 'exonerado' no arrastra saldo. Con divisas
     // recibidas a tasa de efectivo la resta deja centavos que el cliente no debe.
     if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0) item.balance = 0;
-    ["Customer", "Employee", "Currency", "Warehouse", "RequestedWarehouse", "Serie", "DiningTable", "Waiter", "SaleItems"].forEach((k) => delete item[k]);
+    ["Customer", "Employee", "Currency", "Warehouse", "RequestedWarehouse", "Serie", "DiningTable", "Waiter", "Seller", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });
 

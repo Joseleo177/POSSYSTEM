@@ -12,6 +12,7 @@ const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
+const { sellerForSale } = require("../commissions");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { vendeSinInsumo, fichaEnCero, fotoConsumo, consumoDeLinea } = require("../products/recipeStock");
 
@@ -312,6 +313,12 @@ module.exports = async function updateSale(saleId, body, req) {
     // sin nombrarla —la vista BARRA— no se la quita.
     if (body.table_id !== undefined) {
       headerPatch.table_id = body.table_id ? (await assertTable(body.table_id, sale.warehouse_id, transaction)).id : null;
+    }
+
+    // Vendedor de la comisión: mismo criterio que la mesa. Si sigue siendo el mismo, el % que
+    // quedó copiado al abrir la cuenta no se toca.
+    if (body.seller_id !== undefined && (parseInt(body.seller_id) || null) !== (sale.seller_id || null)) {
+      Object.assign(headerPatch, await sellerForSale(body.seller_id, transaction));
     }
 
     // Cambiar de serie no puede saltar de sucursal: la serie pertenece a un almacén.
