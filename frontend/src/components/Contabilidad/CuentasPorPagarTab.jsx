@@ -30,7 +30,6 @@ export default function CuentasPorPagarTab({ notify, fmtPrice }) {
     // Un pago conjunto es una transferencia a UN proveedor con un egreso de UNA sucursal.
     groupRuleText: "Solo se pagan juntas compras del mismo proveedor y sucursal",
     // Un depósito también recibe compras: acá entran todas las sucursales.
-    warehouseFilter: null,
     text: {
       contact: "proveedor", contactTitle: "Proveedor", contactsTitle: "Proveedores",
       doc: "compra", docs: "compras", docTitle: "Compra", docsTitle: "Compras",

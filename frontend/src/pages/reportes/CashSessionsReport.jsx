@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import SaleDetailModal from "../../components/Customers/SaleDetailModal";
 import CustomSelect from "../../components/ui/CustomSelect";
 import Modal from "../../components/ui/Modal";
@@ -95,13 +96,13 @@ export default function CashSessionsReport() {
     // Filtros
     const [searchTerm, setSearchTerm] = useState("");
     const [filterEmployee, setFilterEmployee] = useState("");
-    const [filterWarehouse, setFilterWarehouse] = useState("");
     const [dateFrom, setDateFrom] = useState("");
     const [dateTo, setDateTo] = useState("");
 
     const employees  = [...new Set(sessions.map(s => s.employee?.full_name).filter(Boolean))];
-    // Mismo criterio: derivadas de las sesiones ya cargadas, sin pedir nada aparte al servidor.
-    const warehouses = [...new Map(sessions.filter(s => s.warehouse).map(s => [s.warehouse.id, s.warehouse])).values()];
+    // Llegan recortadas a las sucursales marcadas en la barra de arriba; entre ellas se elige aquí.
+    const suc = useSucursalFilter({ soloVenden: true });
+    const filterWarehouse = suc.warehouseId;
 
     const filtered = sessions.filter(s => {
         if (filterEmployee && s.employee?.full_name !== filterEmployee) return false;
@@ -122,7 +123,7 @@ export default function CashSessionsReport() {
     useEffect(() => { sessionsPag.setPage(1); }, [searchTerm, filterEmployee, filterWarehouse, dateFrom, dateTo]); // eslint-disable-line
 
     const hasFilters = !!(searchTerm || filterEmployee || filterWarehouse || dateFrom || dateTo);
-    const clearFilters = () => { setSearchTerm(""); setFilterEmployee(""); setFilterWarehouse(""); setDateFrom(""); setDateTo(""); };
+    const clearFilters = () => { setSearchTerm(""); setFilterEmployee(""); suc.setWarehouseId(""); setDateFrom(""); setDateTo(""); };
 
     const loadSessions = useCallback(async () => {
         setLoading(true);
@@ -170,19 +171,7 @@ export default function CashSessionsReport() {
                     ]}
                 />
 
-                {/* Sucursal: con una sola no aporta nada elegir entre ella misma. */}
-                {warehouses.length > 1 && (
-                    <CustomSelect
-                        value={filterWarehouse}
-                        onChange={setFilterWarehouse}
-                        placeholder="Todas las sucursales"
-                        boxClassName="min-w-[180px]"
-                        options={[
-                            { value: "", label: "Todas las sucursales" },
-                            ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) })),
-                        ]}
-                    />
-                )}
+                <SucursalFilter filter={suc} boxClassName="min-w-[180px]" />
 
                 <DateRangePicker from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t); }} />
 

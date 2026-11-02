@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import { buildMarginsExcel } from "../../helpers/excel";
 import { fmtDateShort, toNameCase } from "../../helpers";
 import { fmtNumber } from "../../helpers/numbers";
-import CustomSelect from "../../components/ui/CustomSelect";
 import Segmented from "../../components/ui/Segmented";
 import {
  fmt$,
@@ -39,25 +39,16 @@ const VIEWS = [
 export default function MarginsReport() {
  const [range, setRange] = useState(defaultRange(30));
  const [basis, setBasis] = useState("venta");
- // El margen ahora se puede ver por sucursal: cada una compra a su precio, así que el mismo
- // producto deja utilidades distintas en cada tienda.
- const [warehouseId, setWarehouseId] = useState("");
- const [warehouses, setWarehouses] = useState([]);
- useEffect(() => {
-  api.warehouses.getAll()
-   .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
-   .catch(e => console.error("[MarginsReport] no se pudieron cargar los almacenes:", e));
- }, []);
+ // El margen se ve por sucursal (cada una compra a su precio): las marcadas en la barra de
+ // arriba. El servidor ya responde recortado a ellas.
 
  const hr = useHourRange();
- const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, basis, ...hr.params };
- const { data, loading, error } = useReport(api.reports.margins, params, [range, warehouseId, basis, hr.key]);
+ const suc = useSucursalFilter({ soloVenden: true });
+ const params = { date_from: range.from, date_to: range.to, warehouse_id: suc.warehouseId, basis, ...hr.params };
+ const { data, loading, error } = useReport(api.reports.margins, params, [range, suc.warehouseId, basis, hr.key]);
  const exportFull = useExportFull(api.reports.margins, params, (d) => buildMarginsExcel(d, { ...range, ...hr.params }));
  const [view, setView] = useState("top");
 
- // Con una sola sucursal, "todas" promete un alcance que no existe: la API ya devuelve solo
- // la suya. Mismo criterio que el reporte de inventario.
- const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
  const s = data?.summary;
  const cobro = data?.basis === "cobro";
 
@@ -106,18 +97,7 @@ export default function MarginsReport() {
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
  <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
  {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
- {warehouses.length > 1 && (
- <CustomSelect
-  value={warehouseId}
-  onChange={setWarehouseId}
-  placeholder={todasLabel}
-  boxClassName="h-10 min-w-[190px]"
-  options={[
-  { value: "", label: todasLabel },
-  ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
-  ]}
- />
- )}
+ <SucursalFilter filter={suc} />
  </div>
  {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>

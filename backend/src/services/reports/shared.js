@@ -31,7 +31,7 @@ function buildHours(query = {}) {
   return { from, to, overnight: to < from };
 }
 
-const { visibleWarehouseIds } = require("../../middleware/auth");
+const { scopeWarehouseIds } = require("../../middleware/auth");
 
 // Recorta un reporte a las sucursales del empleado. Devuelve una función que arma el
 // fragmento SQL para el alias que corresponda: los reportes son SQL crudo y el mismo alias
@@ -78,7 +78,7 @@ function buildSerieScope(serie_ids) {
 async function buildTenantContext(req) {
   const company_id  = req.employee?.company_id ?? null;
   const scoped      = !!company_id;
-  const allowedWarehouses = await visibleWarehouseIds(req);
+  const allowedWarehouses = await scopeWarehouseIds(req);
   return {
     company_id,
     isSuperuser: !scoped,

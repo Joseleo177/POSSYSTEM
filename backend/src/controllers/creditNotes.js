@@ -1,6 +1,6 @@
 const { Return, ReturnItem, Sale, Customer, Employee } = require("../models");
 const { Op } = require("sequelize");
-const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../utils/localDate");
 const annulReturn = require("../services/returns/annulReturn");
 const { broadcast } = require("../services/sseService");
@@ -21,7 +21,7 @@ exports.getAll = async (req, res) => {
       await assertWarehouseAccess(req, warehouse_id);
       saleWhere.warehouse_id = parseInt(warehouse_id);
     } else {
-      const allowedWarehouses = await visibleWarehouseIds(req);
+      const allowedWarehouses = await scopeWarehouseIds(req);
       if (allowedWarehouses) saleWhere.warehouse_id = { [Op.in]: allowedWarehouses };
     }
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
-import CustomSelect from "../ui/CustomSelect";
+import SucursalFilter, { useSucursalFilter } from "../ui/SucursalFilter";
 import StockQty, { splitQty } from "../ui/StockQty";
 import { useDebounce } from "../../hooks/useDebounce";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
@@ -13,7 +13,7 @@ import { ICON } from "./movementMeta";
 // superusuario entra a varias) y sin esto "Consultados hace poco" mostraba productos de otra.
 const claves = (emp) => {
     const sufijo = `${emp?.company_id ?? "0"}_${emp?.id ?? "0"}`;
-    return { RECENT_KEY: `kardex_recent_${sufijo}`, WH_KEY: `kardex_warehouse_${sufijo}` };
+    return { RECENT_KEY: `kardex_recent_${sufijo}` };
 };
 // Las claves viejas, sin empresa, se descartan.
 try { localStorage.removeItem("kardex_recent"); localStorage.removeItem("kardex_warehouse"); } catch { /* sin almacenamiento */ }
@@ -153,91 +153,34 @@ function ProductPicker({ warehouseId, onSelect, autoFocus }) {
 
 // Pestaña Movimientos de Inventario: buscar un producto y leer su historial completo —ventas,
 // compras, devoluciones, transferencias y ajustes— con la existencia después de cada uno.
-export default function MovementsView({ warehouses = [] }) {
+export default function MovementsView() {
     const { employee } = useApp();
-    const { RECENT_KEY, WH_KEY } = claves(employee);
+    const { RECENT_KEY } = claves(employee);
     const [product, setProduct] = useState(null);
     const [recent, setRecent] = useState(() => { const r = leer(RECENT_KEY, []); return Array.isArray(r) ? r : []; });
 
-    // Por defecto un almacén concreto, no "Todos": el kardex se lee por sucursal, y sumando
-    // todas cada transferencia aparece dos veces (sale de una y entra en otra).
-    const [warehouseId, setWarehouseId] = useState(() => {
-        const g = leer(WH_KEY, null);
-        return g == null ? "" : String(g);
-    });
-    // Los almacenes pueden llegar después del primer render. Sin preferencia guardada, o si la
-    // guardada ya no es visible para este usuario, se toma el primero.
-    useEffect(() => {
-        if (!warehouses.length) return;
-        const g = leer(WH_KEY, null);
-        const valido = warehouseId === "" ? (g === "" && warehouses.length > 1) : warehouses.some(w => String(w.id) === warehouseId);
-        if (!valido) setWarehouseId(String(warehouses[0].id));
-    }, [warehouses]); // eslint-disable-line react-hooks/exhaustive-deps
-
-    // Aviso cuando se cambió de almacén solo, para que no parezca que el filtro se movió sin razón.
-    const [aviso, setAviso] = useState(null);
-
-    const cambiarAlmacen = (v) => { setWarehouseId(v); guardar(WH_KEY, v); setAviso(null); };
-
-    // Al elegir un producto: si en el almacén seleccionado no tiene existencias pero en otro
-    // sí, se muestra ese. Antes el historial abría en el primer almacén de la lista y salía
-    // vacío aunque el producto viviera en otro, que es lo primero que se interpreta como falla.
-    // No se guarda como preferencia: es para este producto.
-    const ubicar = async (p) => {
-        setAviso(null);
-        if (warehouses.length < 2 || warehouseId === "") return;
-        try {
-            const r = await api.warehouses.movements({ product_id: p.id, limit: 1 });
-            const reparto = r.data?.warehouses || [];
-            const aqui = reparto.find(w => String(w.id) === warehouseId);
-            if (aqui && parseFloat(aqui.qty) !== 0) return;
-            const otro = reparto.filter(w => parseFloat(w.qty) > 0).sort((a, b) => b.qty - a.qty)[0];
-            if (!otro) return;
-            const desde = warehouses.find(w => String(w.id) === warehouseId)?.name;
-            setWarehouseId(String(otro.id));
-            setAviso({ desde: toNameCase(desde || ""), hacia: toNameCase(otro.name) });
-        } catch { /* sin reparto: se queda el almacén elegido */ }
-    };
+    // El kardex se lee por sucursal (sumando todas, cada transferencia aparece dos veces: sale
+    // de una y entra en otra). Arranca en la actual; con varias marcadas se elige entre ellas.
+    const suc = useSucursalFilter({ todas: false });
+    const warehouseId = suc.warehouseId;
 
     const elegir = (p) => {
         setProduct(p);
-        ubicar(p);
         const corto = { id: p.id, name: p.name, unit: p.unit, image_url: p.image_url, category_name: p.category_name };
         const nuevos = [corto, ...recent.filter(r => r.id !== p.id)].slice(0, 8);
         setRecent(nuevos);
         guardar(RECENT_KEY, nuevos);
     };
 
-    const opcionesAlmacen = [
-        ...(warehouses.length > 1 ? [{ value: "", label: "Todos los almacenes" }] : []),
-        ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) })),
-    ];
-
     return (
         <div className="flex-1 min-h-0 flex flex-col">
             {/* ── Buscador ── */}
-            {/* Una sola fila también en el teléfono: el almacén se achica y el buscador se
-                queda con el resto. Apilados, costaban dos renglones de pantalla. */}
             <div className="shrink-0 px-4 lg:px-6 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center gap-2">
-                {/* Sin almacén: la existencia que muestra el buscador es la de todos los almacenes
-                    del usuario, para no anunciar "0" de algo que está en otra sucursal. */}
-                <ProductPicker warehouseId="" onSelect={elegir} autoFocus={!product} />
-                {opcionesAlmacen.length > 1 && (
-                    <div className="w-[118px] sm:w-52 shrink-0">
-                        <CustomSelect value={warehouseId} onChange={cambiarAlmacen} options={opcionesAlmacen} height="h-10" />
-                    </div>
-                )}
+                {/* La existencia que muestra el buscador es la de la sucursal elegida, la misma
+                    del historial que se abre. Una sola fila también en el teléfono. */}
+                <ProductPicker warehouseId={warehouseId} onSelect={elegir} autoFocus={!product} />
+                <SucursalFilter filter={suc} className="w-[118px] sm:w-52 shrink-0" boxClassName="" />
             </div>
-
-            {product && aviso && (
-                <div className="shrink-0 mx-4 lg:mx-6 mt-3 rounded-lg bg-surface-2 dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.06] px-3 py-2 flex items-center gap-2 text-[13px]">
-                    <Svg d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-4 h-4 text-content-subtle shrink-0" />
-                    <span className="min-w-0 flex-1 text-content-muted dark:text-white/70">
-                        En <span className="font-semibold text-content dark:text-white">{aviso.desde}</span> no hay existencias de este producto; te muestro <span className="font-semibold text-content dark:text-white">{aviso.hacia}</span>.
-                    </span>
-                    <button onClick={() => setAviso(null)} className="row-icon !w-7 !h-7 shrink-0" aria-label="Cerrar aviso"><Svg d={ICON.close} className="w-3.5 h-3.5" /></button>
-                </div>
-            )}
 
             {product ? (
                 <ProductKardex

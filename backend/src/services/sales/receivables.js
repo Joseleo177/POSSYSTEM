@@ -1,5 +1,5 @@
 const { Sale, Customer, sequelize, Sequelize } = require("../../models");
-const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { dueDateSql, customerCreditDaysSql, TODAY_SQL, effectiveDueDate, parseDueDate, summarize, round, resolveCustomerCreditDays } = require("../../utils/dueDate");
 const { settleToleranceSql } = require("../../utils/saleBalance");
 
@@ -32,7 +32,7 @@ async function getReceivables({ warehouse_id, customer_id, search }, req) {
     await assertWarehouseAccess(req, warehouse_id);
     where.push('s.warehouse_id = :wid'); rep.wid = parseInt(warehouse_id);
   } else {
-    const allowed = await visibleWarehouseIds(req);
+    const allowed = await scopeWarehouseIds(req);
     if (allowed) {
       const ids = allowed.filter(Number.isInteger);
       where.push(ids.length ? `s.warehouse_id IN (${ids.join(',')})` : 'FALSE');

@@ -7,6 +7,7 @@ import {
   KpiCard, SectionHeader, Card, Loading, ExportButton, StockBadge,
 } from "./reportes.utils";
 import CustomSelect from "../../components/ui/CustomSelect";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import FilterPopover from "../../components/ui/FilterPopover";
 import Segmented from "../../components/ui/Segmented";
 
@@ -49,9 +50,10 @@ const MobileRow = ({ lead, title, titleClass = "text-content dark:text-white", s
 
 export default function InventoryReport() {
   const [days, setDays] = useState(30);
-  const [warehouseId, setWarehouseId] = useState("");
+  // Almacén: entre los marcados en la barra de arriba (sin filtro, todos ellos).
+  const suc = useSucursalFilter();
+  const warehouseId = suc.warehouseId;
   const [categoryId, setCategoryId] = useState("");
-  const [warehouses, setWarehouses] = useState([]);
   const [categories, setCategories] = useState([]);
   const [view, setView] = useState("critical");
   const [page, setPage] = useState(1);
@@ -76,13 +78,7 @@ export default function InventoryReport() {
   }, [searchTerm]);
 
   useEffect(() => {
-    Promise.all([
-      api.warehouses.getAll(),
-      api.categories.getAll()
-    ]).then(([wR, cR]) => {
-      setWarehouses(wR.data);
-      setCategories(cR.data);
-    }).catch(console.error);
+    api.categories.getAll().then(cR => setCategories(cR.data)).catch(console.error);
   }, []);
 
   const loadReport = useCallback(async () => {
@@ -148,10 +144,6 @@ export default function InventoryReport() {
   const totalItems = data?.total || 0;
   const totalPages = Math.ceil(totalItems / LIMIT);
   const hasActiveFilters = !!categoryId || !!warehouseId;
-  // La lista de almacenes ya viene recortada a los del usuario.
-  const allWarehousesLabel = warehouses.length === 1
-    ? warehouses[0].name.toUpperCase()
-    : "Todos mis almacenes";
 
   const mobileList = !data ? { rows: [], empty: "" } :
     view === "valuation" ? {
@@ -286,28 +278,18 @@ export default function InventoryReport() {
                     />
                   </div>
 
-                  {/* Con un solo almacén no hay nada que elegir: mostrar el selector solo
-                        insinuaría que hay más, cuando no los hay. */}
-                  {warehouses.length > 1 && (
+                  {/* Solo con varios almacenes marcados en la barra hay algo que elegir. */}
+                  {suc.visible && (
                     <div className="space-y-1.5">
                       <label className="text-[12px] font-medium text-content-subtle/60 ml-1">Almacén</label>
-                      <CustomSelect
-                        value={warehouseId}
-                        onChange={handleFilterChange(setWarehouseId)}
-                        placeholder={allWarehousesLabel}
-                        className="w-full"
-                        options={[
-                          { value: "", label: allWarehousesLabel },
-                          ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
-                        ]}
-                      />
+                      <SucursalFilter filter={{ ...suc, setWarehouseId: handleFilterChange(suc.setWarehouseId) }} className="w-full" boxClassName="" />
                     </div>
                   )}
                 </div>
 
                 <footer className="pt-2 border-t border-border/10 flex gap-2 pt-4">
                   <button
-                    onClick={() => { setCategoryId(""); setWarehouseId(""); setShowFilterDrop(false); }}
+                    onClick={() => { setCategoryId(""); suc.setWarehouseId(""); setShowFilterDrop(false); }}
                     className="flex-1 h-9 text-[13px] font-semibold btn-outline rounded-lg active:scale-[0.98]"
                   >
                     Limpiar todo

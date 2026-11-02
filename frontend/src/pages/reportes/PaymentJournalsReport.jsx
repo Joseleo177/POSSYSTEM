@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import FilterPopover from "../../components/ui/FilterPopover";
-import CustomSelect from "../../components/ui/CustomSelect";
+import { useApp } from "../../context/AppContext";
 import Segmented from "../../components/ui/Segmented";
 import { fmtNumber } from "../../helpers/numbers";
 import { buildPaymentJournalsExcel } from "../../helpers/excel";
@@ -78,47 +79,37 @@ export default function PaymentJournalsReport() {
     const filtrosBtnRef = useRef(null);
     const [empleados, setEmpleados] = useState([]);
     const [series, setSeries]       = useState([]);
-    // Sucursal. Casi nunca el mismo banco es la misma cuenta en dos tiendas, así que sin
-    // poder aislar una sola, este reporte —que existe justo para no mezclar diarios— seguía
-    // mezclando sucursales.
-    const [warehouseId, setWarehouseId] = useState("");
-    const [warehouses, setWarehouses]   = useState([]);
 
     useEffect(() => {
         api.employees.getAll().then(r => setEmpleados(r.data || [])).catch(() => setEmpleados([]));
         // Las notas de crédito no cobran: no tienen sentido como corte de este reporte.
         api.series.getAll().then(r => setSeries((r.data || []).filter(s => s.type !== "nc"))).catch(() => setSeries([]));
-        // Un depósito no tiene diario de caja: no aporta nada a un reporte de cobros.
-        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => setWarehouses([]));
     }, []);
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
 
-    // Una serie es de UNA sucursal, sin excepción; un empleado que nunca trabajó ahí tampoco
+    // Sucursal: entre las marcadas en la barra de arriba. Casi nunca el mismo banco es la misma
+    // cuenta en dos tiendas, así que este reporte —que existe para no mezclar diarios— deja
+    // aislar una. Una serie es de UNA sucursal y un empleado que nunca trabajó ahí tampoco
     // pudo cobrar nada. Mismo criterio que Transacciones y Pagos.
+    const { etiquetaSucursales } = useApp();
+    const suc = useSucursalFilter({ soloVenden: true });
+    const acotado = !!(suc.warehouseId || etiquetaSucursales);
     const visibleEmpleados = empleados.filter(e =>
-        !warehouseId || (e.warehouses || []).some(w => w.id === Number(warehouseId)));
-    const visibleSeries = series.filter(s =>
-        !warehouseId || s.warehouse_id === Number(warehouseId));
+        !acotado || (e.warehouses || []).some(w => suc.ids.includes(w.id)));
+    const visibleSeries = series.filter(s => !acotado || suc.ids.includes(s.warehouse_id));
 
     // Al cambiar de sucursal, una marca vieja de empleado o serie que ya no pertenece a ella
     // queda sin sentido.
-    const firstWarehouseRender = useRef(true);
-    useEffect(() => {
-        if (firstWarehouseRender.current) { firstWarehouseRender.current = false; return; }
-        setEmpSel(prev => prev.filter(id => visibleEmpleados.some(e => e.id === id)));
-        setSerieSel(prev => prev.filter(id => visibleSeries.some(s => s.id === id)));
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [warehouseId]);
+    useEffect(() => { setEmpSel([]); setSerieSel([]); }, [suc.warehouseId]);
 
     const hr = useHourRange();
-    const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId, by: vista, ...hr.params };
+    const params = { date_from: range.from, date_to: range.to, warehouse_id: suc.warehouseId, by: vista, ...hr.params };
     if (empSel.length)   params.employee_ids = empSel.join(",");
     if (serieSel.length) params.serie_ids    = serieSel.join(",");
 
     const { data, loading, error } = useReport(
         api.reports.paymentJournals,
         params,
-        [range.from, range.to, hr.key, warehouseId, empSel.join(","), serieSel.join(","), vista]
+        [range.from, range.to, hr.key, suc.warehouseId, empSel.join(","), serieSel.join(","), vista]
     );
 
     const toggle = (setter) => (id) =>
@@ -154,19 +145,7 @@ export default function PaymentJournalsReport() {
                 <div className="flex flex-wrap items-center gap-2">
                     <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
                     <HourRangePicker from={hr.hours.from} to={hr.hours.to} onChange={hr.setHours} />
-                    {warehouses.length > 1 && (
-                    <CustomSelect
-                        value={warehouseId}
-                        onChange={setWarehouseId}
-                        placeholder={todasLabel}
-                        height="h-9"
-                        boxClassName="min-w-[190px]"
-                        options={[
-                            { value: "", label: todasLabel },
-                            ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
-                        ]}
-                    />
-                    )}
+                    <SucursalFilter filter={suc} height="h-9" boxClassName="min-w-[180px]" />
                     <Segmented value={vista} onChange={setVista} options={VISTAS} />
                     {hr.nocturna && <NightShiftNotice from={hr.hours.from} to={hr.hours.to} dateFrom={range.from} dateTo={range.to} />}
 

@@ -1,6 +1,6 @@
 const { CashSession, SESSION_INCLUDE } = require("./shared");
 const { Op } = require("sequelize");
-const { visibleWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
 
 module.exports = async function getHistory(query, req) {
   const { employee_id, warehouse_id } = query;
@@ -12,7 +12,7 @@ module.exports = async function getHistory(query, req) {
     await assertWarehouseAccess(req, warehouse_id);
     where.warehouse_id = warehouse_id;
   } else {
-    const allowedWarehouses = await visibleWarehouseIds(req);
+    const allowedWarehouses = await scopeWarehouseIds(req);
     if (allowedWarehouses) where.warehouse_id = { [Op.in]: allowedWarehouses };
   }
 

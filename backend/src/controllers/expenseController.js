@@ -3,7 +3,7 @@ const { Op, literal } = require('sequelize');
 const { recalcPurchaseStatus, recalcBatch } = require('../services/purchasePayments/purchasePaymentService');
 const { toLocalDate, endOfLocalDay } = require('../utils/localDate');
 const { resolveMethod } = require("../utils/journalMethod");
-const { visibleWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
+const { scopeWarehouseIds, assertWarehouseAccess } = require('../middleware/auth');
 const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { expenseRefSql } = require('../utils/expenseReference');
 const { anularAvance } = require('../services/cashAdvances');
@@ -21,7 +21,7 @@ exports.getAll = async (req, res, next) => {
     if (search)      where.description = { [Op.iLike]: `%${search}%` };
 
     // Cada quien ve los egresos de sus sucursales; el admin, los de todas.
-    const allowedWarehouses = await visibleWarehouseIds(req);
+    const allowedWarehouses = await scopeWarehouseIds(req);
     if (warehouse_id) {
       await assertWarehouseAccess(req, warehouse_id);
       where.warehouse_id = parseInt(warehouse_id);

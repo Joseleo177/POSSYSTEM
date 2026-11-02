@@ -7,6 +7,25 @@ const SECRET  = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
 const EXPIRES = "12h";
 
+// Sucursales entre las que el usuario elige al entrar y en el selector de la barra. El admin
+// (y el superusuario) no está atado a almacenes: elige entre todas las activas de la empresa.
+// El resto, entre las suyas. `sells` distingue un depósito, que no factura.
+async function sucursalesDe({ company_id, is_superuser, permissions, warehouses }) {
+  if (is_superuser || permissions?.all) {
+    if (!company_id) return [];
+    const rows = await Warehouse.findAll({
+      where: { company_id, active: true },
+      attributes: ['id', 'name', 'sells'],
+      order: [['sort_order', 'ASC'], ['name', 'ASC']],
+      raw: true,
+    });
+    return rows.map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+  }
+  return (warehouses || [])
+    .filter(w => w.active !== false)
+    .map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+}
+
 // POST /api/auth/login
 const login = async (req, res) => {
   try {
@@ -18,7 +37,7 @@ const login = async (req, res) => {
       where: { username },
       include: [
         { model: Role, attributes: ['name', 'label', 'permissions'] },
-        { model: Warehouse, attributes: ['id', 'name'], through: { attributes: [] } }
+        { model: Warehouse, attributes: ['id', 'name', 'active', 'sells'], through: { attributes: [] } }
       ]
     });
 
@@ -76,7 +95,11 @@ const login = async (req, res) => {
     const refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
     await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.OK });
     invalidateEmployee(emp.id);
-    res.json({ ok: true, token, refresh_token, employee: payload });
+    const sucursales = await sucursalesDe({
+      company_id: emp.company_id, is_superuser: emp.is_superuser,
+      permissions: payload.permissions, warehouses: emp.Warehouses,
+    });
+    res.json({ ok: true, token, refresh_token, employee: { ...payload, sucursales } });
   } catch (err) {
     // El detalle queda en el log; al cliente solo un mensaje genérico. El login es un
     // endpoint público: el mensaje de error de Sequelize nombra tablas, columnas y hasta
@@ -98,14 +121,19 @@ const me = async (req, res) => {
     const emp = await Employee.findByPk(req.employee.id, {
       attributes: ["id"], include: [
         { model: Role, attributes: ["name", "label", "permissions"] },
-        { model: Warehouse, attributes: ["id", "name"], through: { attributes: [] } },
+        { model: Warehouse, attributes: ["id", "name", "active", "sells"], through: { attributes: [] } },
       ],
     });
     if (emp?.Role) {
+      const permissions = emp.Role.permissions || {};
+      const sucursales = await sucursalesDe({
+        company_id: req.company_id, is_superuser: req.is_superuser, permissions, warehouses: emp.Warehouses,
+      });
       return res.json({ ok: true, employee: {
         ...req.employee,
-        role: emp.Role.name, role_label: emp.Role.label, permissions: emp.Role.permissions || {},
+        role: emp.Role.name, role_label: emp.Role.label, permissions,
         warehouses: (emp.Warehouses || []).map(w => ({ id: w.id, name: w.name })),
+        sucursales,
       } });
     }
   } catch { /* se cae a lo del token */ }

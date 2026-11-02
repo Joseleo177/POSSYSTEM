@@ -1,5 +1,5 @@
 const { sequelize, Sequelize, KitchenTicket, KitchenTicketItem, Sale } = require("../models");
-const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 const { huella, olvidar } = require("../utils/huella");
 
 // Lo que cambia la cocina cambia también el mapa de mesas y el QR de la mesa.
@@ -92,7 +92,7 @@ async function board(req, { warehouse_id, v } = {}) {
     rep.wid = wid;
     filtros.push(`(k.warehouse_id = :wid OR k.warehouse_id IS NULL)`);
   } else {
-    const permitidos = await visibleWarehouseIds(req);
+    const permitidos = await scopeWarehouseIds(req);
     if (Array.isArray(permitidos)) {
       if (!permitidos.length) return { data: [], now: new Date().toISOString() };
       rep.permitidos = permitidos;

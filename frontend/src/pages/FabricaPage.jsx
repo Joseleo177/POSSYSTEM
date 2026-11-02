@@ -31,7 +31,7 @@ const TABS = [
 const TAB_KEY = "fabrica_pestana";
 
 export default function FabricaPage() {
-    const { can } = useApp();
+    const { can, sucursalesMarcadas } = useApp();
     const canManage = can("factory.manage");
 
     const [tab, setTabState] = useState(() => {
@@ -93,11 +93,11 @@ export default function FabricaPage() {
     return (
         <Page module="Fábrica" title={titles[tab]} subheader={subheader} actions={actions}>
             {tab === "ordenes" && (
-                <OrdersView warehouses={warehouses} stages={stages} canManage={canManage} version={version}
+                <OrdersView warehouses={sucursalesMarcadas} stages={stages} canManage={canManage} version={version}
                     onOpen={o => setOpenOrderId(o.id)} onChanged={refresh} />
             )}
             {tab === "laminas" && (
-                <PiecesView warehouses={warehouses} materials={materials} version={version}
+                <PiecesView warehouses={sucursalesMarcadas} materials={materials} version={version}
                     onOpen={p => setOpenPieceId(p.id)} onRegister={canManage ? () => setRegistering(true) : null} />
             )}
             {tab === "recetas" && (
@@ -106,7 +106,7 @@ export default function FabricaPage() {
             )}
             {tab === "etapas" && <StagesView version={version} canManage={canManage} onChanged={refresh} />}
             {tab === "materiales" && (
-                <MaterialsView warehouses={warehouses} version={version}
+                <MaterialsView warehouses={sucursalesMarcadas} version={version}
                     onEdit={canManage ? m => setMaterial(m) : null} onNew={canManage ? () => setMaterial({}) : null} />
             )}
 

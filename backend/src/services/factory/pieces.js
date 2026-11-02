@@ -4,7 +4,7 @@ const {
   sequelize, Sequelize, Op, Product, ProductStock, MaterialPiece,
   fail, r3, r4, TOL, MAX_MONEY, unitOfMode, pieceSpec, mm, money, text,
   companyOf, employeeOf, ownWarehouse, moveStock, inTransaction, COST_ANY_SQL,
-  assertWarehouseAccess, visibleWarehouseIds,
+  assertWarehouseAccess, scopeWarehouseIds,
 } = require("./shared");
 const { ACTIVE, createNumberedPieces, pieceConfigChanges } = require("./numbering");
 
@@ -15,7 +15,7 @@ const QT = Sequelize.QueryTypes;
 // compras, ajustes y ventas como siempre; aquí se compara con lo que está numerado.
 async function listMaterials(req, { warehouse_id } = {}) {
   const company = companyOf(req);
-  const visibles = await visibleWarehouseIds(req);
+  const visibles = await scopeWarehouseIds(req);
   const wid = warehouse_id ? await ownWarehouse(req, warehouse_id) : null;
 
   const rows = await sequelize.query(`
@@ -92,7 +92,7 @@ const STATUS_FILTERS = ["activas", "todas", "disponible", "en_taller", "consumid
 
 async function listPieces(req, q = {}) {
   const company = companyOf(req);
-  const visibles = await visibleWarehouseIds(req);
+  const visibles = await scopeWarehouseIds(req);
   const where = ["mp.company_id = :company"];
   const rep = { company };
 

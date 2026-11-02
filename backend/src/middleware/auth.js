@@ -149,6 +149,50 @@ const visibleWarehouseIds = async (req) => {
   return employeeWarehouseIds(req.employee?.id);
 };
 
+// Sucursales marcadas en la barra superior, como las empresas de Odoo: la app manda
+// `X-Sucursales: 3,7` cuando el usuario no está mirando todas las suyas. `null` = sin marcar.
+const selectedWarehouseIds = (req) => {
+  const raw = req?.headers?.["x-sucursales"];
+  if (!raw) return null;
+  const ids = [...new Set(String(raw).split(",").map(n => parseInt(n, 10)).filter(n => n > 0))];
+  return ids.length ? ids : null;
+};
+
+// Almacenes de la empresa, para validar lo que marca el admin. Cambian muy de vez en cuando:
+// 30 s de caché ahorran una consulta por petición mientras el admin navega con un filtro puesto.
+const companyWarehouseCache = new Map();
+const COMPANY_WAREHOUSES_TTL = 30_000;
+const companyWarehouseIds = async (companyId) => {
+  const hit = companyWarehouseCache.get(companyId);
+  if (hit && Date.now() - hit.t < COMPANY_WAREHOUSES_TTL) return hit.ids;
+  const { Warehouse } = require("../models");
+  const rows = await Warehouse.findAll({ attributes: ['id'], raw: true });
+  const ids = rows.map(r => r.id);
+  companyWarehouseCache.set(companyId, { t: Date.now(), ids });
+  return ids;
+};
+
+// Almacenes que entran en un LISTADO o un REPORTE: los que el empleado puede ver, recortados a
+// los que marcó en la barra. Nunca amplía: una sucursal marcada que no le corresponde se ignora,
+// y si de lo marcado no queda nada se cae a lo permitido. `null` = el admin sin filtro.
+//
+// No sirve para autorizar: abrir, editar o cobrar algo de una sucursal asignada pero no marcada
+// sigue permitido (para eso están visibleWarehouseIds y assertWarehouseAccess).
+const scopeWarehouseIds = async (req) => {
+  if (!req) return null;
+  if (req._scopeWarehouseIds !== undefined) return req._scopeWarehouseIds;
+  const visibles = await visibleWarehouseIds(req);
+  const marcadas = selectedWarehouseIds(req);
+  let ids = visibles;
+  if (marcadas) {
+    const base = visibles ?? await companyWarehouseIds(req.company_id);
+    const quedan = base.filter(id => marcadas.includes(id));
+    if (quedan.length) ids = quedan;
+  }
+  req._scopeWarehouseIds = ids;
+  return ids;
+};
+
 // Lanza 403 si el empleado no tiene asignado el almacén. Para usar dentro de un servicio,
 // cuando el almacén no viene en el request sino de la fila que se está tocando (p. ej. al
 // recibir una compra, el destino ya está guardado en la orden).
@@ -196,5 +240,5 @@ const warehouseAccess = (getId = (req) => req.params.id, opts = {}) => async (re
 
 module.exports = {
   auth, permit, superuser, hasPermission, warehouseAccess, assertWarehouseAccess,
-  visibleWarehouseIds, employeeWarehouseIds, isAdmin,
+  visibleWarehouseIds, scopeWarehouseIds, selectedWarehouseIds, employeeWarehouseIds, isAdmin,
 };

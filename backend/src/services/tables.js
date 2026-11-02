@@ -1,5 +1,5 @@
 const { DiningArea, DiningTable, Sale, sequelize, Sequelize } = require("../models");
-const { visibleWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 
 const { Op } = Sequelize;
 
@@ -39,7 +39,7 @@ async function listAreas(req, { warehouse_id } = {}) {
     await assertWarehouseAccess(req, wid);
     return { data: await areasDe([wid]) };
   }
-  const visibles = await visibleWarehouseIds(req);
+  const visibles = await scopeWarehouseIds(req);
   if (Array.isArray(visibles) && !visibles.length) return { data: [] };
   return { data: await areasDe(visibles) };
 }

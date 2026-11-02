@@ -20,7 +20,7 @@ const {
   sequelize, Sequelize, Sale, SaleItem, Serie, PaymentReport, Payment, Product, Company,
 } = require("../models");
 const { crearComanda } = require("./kitchen");
-const { visibleWarehouseIds, assertWarehouseAccess, isAdmin } = require("../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess, isAdmin } = require("../middleware/auth");
 const acceptWebOrder = require("./sales/acceptWebOrder");
 const paymentReports = require("./paymentReports");
 const { imageUrl } = require("../utils/imageStorage");
@@ -39,7 +39,7 @@ const companyOf = (req) => {
 // Recorte por sucursal: un encargado solo ve los pedidos de sus tiendas. El pedido nace con la
 // sucursal que eligió el cliente (requested_warehouse_id) y, aceptado, con la que lo despacha.
 async function filtroSucursal(req) {
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   if (allowed === null) return { sql: "", rep: {} };
   return {
     sql: `AND (COALESCE(s.warehouse_id, s.requested_warehouse_id) IS NULL

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
 
 const LIMIT = 50;
 
@@ -26,9 +27,11 @@ export function useTransacciones({ notify }) {
     // Filtro por quién hizo la venta. "" = todos.
     const [employeeId, setEmployeeId] = useState("");
     const [employees, setEmployees] = useState([]);
-    // Sucursal. "" = todas las que el empleado tiene permitidas (o toda la empresa, si es admin).
+    // Sucursal, entre las marcadas en la barra de arriba. "" = todas ellas (el servidor ya
+    // responde recortado). Un depósito no vende ni factura: no aporta nada al filtro.
     const [warehouseId, setWarehouseId] = useState("");
-    const [warehouses, setWarehouses] = useState([]);
+    const { sucursalesMarcadas } = useApp();
+    const warehouses = sucursalesMarcadas.filter(w => w.sells !== false);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [saleDetail, setSaleDetail] = useState(null);
     const [returnSale, setReturnSale] = useState(null);
@@ -40,11 +43,6 @@ export function useTransacciones({ notify }) {
     }, [searchTerm]);
 
     useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId, warehouseId]);
-
-    useEffect(() => {
-        // Un depósito no vende ni factura: no aporta nada a un filtro de ventas.
-        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
-    }, []);
 
     // Serie y empleado dependen de la sucursal: la serie A no existe en la B, y un empleado
     // de la B no tiene nada que hacer filtrando ventas de la A. Al cambiar de sucursal, una

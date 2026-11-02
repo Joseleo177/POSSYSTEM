@@ -1,13 +1,14 @@
 // src/Layout/HeaderMobile.jsx
 import React from "react";
 import { resolveImageUrl } from "../helpers";
+import SucursalSwitcher from "./SucursalSwitcher";
 
 export default function HeaderMobile({ settings, visibleTabs, safeTab, storeName, dark, toggle, logout }) {
     const activeTab = visibleTabs.find((t) => t.key === safeTab);
 
     return (
         <header className="md:hidden sticky top-0 z-50 bg-white dark:bg-surface-dark-2 border-b border-border dark:border-border-dark shadow-card">
-            <div className="flex items-center gap-3 px-3 py-2">
+            <div className="flex items-center gap-2 px-3 py-2">
                 {/* Sin logo, solo el nombre: sin icono de relleno (ver TopBar). */}
                 <div className="flex items-center gap-2 min-w-0">
                     {settings.logo_url && (
@@ -18,6 +19,7 @@ export default function HeaderMobile({ settings, visibleTabs, safeTab, storeName
                     </span>
                 </div>
                 <div className="flex-1" />
+                <SucursalSwitcher compact />
                 <div className="flex items-center gap-1.5">
                     <button
                         onClick={toggle}

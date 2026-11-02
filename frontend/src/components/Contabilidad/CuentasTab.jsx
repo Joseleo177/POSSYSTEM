@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../ui/SucursalFilter";
 import { fmtDateShort, toNameCase } from "../../helpers";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
 import { ledgerRow } from "../ui/Ledger";
 import Check from "../ui/Check";
-import CustomSelect from "../ui/CustomSelect";
 
 /**
  * Pantalla común de Cuentas por Pagar y Cuentas por Cobrar.
@@ -20,7 +19,7 @@ import CustomSelect from "../ui/CustomSelect";
  *   canAct              – si el usuario puede pagar/cobrar
  *   actionLabel         – "Pagar" / "Cobrar";  bulkActionLabel – "Pagar juntas" / "Cobrar juntas"
  *   groupRuleText       – por qué una fila no se puede sumar a la selección
- *   warehouseFilter(w)  – qué sucursales se ofrecen en el filtro
+ *   soloVenden          – el filtro de sucursal deja fuera los depósitos
  *   text                – etiquetas: contacto, contactos, doc, docs, searchPlaceholder, emptyContacts,
  *                         emptyDocs, loading, totalLabel, viewDocLabel, docDateLabel
  *   renderModals({ toAct, closeAct, detailId, closeDetail, reload, afterAct })
@@ -119,8 +118,8 @@ export default function CuentasTab({ notify, fmtPrice, config }) {
   const [view, setView]         = useState("contactos");
   const [search, setSearch]     = useState("");
   const [debounced, setDebounced] = useState("");
-  const [warehouseId, setWarehouseId] = useState("");
-  const [warehouses, setWarehouses]   = useState([]);
+  // Sucursal: entre las marcadas en la barra de arriba (sin filtro, todas ellas).
+  const suc = useSucursalFilter({ soloVenden: !!config.soloVenden });
   // Filtros locales sobre lo ya traído: un contacto elegido en la otra vista, o un tramo de
   // antigüedad tocado en la barra.
   const [contactFilter, setContactFilter] = useState(null);
@@ -136,24 +135,17 @@ export default function CuentasTab({ notify, fmtPrice, config }) {
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => {
-    api.warehouses.getAll()
-      .then(r => setWarehouses((r.data || []).filter(config.warehouseFilter || (() => true))))
-      .catch(() => {});
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const params = {};
       if (debounced.trim()) params.search = debounced.trim();
-      if (warehouseId)      params.warehouse_id = warehouseId;
+      if (suc.warehouseId)  params.warehouse_id = suc.warehouseId;
       setData(await config.fetch(params));
     } catch (e) { notify(e.message, "err"); }
     finally { setLoading(false); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [debounced, warehouseId, notify]);
+  }, [debounced, suc.warehouseId, notify]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -227,7 +219,6 @@ export default function CuentasTab({ notify, fmtPrice, config }) {
     <button onClick={(e) => { e.stopPropagation(); setDetailId(inv.id); }} className={BTN_VIEW}>{t.viewDocLabel}</button>
   );
 
-  const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
   const totalAging = BUCKETS.reduce((acc, b) => acc + (aging[b.key]?.amount || 0), 0);
   const showSelectAll = view === "documentos" && contactFilter && canAct && invoices.length > 1;
 
@@ -248,18 +239,7 @@ export default function CuentasTab({ notify, fmtPrice, config }) {
             className="input h-9 pl-9 text-[12px] w-full"
           />
         </div>
-        {warehouses.length > 1 && (
-          <CustomSelect
-            value={warehouseId}
-            onChange={setWarehouseId}
-            placeholder={todasLabel}
-            boxClassName="h-9 min-w-[190px]"
-            options={[
-              { value: "", label: todasLabel },
-              ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
-            ]}
-          />
-        )}
+        <SucursalFilter filter={suc} boxClassName="h-9 min-w-[180px]" />
         <button onClick={load} disabled={loading} title="Actualizar"
           className="h-9 w-9 rounded-lg border border-border/30 dark:border-white/10 bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle hover:text-brand-500 transition-all">
           <svg className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -7,7 +7,7 @@ const {
 const { statementJournals, journalRows, assertAccountAccess, defaultJournal } = require("./accounts");
 const { loadUnits, autoMatch, windowFor } = require("./candidates");
 const { voidCreatedDocs } = require("./documents");
-const { visibleWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
 const { casarPendientes } = require("../paymentReports");
 
 const KINDS = ["movimiento", "comision", "impuesto", "interes"];
@@ -192,7 +192,7 @@ async function create(req, body) {
 async function list(req, query = {}) {
   const companyId = companyOf(req);
   await pruneStale(companyId);
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   const rep = { company_id: companyId };
   let where = "";
   if (allowed !== null) where += ` AND st.warehouse_id IN (${allowed.filter(Number.isInteger).join(",") || "NULL"})`;

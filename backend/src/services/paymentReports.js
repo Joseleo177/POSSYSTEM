@@ -27,7 +27,7 @@ const { getSaleBalance } = require("./payments/shared");
 const { liveReturnedTotal } = require("./returns/shared");
 const { tasaDivisasDeCaja } = require("./sales/fxRate");
 const { imageUrl } = require("../utils/imageStorage");
-const { visibleWarehouseIds } = require("../middleware/auth");
+const { scopeWarehouseIds } = require("../middleware/auth");
 
 const QT = Sequelize.QueryTypes;
 const fail = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
@@ -355,7 +355,7 @@ async function list(req, query = {}) {
   const estados = String(query.status || "").split(",").map(s => s.trim()).filter(Boolean);
   if (estados.length) { where.push("r.status IN (:estados)"); rep.estados = estados; }
   if (query.sale_id) { where.push("r.sale_id = :sid"); rep.sid = parseInt(query.sale_id, 10) || 0; }
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   if (allowed !== null) {
     where.push(`(s.id IS NULL OR COALESCE(s.warehouse_id, s.requested_warehouse_id) IS NULL
                  OR COALESCE(s.warehouse_id, s.requested_warehouse_id) IN (:allowed))`);

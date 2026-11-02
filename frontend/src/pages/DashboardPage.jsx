@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { fmtNumber, fmtInt, toNameCase } from "../helpers";
 import { useApp } from "../context/AppContext";
+import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 
 import Page from "../components/ui/Page";
-import CustomSelect from "../components/ui/CustomSelect";
 import { BarChart } from "./reportes/reportes.utils";
 
 const fmt = (n, d = 2) => fmtNumber(n, d);
@@ -53,7 +53,10 @@ const CardLink = ({ title, sub, onClick }) => (
 const CARD = "bg-white dark:bg-white/[0.03] rounded-xl border border-border/70 dark:border-white/[0.06] p-5";
 
 export default function DashboardPage() {
-    const { baseCurrency, activeCurrencies, triggerAction } = useApp();
+    const { baseCurrency, activeCurrencies, triggerAction, sucursales } = useApp();
+    // Sucursal a mirar: entre las marcadas en la barra de arriba (sin filtro, todas ellas).
+    const suc = useSucursalFilter({ soloVenden: true });
+    const nombreSucursales = suc.nombre || (sucursales.length === 1 ? sucursales[0].name : "Todas las sucursales");
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -63,22 +66,12 @@ export default function DashboardPage() {
     const localSym  = localCur?.symbol     || baseSym;
     const localRate = parseFloat(localCur?.exchange_rate || 1);
 
-    // Sucursal a mirar. "" = todas las que el empleado tiene permitidas (o toda la empresa,
-    // si es admin). Con una sola sucursal, mostrar el selector solo insinuaría que hay más.
-    const [warehouseId, setWarehouseId] = useState("");
-    const [warehouses, setWarehouses] = useState([]);
-    useEffect(() => {
-        // Un depósito no vende: no aporta nada a un tablero de negocio.
-        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
-    }, []);
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
-
     const load = useCallback(async () => {
         setLoading(true);
-        try { const res = await api.dashboard.get(warehouseId ? { warehouse_id: warehouseId } : {}); setData(res.data); }
+        try { const res = await api.dashboard.get(suc.warehouseId ? { warehouse_id: suc.warehouseId } : {}); setData(res.data); }
         catch (e) { setError(e.message); }
         finally { setLoading(false); }
-    }, [warehouseId]);
+    }, [suc.warehouseId]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -110,19 +103,7 @@ export default function DashboardPage() {
                     <span className="truncate">En línea · {new Date().toLocaleDateString("es-VE", { weekday: "long", day: "numeric", month: "long" })}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                    {warehouses.length > 1 && (
-                        <CustomSelect
-                            value={warehouseId}
-                            onChange={setWarehouseId}
-                            placeholder={todasLabel}
-                            className="flex-1 min-w-0 sm:flex-none"
-                            boxClassName="h-9 w-full sm:min-w-[190px]"
-                            options={[
-                                { value: "", label: todasLabel },
-                                ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
-                            ]}
-                        />
-                    )}
+                    <SucursalFilter filter={suc} className="flex-1 min-w-0 sm:flex-none" boxClassName="h-9 w-full sm:min-w-[180px]" />
                     <button onClick={load} title="Actualizar métricas" className="btn-outline h-9 px-3 shrink-0 flex items-center gap-1.5 rounded-lg text-[13px] font-semibold whitespace-nowrap">
                         <svg className="w-4 h-4 shrink-0 text-content-subtle" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
                         Actualizar
@@ -179,7 +160,7 @@ export default function DashboardPage() {
                             <div>
                                 <div className="text-[14px] font-semibold text-content dark:text-white">Facturación de los últimos 30 días</div>
                                 <div className="text-[12px] text-content-subtle mt-0.5">
-                                    {warehouseId ? toNameCase(warehouses.find(w => String(w.id) === warehouseId)?.name) : todasLabel}
+                                    {toNameCase(nombreSucursales)}
                                 </div>
                             </div>
                             <div className="text-right">

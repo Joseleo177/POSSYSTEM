@@ -5,7 +5,7 @@ const {
   Customer, Employee, Currency, Warehouse, Serie, SerieRange,
   sequelize, Sequelize,
 } = require("../../models");
-const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { vendeSinInsumo, fichaEnCero, fotoConsumo } = require("../products/recipeStock");
 const { Op } = Sequelize;
@@ -36,7 +36,7 @@ async function getAll({ search, status, date_from, date_to, page = 1, limit = 30
     await assertWarehouseAccess(req, warehouse_id);
     where.warehouse_id = parseInt(warehouse_id);
   } else {
-    const allowedWarehouses = await visibleWarehouseIds(req);
+    const allowedWarehouses = await scopeWarehouseIds(req);
     if (allowedWarehouses) where.warehouse_id = { [Op.in]: allowedWarehouses };
   }
 

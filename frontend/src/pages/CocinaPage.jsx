@@ -3,11 +3,11 @@ import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Page from "../components/ui/Page";
 import Segmented from "../components/ui/Segmented";
-import CustomSelect from "../components/ui/CustomSelect";
 import { Spinner } from "../components/ui/Spinner";
 import { fmtTime, printKitchenOrder, toNameCase } from "../helpers";
 import AgotadosModal from "../components/mesas/AgotadosModal";
 import BatchFormModal from "../components/recetas/BatchFormModal";
+import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 
 // Pantalla de cocina. Va en una tablet o un TV de la cocina, siempre abierta: las comandas
 // son los pedidos que los mesoneros mandan desde el catálogo en sus tablets, y aquí se
@@ -82,13 +82,15 @@ function useCampana() {
 }
 
 export default function CocinaPage() {
-    const { can, notify, company, companyInfo, printerWidth } = useApp();
+    const { can, notify, company, companyInfo, printerWidth, sucursalActual } = useApp();
     const canManage = can("kitchen.manage");
     const cid = company?.id ?? "x";
 
+    // Las comandas son de las sucursales marcadas en la barra de arriba; con varias se puede
+    // mirar una sola. La lista de almacenes queda para registrar una tanda.
+    const suc = useSucursalFilter({ soloVenden: true });
+    const almacen = suc.warehouseId;
     const [warehouses, setWarehouses] = useState([]);
-    const [almacen, setAlmacenState] = useState(() => leer(`cocina_almacen_${cid}`, ""));
-    const setAlmacen = (v) => { setAlmacenState(v); guardar(`cocina_almacen_${cid}`, v); };
 
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -198,14 +200,11 @@ export default function CocinaPage() {
         return m;
     }, [rows]);
 
-    const opcionesAlmacen = [{ value: "", label: "Todas las sucursales" }, ...warehouses.map(w => ({ value: String(w.id), label: w.name }))];
     const pantallaCompleta = typeof document !== "undefined" && !!document.documentElement.requestFullscreen;
 
     const actions = (
         <div className="flex items-center gap-2">
-            {warehouses.length > 1 && (
-                <CustomSelect value={almacen} onChange={setAlmacen} options={opcionesAlmacen} className="w-48" height="h-9" />
-            )}
+            <SucursalFilter filter={suc} className="w-48" height="h-9" boxClassName="" />
             {canProduce && (
                 <button onClick={() => setProduciendo(true)} title="Registrar una tanda: la olla de sopa, la salsa"
                     className="btn-outline h-9 px-3 rounded-lg text-[13px] font-medium flex items-center gap-1.5 whitespace-nowrap">
@@ -371,7 +370,7 @@ export default function CocinaPage() {
             )}
             {agotados && <AgotadosModal notify={notify} onClose={() => setAgotados(false)} />}
             {canProduce && (
-                <BatchFormModal open={produciendo} warehouseId={almacen} warehouses={warehouses}
+                <BatchFormModal open={produciendo} warehouseId={almacen || (sucursalActual ? String(sucursalActual.id) : "")} warehouses={warehouses}
                     onClose={() => setProduciendo(false)} onSaved={() => setProduciendo(false)} />
             )}
         </Page>

@@ -1,6 +1,6 @@
 const { Sequelize, sequelize, Customer, Sale, SaleItem, Purchase, Payment, Currency, Expense, ExpenseCategory, PaymentJournal, CustomerCreditMovement } = require("../../models");
 const { resolveMethod } = require("../../utils/journalMethod");
-const { assertWarehouseAccess, employeeWarehouseIds, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, employeeWarehouseIds, scopeWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate } = require("../../utils/localDate");
 const { SETTLED_SQL, SETTLED_STATUSES, RECEIVABLE_STATUSES } = require("../../utils/saleBalance");
 const { creditAvailable, addCreditMovement } = require("./creditLedger");
@@ -24,7 +24,7 @@ async function warehouseFragments(req, wid = null) {
     const id = parseInt(wid);
     return { whS: `AND s.warehouse_id = ${id}`, whP: `AND p.warehouse_id = ${id}` };
   }
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   if (allowed === null) return { whS: '', whP: '' };          // admin: todas las sucursales
 
   const ids = allowed.filter(Number.isInteger);
@@ -205,7 +205,7 @@ async function getCustomerPurchases(id, { limit = 50, offset = 0, warehouse_id }
     await assertWarehouseAccess(req, warehouse_id);
     scope = { warehouse_id: parseInt(warehouse_id) };
   } else {
-    const allowed = await visibleWarehouseIds(req);
+    const allowed = await scopeWarehouseIds(req);
     scope = Array.isArray(allowed) ? { warehouse_id: { [Sequelize.Op.in]: allowed } } : {};
   }
 

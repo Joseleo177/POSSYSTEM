@@ -5,9 +5,9 @@ import Page from "../components/ui/Page";
 import Modal from "../components/ui/Modal";
 import ConfirmModal from "../components/ui/ConfirmModal";
 import Segmented from "../components/ui/Segmented";
-import CustomSelect from "../components/ui/CustomSelect";
 import { Button } from "../components/ui/Button";
 import { Spinner } from "../components/ui/Spinner";
+import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 import TablePlan, { TableGrid, agruparPorMesa, minutosDesde, COLS, ROWS, TAMANOS, GIROS, huella, tamanoDe, giroDe } from "../components/mesas/TablePlan";
 import KitchenMark from "../components/KitchenMark";
 import WaiterOrder from "../components/mesas/WaiterOrder";
@@ -56,15 +56,16 @@ function siguienteNombre(todas) {
 }
 
 export default function MesasPage() {
-    const { can, notify, company, baseCurrency, employee, storeName } = useApp();
+    const { can, notify, company, baseCurrency, storeName } = useApp();
     const puedeEditar = can("tables.layout");
     const puedeServir = can("tables.serve");
     const cid = company?.id ?? "x";
     const sym = baseCurrency?.symbol || "Ref.";
 
-    const [warehouses, setWarehouses] = useState([]);
-    const [almacen, setAlmacenState] = useState(() => leer(`mesas_almacen_${cid}`, ""));
-    const setAlmacen = (v) => { setAlmacenState(v); guardar(`mesas_almacen_${cid}`, v); };
+    // El plano es de UNA sucursal: arranca en la actual y, con varias marcadas en la barra de
+    // arriba, se elige entre ellas. Un depósito no tiene mesas.
+    const suc = useSucursalFilter({ todas: false, soloVenden: true });
+    const almacen = suc.warehouseId;
 
     const [areas, setAreas] = useState([]);
     const [verQr, setVerQr] = useState(false);   // ventana con los QR de las mesas del área
@@ -83,21 +84,7 @@ export default function MesasPage() {
     // Quien toma pedidos entra a la mesa; quien solo mira, ve su detalle.
     const tocarMesa = (t) => (puedeServir ? setAtendiendo(t) : setAbierta(t));
 
-    useEffect(() => {
-        const elegir = (lista) => {
-            setWarehouses(lista);
-            // Sin sucursal elegida, la primera: el plano es de una sucursal, no de todas.
-            if (!lista.some(w => String(w.id) === String(almacen))) {
-                if (lista[0]) setAlmacen(String(lista[0].id));
-                else setLoading(false);
-            }
-        };
-        // El mesonero no tiene permiso de inventario, que es el que pide el listado de
-        // sucursales: para él valen las que tiene asignadas en su usuario.
-        api.warehouses.getAll()
-            .then(r => elegir((r.data || []).filter(w => w.active !== false && w.sells !== false)))
-            .catch(() => elegir((employee?.warehouses || []).filter(w => w.active !== false)));
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => { if (!almacen) setLoading(false); }, [almacen]);
 
     const cargarAreas = useCallback(async () => {
         if (!almacen) return;
@@ -270,7 +257,6 @@ export default function MesasPage() {
     };
 
     // ── Barra superior ──────────────────────────────────────
-    const opcionesAlmacen = warehouses.map(w => ({ value: String(w.id), label: w.name }));
     const actions = editando ? (
         <div className="flex items-center gap-2">
             <button onClick={cancelarEdicion} className="btn-outline h-9 px-4 rounded-lg text-[13px] font-medium">Cancelar</button>
@@ -278,9 +264,8 @@ export default function MesasPage() {
         </div>
     ) : (
         <div className="flex items-center gap-2">
-            {warehouses.length > 1 && (
-                <CustomSelect value={almacen} onChange={v => { setAlmacen(v); setAreaId(""); }} options={opcionesAlmacen} className="w-44" height="h-9" />
-            )}
+            <SucursalFilter filter={{ ...suc, setWarehouseId: v => { suc.setWarehouseId(v); setAreaId(""); } }}
+                className="w-44" height="h-9" boxClassName="" />
             {/* El QR de cada mesa del área: verlo, abrirlo, copiar el enlace o imprimirlo. */}
             {puedeEditar && area?.tables?.length > 0 && (
                 <button onClick={() => setVerQr(true)}

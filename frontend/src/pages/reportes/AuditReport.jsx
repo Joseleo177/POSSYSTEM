@@ -1,8 +1,8 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import { buildAuditExcel } from "../../helpers/excel";
 import { fmtDate, toNameCase } from "../../helpers";
-import CustomSelect from "../../components/ui/CustomSelect";
 import {
  fmt$, fmtN,
  useReport, defaultRange, usePagination, Pagination, useExportFull,
@@ -13,18 +13,10 @@ export default function AuditReport() {
  const [range, setRange] = useState(defaultRange(30));
 
  // Devoluciones y descuentos son cosa de la sucursal donde se dieron: mezclarlas entre
- // varias hace imposible saber a quién auditar.
- const [warehouseId, setWarehouseId] = useState("");
- const [warehouses, setWarehouses] = useState([]);
- useEffect(() => {
-  api.warehouses.getAll()
-   .then(r => setWarehouses((r.data || []).filter(w => w.sells !== false)))
-   .catch(e => console.error("[AuditReport] no se pudieron cargar los almacenes:", e));
- }, []);
- const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
-
- const params = { date_from: range.from, date_to: range.to, warehouse_id: warehouseId };
- const { data, loading, error } = useReport(api.reports.audit, params, [range, warehouseId]);
+ // varias hace imposible saber a quién auditar. Se elige entre las marcadas en la barra.
+ const suc = useSucursalFilter({ soloVenden: true });
+ const params = { date_from: range.from, date_to: range.to, warehouse_id: suc.warehouseId };
+ const { data, loading, error } = useReport(api.reports.audit, params, [range, suc.warehouseId]);
  const exportFull = useExportFull(api.reports.audit, params, (d) => buildAuditExcel(d, range));
  const [view, setView] = useState("employees");
  const rs = data?.returns_summary;
@@ -38,20 +30,7 @@ export default function AuditReport() {
  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 shrink-0">
  <div className="flex items-center gap-2 flex-wrap">
  <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
- {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo insinuaría que
-     hay más, cuando no las hay. */}
- {warehouses.length > 1 && (
- <CustomSelect
-  value={warehouseId}
-  onChange={setWarehouseId}
-  placeholder={todasLabel}
-  boxClassName="h-10 min-w-[190px]"
-  options={[
-   { value: "", label: todasLabel },
-   ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
-  ]}
- />
- )}
+ <SucursalFilter filter={suc} />
  </div>
  {data && <ExportButton onClick={exportFull.run} loading={exportFull.exporting} />}
  </div>

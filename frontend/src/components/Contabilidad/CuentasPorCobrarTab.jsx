@@ -24,6 +24,8 @@ export default function CuentasPorCobrarTab({ notify, fmtPrice }) {
     },
     contact,
     docLabel: (inv) => inv.invoice_number || `#${inv.id}`,
+    // Un depósito no vende: no tiene cuentas por cobrar.
+    soloVenden: true,
     // Mismo permiso que registrar un cobro en el resto del sistema.
     canAct: can("sales.create"),
     actionLabel: "Cobrar",
@@ -31,7 +33,6 @@ export default function CuentasPorCobrarTab({ notify, fmtPrice }) {
     // El cobro conjunto es un solo movimiento de caja: del mismo cliente y de una sucursal.
     groupRuleText: "Solo se cobran juntas facturas del mismo cliente y sucursal",
     // Un depósito no vende: no tiene facturas que cobrar.
-    warehouseFilter: (w) => w.sells !== false,
     text: {
       contact: "cliente", contactTitle: "Cliente", contactsTitle: "Clientes",
       doc: "factura", docs: "facturas", docTitle: "Factura", docsTitle: "Facturas",

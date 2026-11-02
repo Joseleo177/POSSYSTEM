@@ -41,6 +41,14 @@ export function recordarSesion(employee) {
   if (uid && employee) kvSet(`get:${uid}:/auth/me`, { ok: true, employee });
 }
 
+// Sucursales marcadas en la barra (ver AppContext). Viajan en cada petición como
+// `X-Sucursales: 3,7` y el servidor recorta listados y reportes a ellas (scopeWarehouseIds).
+// `null` = todas las del usuario: no se manda nada y responde como siempre.
+let sucursalesFiltro = null;
+export function setSucursalesFiltro(ids) {
+  sucursalesFiltro = Array.isArray(ids) && ids.length ? ids.join(",") : null;
+}
+
 // ¿El servidor está sin base de datos? Se pregunta a /ping (que prueba la base) cuando una
 // petición falla con un 5xx o tarda demasiado. Hay internet y Vercel responde, pero no puede
 // atender: es la caída del 24-09-2026, y para la caja es lo mismo que no tener conexión.
@@ -69,7 +77,7 @@ const ESPERA_ARRANQUE_MS = 12_000;
 async function request(path, options = {}) {
   const guardable = (options.method || "GET") === "GET" && GUARDABLES.some((re) => re.test(path));
   const uid = guardable ? usuarioDelToken() : null;
-  const clave = uid ? `get:${uid}:${path}` : null;
+  const clave = uid ? `get:${uid}:${path}${sucursalesFiltro ? `#${sucursalesFiltro}` : ""}` : null;
   if (guardable && !options.timeout) options = { ...options, timeout: ESPERA_ARRANQUE_MS };
   try {
     const data = await requestServidor(path, options);
@@ -133,6 +141,7 @@ async function requestServidor(path, options = {}) {
   const headers = {
     ...(isFormData || ["GET", "DELETE"].includes(method) ? {} : { "Content-Type": "application/json" }),
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(sucursalesFiltro ? { "X-Sucursales": sucursalesFiltro } : {}),
     ...options.headers,
   };
   
@@ -439,7 +448,7 @@ export const api = {
     // Acepta un pedido web: descuenta stock del almacén indicado y lo pasa a 'espera'
     acceptOrder: (id, body)  => request(`/sales/${id}/accept-order`, { method: "POST", body: JSON.stringify(body) }),
     // Toma / suelta una cuenta en espera para que las demás cajas la vean bloqueada.
-    claim:       (id)        => request(`/sales/${id}/claim`, { method: "POST" }),
+    claim:       (id, data = {}) => request(`/sales/${id}/claim`, { method: "POST", body: JSON.stringify(data) }),
     release:     (id)        => request(`/sales/${id}/claim`, { method: "DELETE" }),
     // Devoluciones
     createReturn:   (id, body) => request(`/sales/${id}/return`,   { method: "POST", body: JSON.stringify(body) }),

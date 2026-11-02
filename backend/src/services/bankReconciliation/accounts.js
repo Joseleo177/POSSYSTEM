@@ -1,7 +1,7 @@
 'use strict';
 
 const { sequelize, QT, fail, companyOf } = require("./shared");
-const { visibleWarehouseIds, assertWarehouseAccess, isAdmin } = require("../../middleware/auth");
+const { scopeWarehouseIds, assertWarehouseAccess, isAdmin } = require("../../middleware/auth");
 
 /**
  * Cuenta bancaria = diario.
@@ -81,7 +81,7 @@ function defaultJournal(journals, dir = "out") {
 // Cuentas que el usuario puede conciliar, con lo pendiente de cada una.
 async function listAccounts(req) {
   const companyId = companyOf(req);
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   const rows = (await journalRows(companyId, `AND pj.active = TRUE AND pj.merged_into_id IS NULL`))
     .filter(j => allowed === null || !j.warehouse_ids.length || j.warehouse_ids.some(w => allowed.includes(w)));
 

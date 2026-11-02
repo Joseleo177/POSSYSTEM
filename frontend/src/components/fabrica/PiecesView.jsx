@@ -82,7 +82,7 @@ export default function PiecesView({ warehouses, materials, version, onOpen, onR
                     )}
                     {warehouses.length > 1 && (
                         <CustomSelect value={warehouseId} onChange={setWarehouseId} height="h-9" className="flex-1 sm:flex-none sm:w-40 min-w-0"
-                            options={[{ value: "", label: "Todos los almacenes" }, ...warehouses.map(x => ({ value: String(x.id), label: toNameCase(x.name) }))]} />
+                            options={[{ value: "", label: `Todos (${warehouses.length})` }, ...warehouses.map(x => ({ value: String(x.id), label: toNameCase(x.name) }))]} />
                     )}
                     <button onClick={() => setShowFit(s => !s)}
                         className={`h-9 px-3 rounded-lg text-[13px] font-medium border transition-colors ${showFit ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "btn-outline"}`}>

@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../../services/api";
-import CustomSelect from "../../components/ui/CustomSelect";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import Segmented from "../../components/ui/Segmented";
 import { fmtNumber, todayISO } from "../../helpers";
 import { buildFinanceExcel } from "../../helpers/excel";
@@ -78,18 +78,13 @@ export default function FinanceReport() {
     const [range, setRange] = useState(mesEnCurso);
     const [vista, setVista] = useState("ingresos");
     const [tipo, setTipo] = useState("");
-    const [warehouseId, setWarehouseId] = useState("");
-    const [warehouses, setWarehouses] = useState([]);
-
-    useEffect(() => {
-        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => setWarehouses([]));
-    }, []);
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
+    // Sucursal: entre las marcadas en la barra de arriba (sin filtro, todas ellas).
+    const suc = useSucursalFilter({ soloVenden: true });
 
     const { data, loading, error } = useReport(
         api.reports.finance,
-        { date_from: range.from, date_to: range.to, warehouse_id: warehouseId },
-        [range.from, range.to, warehouseId]
+        { date_from: range.from, date_to: range.to, warehouse_id: suc.warehouseId },
+        [range.from, range.to, suc.warehouseId]
     );
 
     const baseSym  = data?.base_symbol || "Ref.";
@@ -106,7 +101,7 @@ export default function FinanceReport() {
     const egresos = (data?.expenses?.rows ?? []).filter(e => !tipo || e.kind === tipo);
     const totalFiltrado = egresos.reduce((a, e) => a + e.amount_base, 0);
 
-    const warehouseName = warehouses.find(w => String(w.id) === warehouseId)?.name;
+    const warehouseName = suc.nombre || undefined;
 
     const documento = (e) => e.doc_number
         ? `${e.doc_type ? `${e.doc_type} ` : ""}${e.doc_number}`
@@ -117,19 +112,7 @@ export default function FinanceReport() {
         <div className="lg:h-full flex flex-col space-y-4 lg:overflow-hidden">
             <div className="shrink-0 flex flex-wrap items-center gap-2">
                 <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
-                {warehouses.length > 1 && (
-                    <CustomSelect
-                        value={warehouseId}
-                        onChange={setWarehouseId}
-                        placeholder={todasLabel}
-                        height="h-9"
-                        boxClassName="min-w-[190px]"
-                        options={[
-                            { value: "", label: todasLabel },
-                            ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
-                        ]}
-                    />
-                )}
+                <SucursalFilter filter={suc} />
                 <div className="ml-auto">
                     {data && (days.length > 0 || data.expenses.rows.length > 0) && (
                         <ExportButton onClick={() => buildFinanceExcel(data, { ...range, warehouse_name: warehouseName })} />

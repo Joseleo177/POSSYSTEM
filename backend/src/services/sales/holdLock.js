@@ -1,5 +1,5 @@
 const { Sale, Employee, sequelize } = require("./shared");
-const { Setting } = require("../../models");
+const { Setting, Warehouse } = require("../../models");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 
 // Una cuenta en espera recuperada queda "tomada" por la caja que la abrió. Sin esto, ocultarla
@@ -46,6 +46,19 @@ async function claimSale(saleId, employeeId, req) {
     }
     if (!["espera", "pedido"].includes(sale.status)) {
       throw Object.assign(new Error("Esta cuenta ya fue cobrada desde otra caja."), { status: 400, code: "SALE_NOT_EDITABLE" });
+    }
+
+    // Una caja solo atiende cuentas de su sucursal. Con la caja abierta en Centro, un pedido de
+    // Oeste se abría con los productos, precios y existencias de Oeste, y se cobraba desde la
+    // caja equivocada. `warehouse_id` es la sucursal de la caja; sin él (apps viejas) no se mira.
+    const cajaEn = parseInt(req?.body?.warehouse_id, 10);
+    const deLaCuenta = sale.warehouse_id || sale.requested_warehouse_id;
+    if (cajaEn && deLaCuenta && cajaEn !== deLaCuenta) {
+      const w = await Warehouse.findByPk(deLaCuenta, { attributes: ["name"], transaction });
+      throw Object.assign(
+        new Error(`Esta cuenta es de ${w?.name || "otra sucursal"}: se cobra desde la caja de esa sucursal.`),
+        { status: 409, code: "SALE_OTHER_WAREHOUSE" }
+      );
     }
 
     const mine = sale.held_by_employee_id === employeeId;

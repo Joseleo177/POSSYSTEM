@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
 
 const LIMIT = 50;
 
@@ -27,9 +28,11 @@ export function usePagos({ notify }) {
     // ver empleados llega vacía y el filtro no se ofrece, en vez de reventar la pestaña.
     const [employeeFilter, setEmployeeFilter] = useState("");
     const [employees, setEmployees] = useState([]);
-    // Sucursal. "" = todas las que el empleado tiene permitidas (o toda la empresa, si es admin).
+    // Sucursal, entre las marcadas en la barra de arriba. "" = todas ellas (el servidor ya
+    // responde recortado). Un depósito no cobra: no aporta nada al filtro.
     const [warehouseFilter, setWarehouseFilter] = useState("");
-    const [warehouses, setWarehouses] = useState([]);
+    const { sucursalesMarcadas } = useApp();
+    const warehouses = sucursalesMarcadas.filter(w => w.sells !== false);
     // Verificado contra el extracto del banco (Conciliación). "" = todos, "yes" o "no".
     const [verifiedFilter, setVerifiedFilter] = useState("");
     const [showFilterDrop, setShowFilterDrop] = useState(false);
@@ -40,11 +43,6 @@ export function usePagos({ notify }) {
             .then(r => { if (vivo) setEmployees(r.data || []); })
             .catch(() => { /* sin permiso: sin filtro */ });
         return () => { vivo = false; };
-    }, []);
-
-    useEffect(() => {
-        // Un depósito no cobra: no aporta nada a un filtro de pagos.
-        api.warehouses.getAll().then(r => setWarehouses((r.data || []).filter(w => w.sells !== false))).catch(() => {});
     }, []);
 
     // Un empleado que nunca trabajó en la sucursal elegida no puede haber cobrado nada ahí:

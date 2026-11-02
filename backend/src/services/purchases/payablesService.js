@@ -1,5 +1,5 @@
 const { Purchase, Customer, sequelize, Sequelize } = require("../../models");
-const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { dueDateSql, supplierCreditDaysSql, TODAY_SQL, effectiveDueDate, parseDueDate, summarize, round } = require("../../utils/dueDate");
 
 // Vencimiento de una compra: el pactado a mano para esa factura o, si no hay, la fecha de la
@@ -21,7 +21,7 @@ async function getPayables({ warehouse_id, supplier_id, search }, req) {
     await assertWarehouseAccess(req, warehouse_id);
     where.push('p.warehouse_id = :wid'); rep.wid = parseInt(warehouse_id);
   } else {
-    const allowed = await visibleWarehouseIds(req);
+    const allowed = await scopeWarehouseIds(req);
     if (allowed) {
       const ids = allowed.filter(Number.isInteger);
       where.push(ids.length ? `(p.warehouse_id IN (${ids.join(',')}) OR p.warehouse_id IS NULL)` : 'p.warehouse_id IS NULL');

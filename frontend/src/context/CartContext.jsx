@@ -11,7 +11,7 @@ import { cartKey, textoAdicionales } from "../helpers/cartLine";
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const { employee, notify, baseCurrency, activeCurrencies, settings, company } = useApp();
+  const { employee, notify, baseCurrency, activeCurrencies, settings, company, sucursalActual, sucursales } = useApp();
 
   // ── Carrito ────────────────────────────────────────────────
   const [cart, setCart] = useState([]);
@@ -150,6 +150,8 @@ export function CartProvider({ children }) {
   // ── Almacén activo ─────────────────────────────────────────
   const [employeeWarehouses, setEmployeeWarehouses] = useState([]);
   const [activeWarehouse, setActiveWarehouse] = useState(null);
+  const activeWarehouseRef = useRef(null);
+  activeWarehouseRef.current = activeWarehouse;
 
   const loadEmployeeWarehouses = useCallback(async () => {
     if (!employee) return;
@@ -157,21 +159,28 @@ export function CartProvider({ children }) {
       const r = await api.warehouses.getByEmployee(employee.id);
       // La caja solo lista los almacenes que atienden público: un depósito guarda mercancía
       // pero no factura, y ofrecerlo acá solo lleva a vender contra el stock equivocado.
-      const vendedores = (r.data || []).filter(w => w.sells !== false);
+      let vendedores = (r.data || []).filter(w => w.sells !== false);
+      // La caja vende desde la sucursal ACTUAL, la que se eligió al entrar o en la barra; ya
+      // no tiene selector propio. El admin no está atado a almacenes: vende en la actual
+      // aunque no la tenga asignada. Si la actual es un depósito, la caja queda sin sucursal.
+      if (sucursalActual) {
+        const actual = vendedores.filter(w => w.id === sucursalActual.id);
+        const admin = !!(employee.is_superuser || employee.permissions?.all);
+        vendedores = actual.length ? actual
+          : (admin && sucursalActual.sells !== false ? [{ id: sucursalActual.id, name: sucursalActual.name, sells: true }] : []);
+      }
       setEmployeeWarehouses(vendedores);
 
-      if (vendedores.length >= 1) {
-        setActiveWarehouse(prev => {
-          if (!prev) return vendedores[0];
-          // Validar que el almacén previo siga asignado al empleado
-          const stillAssigned = vendedores.find(w => w.id === prev.id);
-          return stillAssigned || vendedores[0];
-        });
-      } else {
-        setActiveWarehouse(null);
-      }
+      const previo = activeWarehouseRef.current;
+      const siguiente = vendedores.length
+        ? (previo && vendedores.find(w => w.id === previo.id)) || vendedores[0]
+        : null;
+      setActiveWarehouse(siguiente);
+      // Otra sucursal, otro carrito: el de la anterior queda guardado en el equipo y vuelve al
+      // regresar a ella (como hacía switchWarehouse).
+      if (previo && previo.id !== siguiente?.id) setCart([]);
     } catch (e) { console.error(e); }
-  }, [employee]);
+  }, [employee, sucursalActual]);
 
   const switchWarehouse = useCallback((warehouse) => {
     setActiveWarehouse(warehouse);
@@ -515,8 +524,15 @@ export function CartProvider({ children }) {
   // Pre-carga el carrito desde una cotización para editar antes de facturar
   const loadFromQuotation = useCallback(async (quot) => {
     if (!activeWarehouse) { notify("Selecciona una sucursal antes de cargar la cotización", "err"); return; }
+    // Igual que las cuentas en espera: la cotización se vende desde la caja de su sucursal.
+    // Antes se cargaba con los productos y precios de la otra y se facturaba en esta.
+    if (quot.warehouse_id && quot.warehouse_id !== activeWarehouse.id) {
+      const nombre = sucursales.find(w => w.id === quot.warehouse_id)?.name || quot.Warehouse?.name || "otra sucursal";
+      notify(`Esta cotización es de ${nombre} y tu caja está en ${activeWarehouse.name}. Cambia a ${nombre} en la barra de arriba para cargarla.`, "err");
+      return false;
+    }
     try {
-      const wid = quot.warehouse_id || activeWarehouse.id;
+      const wid = activeWarehouse.id;
       // Solo los productos de la cotización, por id: pedir "las primeras 500" del almacén
       // dejaba fuera —sin decir nada— cualquier línea que cayera más abajo en un catálogo
       // grande, y la cotización se cargaba incompleta.
@@ -558,7 +574,7 @@ export function CartProvider({ children }) {
     } catch (e) {
       notify(e.message || "Error al cargar la cotización", "err");
     }
-  }, [activeWarehouse, notify]);
+  }, [activeWarehouse, sucursales, notify]);
 
   // ── Totales ────────────────────────────────────────────────
   // USD: suma precios PRECISOS, redondea solo el total final (round-after-sum).
@@ -1058,19 +1074,27 @@ export function CartProvider({ children }) {
     }
     if (!held) return notify("Esa cuenta ya no está en espera: puede que otra caja la haya cobrado", "err");
 
+    // Una caja solo atiende cuentas de su sucursal: antes un pedido de Oeste se abría en la caja
+    // de Centro con los productos y precios de Oeste. Para cobrarlo hay que cambiar de sucursal.
+    const deLaCuenta = held.warehouse_id || held.requested_warehouse_id;
+    if (deLaCuenta && deLaCuenta !== activeWarehouse.id) {
+      const nombre = sucursales.find(w => w.id === deLaCuenta)?.name || held.warehouse_name || "otra sucursal";
+      return notify(`Esta cuenta es de ${nombre} y tu caja está en ${activeWarehouse.name}. Cambia a ${nombre} en la barra de arriba para cobrarla.`, "err");
+    }
+
     try {
       // Las líneas guardadas solo traen product_id/precio/cantidad; hay que rehidratarlas
       // con los datos del producto (unidad, imagen, stock) que el carrito necesita. Se
       // piden SOLO los productos de esta cuenta: antes se traía el catálogo entero (hasta
       // 500 fichas, con su agregado de ventas) para rehidratar tres líneas.
-      const wid = held.warehouse_id || activeWarehouse.id;
+      const wid = activeWarehouse.id;
       const ids = [...new Set((held.items || []).map(i => i.product_id))];
 
       // El claim reserva la cuenta en el servidor: si otra caja se adelantó, el 409 llega
       // aquí y el cajero se entera antes de ponerse a trabajar sobre algo que no podrá
       // cobrar. No depende de la carga de productos, así que van en paralelo.
       const [, res] = await Promise.all([
-        api.sales.claim(saleId),
+        api.sales.claim(saleId, { warehouse_id: wid }),
         api.warehouses.getProducts(wid, { ids: ids.join(','), limit: ids.length || 1 }),
       ]);
       const productMap = Object.fromEntries((res.data || []).map(p => [p.id, p]));
@@ -1187,7 +1211,7 @@ export function CartProvider({ children }) {
     } catch (e) {
       notify(e.message || "No se pudo recuperar la cuenta", "err");
     }
-  }, [heldCarts, activeWarehouse, isVesPrimary, vesRate, notify]);
+  }, [heldCarts, activeWarehouse, sucursales, isVesPrimary, vesRate, notify]);
 
   // Suelta el bloqueo de una cuenta que quedó tomada por una caja que ya no la está
   // atendiendo (se cerró el navegador, se fue el cajero). El bloqueo caduca solo, pero con

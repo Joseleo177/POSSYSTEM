@@ -256,7 +256,7 @@ function Seccion({ titulo, aside = null, children }) {
 }
 
 function Detalle({ id, onChanged, onClose }) {
-    const { notify, activeCurrencies, triggerAction, companyInfo, printerWidth } = useApp();
+    const { notify, activeCurrencies, triggerAction, companyInfo, printerWidth, sucursalActual, sucursales, trabajarEn } = useApp();
     const [o, setO] = useState(null);
     const [cargo, setCargo] = useState({ fee: "", extra: "", reason: "" });
     const [serie, setSerie] = useState("");
@@ -333,8 +333,18 @@ function Detalle({ id, onChanged, onClose }) {
         } catch (e) { notify(e.message, "err"); }
     };
 
-    // Abre ESTA cuenta en el POS (CobroPage la toma de la acción pendiente).
-    const cobrar = () => triggerAction("Cobro", `caja:retomar:${o.id}`);
+    // Abre ESTA cuenta en el POS (CobroPage la toma de la acción pendiente). Se cobra desde la
+    // caja de la sucursal del pedido: si se está trabajando en otra, el botón lo dice ("Cobrar
+    // en Oeste") y al tocarlo se pasa a ella. Antes se abría en la caja de la sucursal actual con
+    // los productos y precios de la otra.
+    const sucursalPedido = o.warehouse_id || o.requested_warehouse_id;
+    const otraSucursal = sucursalPedido && sucursalActual && sucursalPedido !== sucursalActual.id
+        ? sucursales.find(w => w.id === sucursalPedido) || null : null;
+    const cobrarEn = otraSucursal ? `Cobrar en ${toNameCase(otraSucursal.name)}` : "Cobrar en la caja";
+    const cobrar = () => {
+        if (otraSucursal) trabajarEn(otraSucursal.id);
+        triggerAction("Cobro", `caja:retomar:${o.id}`);
+    };
 
     const mover = async (body) => {
         setMoviendo(true);
@@ -398,7 +408,7 @@ function Detalle({ id, onChanged, onClose }) {
                 {aceptado && (
                     <div className="rounded-xl bg-emerald-500/10 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <p className="text-[13px] text-emerald-800 dark:text-emerald-300 leading-snug">Aceptado. Síguelo aquí hasta entregarlo; el cobro lo hace la caja.</p>
-                        {porCobrar && <Button variant="ghost" className="h-12 sm:h-9 shrink-0" onClick={cobrar}>Cobrar en la caja</Button>}
+                        {porCobrar && <Button variant="ghost" className="h-12 sm:h-9 shrink-0" onClick={cobrar}>{cobrarEn}</Button>}
                     </div>
                 )}
 
@@ -559,7 +569,7 @@ function Detalle({ id, onChanged, onClose }) {
                         {nuevo && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={() => { setMotivo(""); setRechazar(true); }}>Rechazar</Button>}
                         {/* Con un paso de despacho pendiente, cobrar es secundario; entregado y sin
                             cobrar, cobrar pasa a ser LA acción. */}
-                        {paso && porCobrar && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={cobrar}>Cobrar en la caja</Button>}
+                        {paso && porCobrar && <Button variant="ghost" className="h-12 sm:h-10 sm:flex-1" onClick={cobrar}>{cobrarEn}</Button>}
                     </div>
                     {nuevo && (
                         <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={aceptar}
@@ -573,7 +583,7 @@ function Detalle({ id, onChanged, onClose }) {
                         </Button>
                     )}
                     {!paso && porCobrar && (
-                        <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={cobrar}>Cobrar en la caja · {ref(o.total)}</Button>
+                        <Button className="h-12 sm:h-10 sm:flex-[1.6]" onClick={cobrar}>{cobrarEn} · {ref(o.total)}</Button>
                     )}
                 </div>
                 {/* Deshacer: para el toque equivocado, un paso atrás. */}

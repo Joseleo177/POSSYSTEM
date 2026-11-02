@@ -1,7 +1,7 @@
 const {
   Warehouse, Product, ProductStock, StockTransfer, StockTransferItem, Employee, Sequelize, sequelize
 } = require("../../models");
-const { isAdmin, employeeWarehouseIds, assertWarehouseAccess } = require("../../middleware/auth");
+const { isAdmin, employeeWarehouseIds, assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { Op } = Sequelize;
 
@@ -348,18 +348,15 @@ async function cancelTransfer(id, req) {
 // ── Consultas ───────────────────────────────────────────────────
 // Cada empleado ve solo las transferencias que tocan sus almacenes; el admin las ve todas.
 //
-// `direction` se lee siempre respecto al almacén de referencia —el elegido en el filtro, o
-// los del empleado si no eligió ninguno—: 'in' es lo que llega, 'out' lo que sale. Para el
-// admin sin almacén elegido no hay referencia posible, así que se ignora.
+// `direction` se lee siempre respecto al almacén de referencia —el pedido, o las sucursales
+// marcadas en la barra (las del empleado si no marcó)—: 'in' es lo que llega, 'out' lo que
+// sale. Para el admin sin filtro no hay referencia posible, así que se ignora.
 async function visibilityWhere(req, warehouse_id, direction) {
   const where = {};
-  let visibleIds = null;
-  if (!isAdmin(req)) {
-    visibleIds = await employeeWarehouseIds(req.employee?.id);
-    if (visibleIds.length === 0) return null;
-    if (warehouse_id && !visibleIds.includes(parseInt(warehouse_id))) {
-      throw fail("No tienes acceso a este almacén", 403);
-    }
+  const visibleIds = await scopeWarehouseIds(req);
+  if (Array.isArray(visibleIds) && visibleIds.length === 0) return null;
+  if (warehouse_id && !isAdmin(req) && !(await employeeWarehouseIds(req.employee?.id)).includes(parseInt(warehouse_id))) {
+    throw fail("No tienes acceso a este almacén", 403);
   }
 
   const ref = warehouse_id
@@ -463,7 +460,7 @@ async function getTransferSummary(req) {
   const where = await visibilityWhere(req, warehouse_id);
   if (!where) return { data: { in_transit: 0, to_receive: 0, with_differences: 0 } };
 
-  const visibleIds = isAdmin(req) ? null : await employeeWarehouseIds(req.employee?.id);
+  const visibleIds = await scopeWarehouseIds(req);
 
   const [inTransit, withDiff] = await Promise.all([
     StockTransfer.count({ where: { ...where, status: 'sent' } }),

@@ -1,29 +1,21 @@
 import { useState, useEffect } from "react";
 import { api } from "../../services/api";
+import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
 import { fmtMoney } from "../../helpers";
-import CustomSelect from "../../components/ui/CustomSelect";
 
 export default function ExpiryReport() {
     const [loading, setLoading] = useState(true);
     const [lots, setLots] = useState([]);
     const [filter, setFilter] = useState("all"); // all, expired, soon
 
-    // Los lotes viven en un almacén concreto: sin poder elegir cuál, un vencimiento en la
-    // Sucursal A aparecía igual en la pantalla de la B, que no tiene esa mercancía.
-    const [warehouseId, setWarehouseId] = useState("");
-    const [warehouses, setWarehouses] = useState([]);
-    useEffect(() => {
-        api.warehouses.getAll()
-            .then(r => setWarehouses(r.data || []))
-            .catch(e => console.error("[ExpiryReport] no se pudieron cargar los almacenes:", e));
-    }, []);
-    const todasLabel = warehouses.length === 1 ? warehouses[0].name : "Todas las sucursales";
-
+    // Los lotes viven en un almacén concreto: un vencimiento en la Sucursal A no debe aparecer
+    // en la pantalla de la B. Se elige entre las marcadas en la barra de arriba.
+    const suc = useSucursalFilter();
     useEffect(() => {
         const loadLots = async () => {
             setLoading(true);
             try {
-                const r = await api.reports.expiry(warehouseId ? { warehouse_id: warehouseId } : {});
+                const r = await api.reports.expiry(suc.warehouseId ? { warehouse_id: suc.warehouseId } : {});
                 // Convertimos las strings de fecha a objetos Date para los cálculos
                 const formatted = r.data.map(l => ({
                     ...l,
@@ -37,7 +29,7 @@ export default function ExpiryReport() {
             }
         };
         loadLots();
-    }, [warehouseId]);
+    }, [suc.warehouseId]);
 
     const getStatus = (expiryDate) => {
         const today = new Date();
@@ -78,20 +70,7 @@ export default function ExpiryReport() {
                         </button>
                     ))}
                 </div>
-                {/* Con una sola sucursal no hay nada que elegir: mostrar el selector solo
-                    insinuaría que hay más, cuando no las hay. */}
-                {warehouses.length > 1 && (
-                <CustomSelect
-                    value={warehouseId}
-                    onChange={setWarehouseId}
-                    placeholder={todasLabel}
-                    boxClassName="h-9 min-w-[190px]"
-                    options={[
-                        { value: "", label: todasLabel },
-                        ...warehouses.map(w => ({ value: String(w.id), label: w.name }))
-                    ]}
-                />
-                )}
+                <SucursalFilter filter={suc} boxClassName="h-9 min-w-[180px]" />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">

@@ -2,7 +2,7 @@
 
 const models = require("../../models");
 const { ensureOpenSession } = require("../warehouses/sessionService");
-const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, visibleWarehouseIds, scopeWarehouseIds } = require("../../middleware/auth");
 
 const { sequelize, Sequelize, ProductStock, Product, StockSessionLine, Warehouse, Setting } = models;
 const { Op } = Sequelize;
@@ -251,5 +251,5 @@ module.exports = {
   MODES, isMode, unitOfMode, sizeOf, pieceSpec, cutsInPiece, cutsLeft, hasShape, mm, fmtM, fmtLen, fmtCutLen, cutUnitOf, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
   moveStock, unitCostOf, anyUnitCost, COST_ANY_SQL, lockNumbering, inTransaction,
-  assertWarehouseAccess, visibleWarehouseIds,
+  assertWarehouseAccess, visibleWarehouseIds, scopeWarehouseIds,
 };

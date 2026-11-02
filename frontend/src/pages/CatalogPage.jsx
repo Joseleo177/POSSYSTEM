@@ -19,6 +19,7 @@ import PublicLinkModal from "../components/Catalog/PublicLinkModal";
 import PriceLabelsView from "../components/Catalog/PriceLabelsView";
 import ImportProductsModal from "../components/Catalog/ImportProductsModal";
 import FilterPopover from "../components/ui/FilterPopover";
+import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 
 const TABS = [
     { id: "products",   label: "Productos" },
@@ -52,8 +53,6 @@ export default function CatalogPage() {
     const [selectedProducts, setSelectedProducts] = useState([]);
     const [printingLabels, setPrintingLabels] = useState(false);
     const [isSelectionMode, setIsSelectionMode] = useState(false);
-    const [showWarehouse, setShowWarehouse] = useState(false);
-    const almacenRef = useRef(null);
     const [showFilters, setShowFilters] = useState(false);
     const filtrosRef = useRef(null);
     const [priceCurrency, setPriceCurrency] = useState("base");
@@ -65,18 +64,14 @@ export default function CatalogPage() {
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
 
     const availableWarehouses = employee?.warehouses || [];
-    const [warehouseId, setWarehouseId] = useState(() => availableWarehouses[0]?.id ?? null);
+    // El catálogo muestra precios y existencias de UNA sucursal: arranca en la actual y, con
+    // varias marcadas en la barra de arriba, se puede mirar otra de ellas.
+    const suc = useSucursalFilter({ todas: false });
+    const warehouseId = suc.warehouseId ? Number(suc.warehouseId) : null;
 
     // La asignación pudo cambiar en otra pantalla (Empleados) o la pudo hacer otro admin; lo
     // mismo las categorías, que la app carga una sola vez al entrar.
     useEffect(() => { refreshEmployee(); loadCategories(); }, [refreshEmployee, loadCategories]);
-
-    // Si la lista llega o cambia después de montar (almacén recién creado o asignado), se toma
-    // el primero; antes el estado inicial quedaba en null y la grilla salía vacía sin aviso.
-    const warehouseKey = availableWarehouses.map(w => w.id).join(",");
-    useEffect(() => {
-        setWarehouseId(prev => availableWarehouses.some(w => w.id === prev) ? prev : (availableWarehouses[0]?.id ?? null));
-    }, [warehouseKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         if (warehouseId) loadProducts(1, warehouseId);
@@ -84,7 +79,7 @@ export default function CatalogPage() {
 
     useEffect(() => { localStorage.setItem("catalog_view", viewMode); }, [viewMode]);
 
-    const selectedWarehouseName = availableWarehouses.find(w => w.id === warehouseId)?.name;
+    const selectedWarehouseName = suc.nombre;
     const totalPages = Math.ceil(totalProducts / limit);
 
     // Al crear devuelve el producto: el modal lo necesita para subir después las fotos
@@ -294,37 +289,11 @@ export default function CatalogPage() {
                             <input value={search} onChange={e => setSearch(e.target.value)} className="input h-9 pl-9 text-[12px] w-full" placeholder="Buscar producto..." autoComplete="off" spellCheck={false} />
                         </div>
 
-                        {/* Selector de almacén. Con uno solo no hay nada que elegir: mostrarlo
-                            solo insinuaría que hay más, cuando no los hay. `warehouseId` ya
-                            queda fijo en el único disponible desde el estado inicial. */}
-                        {availableWarehouses.length > 1 && (
-                        <div className="relative">
-                            <button ref={almacenRef} onClick={() => { setShowWarehouse(!showWarehouse); setShowFilters(false); }}
-                                className={`h-9 px-3 flex items-center gap-2 rounded-lg text-[13px] font-medium border transition-colors ${warehouseId ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2"}`}>
-                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                                {selectedWarehouseName || "Almacén"}
-                                <svg className={`w-3 h-3 transition-transform ${showWarehouse ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" /></svg>
-                            </button>
-                            <FilterPopover open={showWarehouse} onClose={() => setShowWarehouse(false)} anchorRef={almacenRef} width={224}>
-                                <div className="p-3">
-                                        <div className="text-[12px] font-medium text-content-subtle mb-1.5 px-1">Almacén</div>
-                                        <div className="space-y-0.5">
-                                            {availableWarehouses.map(w => (
-                                                <button key={w.id} onClick={() => { setWarehouseId(w.id); setShowWarehouse(false); }}
-                                                    className={`w-full text-left px-3 h-9 rounded-lg text-[13px] font-medium transition-colors flex items-center justify-between ${warehouseId === w.id ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40" : "text-content dark:text-white/80 hover:bg-surface-2 dark:hover:bg-white/[0.06]"}`}>
-                                                    {w.name}
-                                                    {warehouseId === w.id && <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
-                                                </button>
-                                            ))}
-                                        </div>
-                                </div>
-                            </FilterPopover>
-                        </div>
-                        )}
+                        <SucursalFilter filter={suc} height="h-9" boxClassName="min-w-[150px]" />
 
                         {/* Filtros */}
                         <div className="relative">
-                            <button ref={filtrosRef} onClick={() => { setShowFilters(!showFilters); setShowWarehouse(false); }}
+                            <button ref={filtrosRef} onClick={() => setShowFilters(!showFilters)}
                                 className={`h-9 px-3 flex items-center gap-2 rounded-lg text-[13px] font-medium border transition-colors ${activeFilterCount > 0 ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 border-brand-500/40" : "bg-white dark:bg-white/5 border-border dark:border-white/10 text-content-muted dark:text-white/70 hover:bg-surface-2 hover:text-content dark:hover:text-white"}`}>
                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>
                                 Filtros

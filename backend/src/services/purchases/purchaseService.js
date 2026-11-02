@@ -2,7 +2,7 @@ const {
   Purchase, PurchaseItem, ProductLot, Employee, Warehouse, Customer,
   Product, ProductStock, ProductComboItem, PurchasePayment, StockSessionLine, Sequelize, sequelize
 } = require("../../models");
-const { assertWarehouseAccess, visibleWarehouseIds } = require("../../middleware/auth");
+const { assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
 const { ensureOpenSession } = require("../warehouses/sessionService");
 const { effectiveDueDate } = require("./payablesService");
@@ -21,7 +21,7 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     await assertWarehouseAccess(req, warehouse_id);
     where.warehouse_id = parseInt(warehouse_id);
   } else {
-    const allowedWarehouses = await visibleWarehouseIds(req);
+    const allowedWarehouses = await scopeWarehouseIds(req);
     if (allowedWarehouses) {
       // Va en Op.and porque el filtro de búsqueda de abajo ocupa Op.or: si se escribiera
       // ahí, uno pisaría al otro y el listado dejaría de estar acotado.

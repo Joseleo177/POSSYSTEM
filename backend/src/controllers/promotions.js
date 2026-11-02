@@ -1,7 +1,7 @@
 const { Promotion, Product, PromotionProduct, sequelize } = require("../models");
 const { Op } = require("sequelize");
 const { broadcast } = require("../services/sseService");
-const { isAdmin, assertWarehouseAccess, visibleWarehouseIds } = require("../middleware/auth");
+const { isAdmin, assertWarehouseAccess, scopeWarehouseIds } = require("../middleware/auth");
 const { idsVisibles } = require("../services/products/productAccess");
 
 // Una promoción cambia lo que la caja descuenta, y el servidor la revalida al facturar: si el
@@ -44,7 +44,7 @@ const assertAlcance = async (req, warehouseId, productIds) => {
 const getAll = async (req, res) => {
   try {
     // Fuera del admin: las de sus sucursales y las generales, que también corren en ellas.
-    const ids = await visibleWarehouseIds(req);
+    const ids = await scopeWarehouseIds(req);
     const promos = await Promotion.findAll({
       where: ids ? { [Op.or]: [{ warehouse_id: null }, { warehouse_id: { [Op.in]: ids } }] } : {},
       include: [{ model: Product, through: { attributes: [] }, attributes: ['id', 'name'] }],

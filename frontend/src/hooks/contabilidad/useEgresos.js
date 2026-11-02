@@ -2,10 +2,12 @@ import { useState, useCallback, useEffect } from "react";
 import { api } from "../../services/api";
 import { todayISO } from "../../helpers";
 import { resolveRate } from "../../components/ui/RateField";
+import { useApp } from "../../context/AppContext";
 
 const LIMIT = 50;
 
 export function useEgresos({ notify, journals }) {
+    const { sucursalActual } = useApp();
     const [expenses, setExpenses] = useState([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -37,7 +39,9 @@ export function useEgresos({ notify, journals }) {
                 // que atiende público.
                 const list = (r.data || []).filter(w => w.sells !== false);
                 setWarehouses(list);
-                if (list.length === 1) setForm(p => p.warehouse_id ? p : { ...p, warehouse_id: String(list[0].id) });
+                // Arranca en la sucursal en la que se trabaja (la de la barra de arriba).
+                const pre = list.length === 1 ? list[0] : list.find(w => w.id === sucursalActual?.id);
+                if (pre) setForm(p => p.warehouse_id ? p : { ...p, warehouse_id: String(pre.id) });
             })
             .catch(() => {});
     }, []);
@@ -135,7 +139,7 @@ export function useEgresos({ notify, journals }) {
             });
             notify("Egreso registrado correctamente");
             setShowCreate(false);
-            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: warehouses.length === 1 ? String(warehouses[0].id) : "" });
+            setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: (() => { const pre = warehouses.length === 1 ? warehouses[0] : warehouses.find(w => w.id === sucursalActual?.id); return pre ? String(pre.id) : ""; })() });
             loadExpenses();
         } catch (e) { notify(e.message, "err"); }
         finally { setSaving(false); }

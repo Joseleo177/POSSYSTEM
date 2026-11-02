@@ -34,7 +34,7 @@ import VariantPickerModal     from "../components/cobro/VariantPickerModal";
 const fmt = fmtMoney;
 
 export default function CobroPage() {
-    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company, pendingAction, setPendingAction } = useApp();
+    const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company, pendingAction, setPendingAction, sucursalActual } = useApp();
     const conMesas = !!company?.cocina_enabled && can("tables.view");
     // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
     const revisarAntes = settings?.pos_review_checkout === "true";
@@ -79,6 +79,9 @@ export default function CobroPage() {
     // cajero decide (pausarla o terminarla) antes de volver a intentarlo.
     useEffect(() => {
         if (typeof pendingAction !== "string" || !pendingAction.startsWith("caja:retomar:") || !activeWarehouse) return;
+        // Si se llegó cambiando de sucursal (pedido de otra), se espera a que la caja ya esté en
+        // la nueva: con la anterior, takeHeldCart lo rechazaría por ser de otra sucursal.
+        if (sucursalActual && activeWarehouse.id !== sucursalActual.id) return;
         const id = parseInt(pendingAction.split(":")[2], 10);
         setPendingAction(null);
         if (!id || heldSaleId === id) { setMobileTab("cart"); return; }
@@ -88,7 +91,7 @@ export default function CobroPage() {
         }
         takeHeldCart(id).then(() => setMobileTab("cart"));
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pendingAction, activeWarehouse]);
+    }, [pendingAction, activeWarehouse, sucursalActual]);
     const [showConfirmCheckout, setShowConfirmCheckout] = useState(false);
     const [showHeldModal, setShowHeldModal]        = useState(false);
     // Mapa de mesas (restaurante): solo con el módulo encendido y permiso para verlo.
@@ -236,8 +239,12 @@ export default function CobroPage() {
             <div className="w-24 h-24 rounded-[40px] bg-surface-2 dark:bg-white/5 flex items-center justify-center text-brand-500 shadow-inner mb-4">
                 <svg className="w-12 h-12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
-            <div className="font-bold text-xl text-brand-500">Sin acceso a sucursal</div>
-            <p className="text-sm text-content-subtle max-w-sm leading-relaxed font-medium">Tu usuario no tiene sucursales asignadas.</p>
+            <div className="font-bold text-xl text-brand-500">{sucursalActual ? `${sucursalActual.name} no vende` : "Sin acceso a sucursal"}</div>
+            <p className="text-sm text-content-subtle max-w-sm leading-relaxed font-medium">
+                {sucursalActual
+                    ? "Es un depósito o no la tienes asignada para vender. Elige otra sucursal desde la barra de arriba."
+                    : "Tu usuario no tiene sucursales asignadas."}
+            </p>
         </div>
     );
 

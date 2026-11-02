@@ -89,7 +89,7 @@ export default function OrdersView({ warehouses, stages = [], canManage, version
                 </div>
                 {warehouses.length > 1 && (
                     <CustomSelect value={warehouseId} onChange={setWarehouseId} height="h-9" className="w-40"
-                        options={[{ value: "", label: "Todos los almacenes" }, ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))]} />
+                        options={[{ value: "", label: `Todos (${warehouses.length})` }, ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))]} />
                 )}
                 <Segmented value={vista} onChange={setVista} options={[{ key: "lista", label: "Lista" }, { key: "tablero", label: "Tablero" }]} />
                 {vista === "lista" && (

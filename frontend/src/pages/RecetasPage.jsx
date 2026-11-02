@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Page from "../components/ui/Page";
-import CustomSelect from "../components/ui/CustomSelect";
 import { Button } from "../components/ui/Button";
 import PlatosView from "../components/recetas/PlatosView";
 import PreparacionesView from "../components/recetas/PreparacionesView";
@@ -10,6 +9,7 @@ import ProduccionView from "../components/recetas/ProduccionView";
 import PreparationModal from "../components/recetas/PreparationModal";
 import BatchFormModal from "../components/recetas/BatchFormModal";
 import BatchDetailModal from "../components/recetas/BatchDetailModal";
+import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 
 // App Recetas (restaurante).
 //   Platos         la ficha técnica de cada plato: costo, food cost y lo que descuenta al venderse
@@ -25,13 +25,11 @@ const TABS = [
 const TITULOS = { platos: "Fichas técnicas", preparaciones: "Preparaciones", produccion: "Producción de cocina" };
 const TAB_KEY = "recetas_pestana";
 
-// La sucursal elegida se recuerda por empresa: el navegador se comparte entre empresas.
-const claveSucursal = (emp) => `recetas_sucursal_${emp?.company_id ?? "0"}`;
 const leer = (k, def = "") => { try { return localStorage.getItem(k) || def; } catch { return def; } };
 const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
 
 export default function RecetasPage() {
-    const { employee, can } = useApp();
+    const { can } = useApp();
     const canEdit = can("products.edit");
     const canProduce = can("production.manage");
 
@@ -41,10 +39,16 @@ export default function RecetasPage() {
     });
     const setTab = (t) => { setTabState(t); guardar(TAB_KEY, t); };
 
+    // Costos, precios y existencias son de UNA sucursal: arranca en la actual y, con varias
+    // marcadas en la barra de arriba, se elige entre ellas. La lista de almacenes queda para
+    // registrar una tanda.
     const [warehouses, setWarehouses] = useState([]);
     const [whReady, setWhReady] = useState(false);
-    const [warehouseId, setWarehouseIdState] = useState(() => leer(claveSucursal(employee)));
-    const setWarehouseId = (v) => { setWarehouseIdState(v); guardar(claveSucursal(employee), v); };
+    const suc = useSucursalFilter({ todas: false });
+    const warehouseId = suc.warehouseId;
+    const sucursal = suc.visible
+        ? <SucursalFilter filter={suc} className="w-40 sm:w-48 shrink-0" height="h-9" boxClassName="" />
+        : null;
 
     // Cualquier cambio (preparación guardada, tanda registrada o anulada) refresca las vistas.
     const [version, setVersion] = useState(0);
@@ -57,20 +61,11 @@ export default function RecetasPage() {
 
     useEffect(() => {
         api.warehouses.getAll()
-            .then(r => {
-                const activos = (r.data || []).filter(w => w.active !== false);
-                setWarehouses(activos);
-                // Sin sucursal recordada (o ya no visible), la primera.
-                setWarehouseIdState(prev => (activos.some(w => String(w.id) === prev) ? prev : String(activos[0]?.id || "")));
-            })
+            .then(r => setWarehouses((r.data || []).filter(w => w.active !== false)))
             .catch(() => {})
             .finally(() => setWhReady(true));
     }, []);
 
-    const sucursal = warehouses.length > 1 ? (
-        <CustomSelect className="w-40 sm:w-48 shrink-0" height="h-9" value={warehouseId} onChange={setWarehouseId}
-            options={warehouses.map(w => ({ value: String(w.id), label: w.name }))} />
-    ) : null;
 
     const subheader = (
         <div className="flex gap-1 px-4 border-b border-border/20 dark:border-white/5 overflow-x-auto scrollbar-hide">

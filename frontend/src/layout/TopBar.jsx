@@ -4,6 +4,7 @@ import { resolveImageUrl, toNameCase } from "../helpers";
 import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
 import { useApp } from "../context/AppContext";
 import { useBcvRate, checkBcvRate } from "../hooks/useBcvRate";
+import SucursalSwitcher from "./SucursalSwitcher";
 
 function useDateTick() {
     const [now, setNow] = React.useState(new Date());
@@ -119,6 +120,9 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                     </button>
                 )}
             </div>
+
+            {/* Sucursal en la que se trabaja, al lado del nombre */}
+            <SucursalSwitcher />
 
             {/* Employee info */}
             <div className="flex items-center gap-2 shrink-0">

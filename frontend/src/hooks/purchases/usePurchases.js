@@ -73,14 +73,15 @@ export function usePurchases(notify, onProductsUpdated) {
   const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [categories, setCategories] = useState([]);
 
-  // Con un solo almacén activo no hay nada que elegir: se asume automáticamente, igual que
-  // el catálogo y el resto de selectores de sucursal. Solo aplica a una compra nueva —si se
-  // está editando un borrador, ese efecto ya trae su propio warehouse_id guardado.
+  // La compra nueva llega a la sucursal actual (la de la barra de arriba); con un solo almacén
+  // activo, a ese. Se puede cambiar en el formulario. Si se está editando un borrador, ese
+  // efecto ya trae su propio warehouse_id guardado.
+  const { sucursalActual } = useApp();
   useEffect(() => {
-    if (!selectedWarehouseId && warehouses.length === 1) {
-      setSelectedWarehouseId(String(warehouses[0].id));
-    }
-  }, [warehouses, selectedWarehouseId]);
+    if (selectedWarehouseId || !warehouses.length) return;
+    const pre = warehouses.length === 1 ? warehouses[0] : warehouses.find(w => w.id === sucursalActual?.id);
+    if (pre) setSelectedWarehouseId(String(pre.id));
+  }, [warehouses, selectedWarehouseId, sucursalActual]);
 
   // Búsquedas
   const [productSearch, setProductSearch] = useState("");

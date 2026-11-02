@@ -128,6 +128,9 @@ export default function TransfersView({
                                         ))}
                                     </div>
                                 </div>
+                                {/* Entre los almacenes marcados en la barra de arriba: con uno solo no hay
+                                    nada que elegir. */}
+                                {warehouses.length > 1 && (
                                 <div>
                                     <div className="text-[12px] font-medium text-content-subtle mb-1.5">Almacén</div>
                                     <CustomSelect
@@ -135,11 +138,12 @@ export default function TransfersView({
                                         onChange={val => setFilter("warehouseId", val)}
                                         height="h-9"
                                         options={[
-                                            { value: "", label: "Todos" },
-                                            ...warehouses.filter(w => w.active).map(w => ({ value: String(w.id), label: w.name })),
+                                            { value: "", label: `Todos (${warehouses.length})` },
+                                            ...warehouses.map(w => ({ value: String(w.id), label: w.name })),
                                         ]}
                                     />
                                 </div>
+                                )}
                                 <div>
                                     <div className="text-[12px] font-medium text-content-subtle mb-1.5">Dirección</div>
                                     <div className="grid grid-cols-3 gap-1">
@@ -156,7 +160,7 @@ export default function TransfersView({
                                     </div>
                                     {/* Entrada o salida se leen contra el almacén elegido; sin almacén, contra
                                         los del propio usuario. El admin, que los ve todos, necesita elegir uno. */}
-                                    {isAdmin && filters.direction && !filters.warehouseId && (
+                                    {isAdmin && filters.direction && !filters.warehouseId && warehouses.length > 1 && (
                                         <p className="text-[11px] text-content-subtle mt-1.5 leading-relaxed">
                                             Elige un almacén para que entradas y salidas tengan referencia
                                         </p>

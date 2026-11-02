@@ -48,7 +48,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
         openAssign, toggleAssign, saveAssign,
     } = useWarehouses(notify);
 
-    const { can, companyInfo, printerWidth } = useApp();
+    const { can, companyInfo, printerWidth, sucursalActual, sucursalesMarcadas } = useApp();
 
     // Despachar y recibir son permisos distintos a propósito: el control cruzado se pierde
     // si la misma persona hace las dos puntas.
@@ -59,6 +59,14 @@ export default function WarehousesTab({ notify, currentEmployee }) {
     // de nadie más: la ruta de asignación decide qué sucursales ve cada quien, así que un rol
     // con esa facultad podría sumarse a las demás tiendas por su cuenta.
     const canManageWarehouses = esAdmin;
+
+    // Stock y Ajustes abren en la sucursal actual (la de la barra de arriba), sin pasar antes
+    // por la grilla. Desde la grilla se puede abrir otro almacén propio, p. ej. un depósito.
+    useEffect(() => {
+        if (selectedWarehouse || !sucursalActual) return;
+        const actual = warehouses.find(w => w.id === sucursalActual.id);
+        if (actual) setSelectedWarehouse(actual);
+    }, [warehouses, sucursalActual]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const {
         transfers, summary: transferSummary, loading: loadingTransfers,
@@ -186,7 +194,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     setFilter={setTransferFilter}
                     clearFilters={clearTransferFilters}
                     activeFilterCount={transferFilterCount}
-                    warehouses={warehouses}
+                    warehouses={sucursalesMarcadas}
                     onOpenDetail={setTransferDetail}
                     onOpenReceive={setTransferReceiving}
                     canReceive={canReceive}
@@ -196,7 +204,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             )}
 
             {subTab === "movimientos" && (
-                <MovementsView warehouses={warehouses} />
+                <MovementsView />
             )}
 
             {subTab === "ajustes" && (

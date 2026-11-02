@@ -56,7 +56,7 @@ export default function MaterialsView({ warehouses, version, onEdit, onNew }) {
             <div className="shrink-0 px-4 py-2 flex flex-wrap items-center gap-2 border-b border-border/20 dark:border-white/5">
                 {warehouses.length > 1 && (
                     <CustomSelect value={warehouseId} onChange={setWarehouseId} height="h-9" className="w-48"
-                        options={[{ value: "", label: "Todos los almacenes" }, ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))]} />
+                        options={[{ value: "", label: `Todos (${warehouses.length})` }, ...warehouses.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))]} />
                 )}
                 <div className="ml-auto flex items-center gap-2">
                     <span className="text-[12px] text-content-subtle">Los cortes se miden en</span>

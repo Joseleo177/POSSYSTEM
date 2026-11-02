@@ -6,7 +6,7 @@ const {
   FabricationStage, FabricationOrderStage, FabricationOrderCut,
   fail, r3, r4, r5, TOL, MAX_QTY, MAX_MONEY, sizeOf, cutsLeft, hasShape, mm, fmtM, fmtCutLen, cutUnitOf, money, text,
   companyOf, employeeOf, orderCode, ownWarehouse,
-  moveStock, unitCostOf, lockNumbering, inTransaction, assertWarehouseAccess, visibleWarehouseIds,
+  moveStock, unitCostOf, lockNumbering, inTransaction, assertWarehouseAccess, scopeWarehouseIds,
 } = require("./shared");
 const assignInvoiceNumber = require("../sales/assignInvoiceNumber");
 const { isIntegerUnit } = require("../../utils/units");
@@ -65,7 +65,7 @@ async function syncSaleCost(order, transaction) {
 
 async function listOrders(req, q = {}) {
   const company = companyOf(req);
-  const visibles = await visibleWarehouseIds(req);
+  const visibles = await scopeWarehouseIds(req);
   const where = ["o.company_id = :company"];
   const rep = { company };
 

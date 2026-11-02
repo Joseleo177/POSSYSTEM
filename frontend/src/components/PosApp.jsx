@@ -5,6 +5,7 @@ import { useApp } from "../context/AppContext";
 import { useCart } from "../context/CartContext";
 import { useTabs } from "../hooks/useTabs";
 import LoginScreen from "../components/LoginScreen";
+import SucursalPicker from "../components/SucursalPicker";
 import NotificationToast from "../layout/NotificationToast";
 import HeaderMobile from "../layout/HeaderMobile";
 import TopBar from "../layout/TopBar";
@@ -17,7 +18,7 @@ import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
 
 export default function PosApp() {
-    const { employee, authChecked, login, logout, can, notification, storeName, settings, company, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction } = useApp();
+    const { employee, authChecked, login, logout, can, notification, storeName, settings, company, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction, faltaSucursal, seleccionKey } = useApp();
     const { setReceipt, clearCart } = useCart();
     const { dark, toggle } = useTheme();
 
@@ -44,7 +45,7 @@ export default function PosApp() {
         return () => window.removeEventListener("keydown", onKey);
     }, []);
 
-    if (!authChecked)
+    if (!authChecked || (employee && !faltaSucursal && !seleccionKey))
         return (
             <div className="min-h-screen flex items-center justify-center bg-surface-2 dark:bg-surface-dark">
                 <div className="flex items-center gap-3 text-content-muted dark:text-content-dark-muted">
@@ -62,6 +63,7 @@ export default function PosApp() {
         );
 
     if (!employee) return <LoginScreen onLogin={login} />;
+    if (faltaSucursal) return <SucursalPicker />;
 
     return (
         // fixed inset-0 y no h-screen: en iOS 100vh mide la pantalla SIN la barra de Safari (y
@@ -117,7 +119,9 @@ export default function PosApp() {
 
             <OfflineBanner />
 
-            <MainContent safeTab={safeTab} />
+            {/* Con otra sucursal la pantalla se vuelve a montar entera y recarga sus datos con el
+                nuevo recorte, como al cambiar de empresa en Odoo. */}
+            <MainContent key={seleccionKey} safeTab={safeTab} />
 
             <BottomTabs visibleTabs={visibleTabs} safeTab={safeTab} goTab={goTab} />
         </div>

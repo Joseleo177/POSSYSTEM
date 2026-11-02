@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { api, recordarSesion } from "../services/api";
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { api, recordarSesion, setSucursalesFiltro } from "../services/api";
 import { hasPermission } from "../constants/permissions";
 import { initSSE, closeSSE, onSSE } from "../services/sse";
 import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBrandColor } from "../helpers/brandColor";
@@ -17,6 +17,39 @@ const CURRENCIES_REFRESH_MS = 60_000;
 // color a medio segundo de haber entrado.
 applyRememberedBrandColor();
 
+// ── Sucursales de trabajo ────────────────────────────────────
+// Como las empresas en Odoo: al entrar se elige la sucursal ACTUAL (con la que se vende, se
+// ajusta el inventario y se ve el catálogo) y en la barra se pueden marcar otras para ver
+// sus listados y reportes juntos. Va por empresa y usuario, y se borra en cada inicio de
+// sesión para que la pregunta se repita; una recarga de la página la conserva.
+const claveSucursal = (emp) => `nxus_sucursal_${emp.company_id ?? 0}_${emp.id}`;
+
+// Lo que viene del servidor. Una respuesta vieja (sin `sucursales`) se arma con las asignadas.
+const sucursalesDe = (emp) => emp?.sucursales
+  ?? (emp?.warehouses || []).map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+
+// Deja solo ids que sigan siendo del usuario. Sin actual válida no hay selección: se pregunta.
+function normalizarSeleccion(sel, lista) {
+  const ids = new Set(lista.map(w => w.id));
+  if (!sel || !ids.has(sel.actual)) return null;
+  const marcadas = [...new Set([sel.actual, ...(sel.marcadas || [])])].filter(id => ids.has(id));
+  return { actual: sel.actual, marcadas };
+}
+
+function leerSeleccion(emp, lista) {
+  if (lista.length === 1) return { actual: lista[0].id, marcadas: [lista[0].id] };
+  try { return normalizarSeleccion(JSON.parse(localStorage.getItem(claveSucursal(emp)) || "null"), lista); }
+  catch { return null; }
+}
+
+// La cabecera se fija ANTES de que se monte cualquier pantalla: los efectos de los hijos corren
+// antes que los del proveedor y su primera petición ya tiene que ir recortada. Marcadas todas,
+// no se manda nada: el servidor responde como siempre.
+function aplicarFiltro(sel, lista) {
+  const todas = !sel || sel.marcadas.length >= lista.length;
+  setSucursalesFiltro(todas ? null : sel.marcadas);
+}
+
 export function AppProvider({ children }) {
   // ── Auth ───────────────────────────────────────────────────
   const [employee, setEmployee]     = useState(null);
@@ -29,7 +62,13 @@ export function AppProvider({ children }) {
     // api.js). Si ni eso hay, el token se conserva: un corte de red no prueba que la sesión
     // sea mala, y borrarlo dejaba fuera a la caja justo cuando volvía de un apagón.
     api.auth.me()
-      .then(res => { setEmployee(res.employee); setAuthChecked(true); })
+      .then(res => {
+        // El filtro de sucursales va puesto antes de tener empleado: el carrito y el resto
+        // de los proveedores consultan en cuanto lo tienen, antes que el efecto de abajo.
+        if (res.employee) aplicarFiltro(leerSeleccion(res.employee, sucursalesDe(res.employee)), sucursalesDe(res.employee));
+        setEmployee(res.employee);
+        setAuthChecked(true);
+      })
       .catch(e => {
         if (!esSinServidor(e)) localStorage.removeItem("pos_token");
         setAuthChecked(true);
@@ -42,8 +81,81 @@ export function AppProvider({ children }) {
   // sesión, y solo con las ventas de la empresa con la que se entró.
   useEffect(() => { if (employee?.company_id) iniciarSincronizacion(employee.company_id); }, [employee?.company_id]);
 
-  const login  = (emp) => { recordarSesion(emp); setEmployee(emp); };
+  const login  = (emp) => {
+    recordarSesion(emp);
+    // Cada inicio de sesión vuelve a preguntar la sucursal: la de ayer no tiene por qué ser la de hoy.
+    try { localStorage.removeItem(claveSucursal(emp)); } catch { /* modo privado */ }
+    setEmployee(emp);
+  };
   const logout = () => { localStorage.removeItem("pos_token"); setEmployee(null); };
+
+  // ── Sucursales ─────────────────────────────────────────────
+  const sucursales = useMemo(() => sucursalesDe(employee), [employee]);
+  const [seleccion, setSeleccion] = useState(null);
+  // La selección se lee en un efecto: hasta entonces no se sabe si hay que preguntar, y sin
+  // esta marca la pantalla de elegir sucursal asomaba un instante en cada recarga.
+  const [seleccionLista, setSeleccionLista] = useState(false);
+
+  // Al tener empleado (login o recarga) se recupera lo elegido, si sigue valiendo.
+  const firmaSucursales = sucursales.map(w => w.id).join(",");
+  useEffect(() => {
+    if (!employee) { setSeleccion(null); setSeleccionLista(false); setSucursalesFiltro(null); return; }
+    const sel = leerSeleccion(employee, sucursales);
+    aplicarFiltro(sel, sucursales);
+    setSeleccion(sel);
+    setSeleccionLista(true);
+  }, [employee?.id, employee?.company_id, firmaSucursales]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const guardarSeleccion = useCallback((sel) => {
+    aplicarFiltro(sel, sucursales);
+    setSeleccion(sel);
+    if (employee) {
+      try { localStorage.setItem(claveSucursal(employee), JSON.stringify(sel)); } catch { /* modo privado */ }
+    }
+  }, [employee, sucursales]);
+
+  // Clic en el nombre: trabajar solo en esa.
+  const elegirSucursal = useCallback((id) => guardarSeleccion({ actual: id, marcadas: [id] }), [guardarSeleccion]);
+
+  // Casilla: sumarla o quitarla de lo que se ve. La última no se puede quitar, y si se quita la
+  // actual pasa a serlo la primera que quede marcada.
+  const alternarSucursal = useCallback((id) => {
+    if (!seleccion) return;
+    const marcada = seleccion.marcadas.includes(id);
+    if (marcada && seleccion.marcadas.length === 1) return;
+    const marcadas = marcada
+      ? seleccion.marcadas.filter(x => x !== id)
+      : sucursales.map(w => w.id).filter(x => x === id || seleccion.marcadas.includes(x));
+    const actual = marcadas.includes(seleccion.actual) ? seleccion.actual : marcadas[0];
+    guardarSeleccion({ actual, marcadas });
+  }, [seleccion, sucursales, guardarSeleccion]);
+
+  // Pasar a trabajar en otra sucursal sin soltar las que ya se miraban (p. ej. para cobrar un
+  // pedido de ella desde su caja).
+  const trabajarEn = useCallback((id) => {
+    if (!seleccion) return guardarSeleccion({ actual: id, marcadas: [id] });
+    const marcadas = sucursales.map(w => w.id).filter(x => x === id || seleccion.marcadas.includes(x));
+    guardarSeleccion({ actual: id, marcadas });
+  }, [seleccion, sucursales, guardarSeleccion]);
+
+  const marcarTodas = useCallback(() => {
+    if (!seleccion) return;
+    guardarSeleccion({ actual: seleccion.actual, marcadas: sucursales.map(w => w.id) });
+  }, [seleccion, sucursales, guardarSeleccion]);
+
+  const sucursalActual = seleccion ? sucursales.find(w => w.id === seleccion.actual) || null : null;
+  const sucursalesMarcadas = seleccion ? sucursales.filter(w => seleccion.marcadas.includes(w.id)) : [];
+  // Para los títulos de PDF y Excel: vacía si se ve todo, como antes con "Todas las sucursales".
+  const etiquetaSucursales = sucursalesMarcadas.length && sucursalesMarcadas.length < sucursales.length
+    ? sucursalesMarcadas.map(w => w.name).join(", ") : "";
+  // Sin sucursales (usuario sin almacén asignado) no hay nada que preguntar.
+  const faltaSucursal = !!employee && seleccionLista && sucursales.length > 1 && !seleccion;
+  // Cambia con cada cambio de sucursales: PosApp la usa de `key` para volver a montar la
+  // pantalla, que así recarga todo con el nuevo recorte.
+  // Vacía mientras falta elegir; "sin" para el usuario que no tiene ninguna.
+  const seleccionKey = seleccion
+    ? `${seleccion.actual}:${seleccion.marcadas.join(",")}`
+    : (employee && seleccionLista && !sucursales.length ? "sin" : "");
 
   // Vuelve a pedir los almacenes del usuario tras crear o asignar uno. Solo se reemplaza el
   // empleado si la lista cambió: muchos efectos dependen de `employee` y recargarían todo.
@@ -52,8 +164,10 @@ export function AppProvider({ children }) {
       const res = await api.auth.me();
       const fresh = res.employee?.warehouses;
       if (!Array.isArray(fresh)) return;
-      const firma = (ws) => (ws || []).map(w => `${w.id}:${w.name}`).sort().join("|");
-      setEmployee(prev => (!prev || firma(prev.warehouses) === firma(fresh)) ? prev : { ...prev, warehouses: fresh });
+      const nuevas = res.employee?.sucursales;
+      const firma = (ws) => (ws || []).map(w => `${w.id}:${w.name}:${w.sells}`).sort().join("|");
+      setEmployee(prev => (!prev || (firma(prev.warehouses) === firma(fresh) && firma(prev.sucursales) === firma(nuevas)))
+        ? prev : { ...prev, warehouses: fresh, ...(nuevas ? { sucursales: nuevas } : {}) });
     } catch {}
   }, []);
 
@@ -141,11 +255,17 @@ export function AppProvider({ children }) {
     if (!employee) return;
     loadSettings();
     loadCurrencies();
-    loadJournals();
     loadBanks();
     loadPaymentMethods();
     loadCategories();
   }, [employee]);
+
+  // Los diarios dependen de las sucursales marcadas: se cargan una vez elegidas, y de nuevo
+  // con cada cambio.
+  useEffect(() => {
+    if (!employee || !seleccionKey) return;
+    loadJournals();
+  }, [seleccionKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── SSE: actualizaciones en tiempo real ─────────────────────
   useEffect(() => {
@@ -224,6 +344,9 @@ export function AppProvider({ children }) {
     <AppContext.Provider value={{
       // Auth
       employee, authChecked, login, logout, can, refreshEmployee,
+      // Sucursales
+      sucursales, sucursalActual, sucursalesMarcadas, etiquetaSucursales, faltaSucursal, seleccionKey,
+      elegirSucursal, alternarSucursal, marcarTodas, trabajarEn,
       // Nav
       pendingNav, setPendingNav, navigateTo,
       // Actions

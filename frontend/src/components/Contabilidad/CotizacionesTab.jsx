@@ -174,7 +174,8 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
 
     const handleLoadToCart = async (quot) => {
         q.setSelectedQuot(null);
-        await loadFromQuotation(quot);
+        // Con la cotización de otra sucursal no se carga nada: se avisa y se queda aquí.
+        if (await loadFromQuotation(quot) === false) return;
         navigateTo("Cobro");
     };
 

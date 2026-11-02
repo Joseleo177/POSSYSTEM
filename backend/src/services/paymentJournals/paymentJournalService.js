@@ -1,6 +1,6 @@
 const { PaymentJournal, PaymentJournalWarehouse, PaymentJournalMethod, Currency, Bank, Sale, Warehouse, Sequelize, sequelize } = require("../../models");
 const { localDate, TZ } = require("../reports/shared");
-const { visibleWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
+const { visibleWarehouseIds, scopeWarehouseIds, isAdmin, assertWarehouseAccess } = require("../../middleware/auth");
 const { expenseRefSql } = require("../../utils/expenseReference");
 
 function flattenJournal(j) {
@@ -79,7 +79,7 @@ async function warehouseFilter(req, wid = null) {
     };
   }
 
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   if (allowed === null) {                                          // admin: sin recorte
     return { whP: '', whI: '', whE: '', whPBare: '', whIBare: '', whEBare: '', whPCount: '' };
   }
@@ -112,7 +112,7 @@ async function journalScope(req, wid = null) {
     await assertWarehouseAccess(req, wid);
     return { [Sequelize.Op.and]: [journalServes(parseInt(wid))] };
   }
-  const allowed = await visibleWarehouseIds(req);
+  const allowed = await scopeWarehouseIds(req);
   if (allowed === null) return {};                    // admin: sin recorte
   const list = allowed.filter(Number.isInteger);
   if (!list.length) return {};
