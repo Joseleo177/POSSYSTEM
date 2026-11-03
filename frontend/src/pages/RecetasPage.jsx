@@ -103,6 +103,7 @@ export default function RecetasPage() {
 
             <PreparationModal productId={prepId} warehouseId={warehouseId}
                 onClose={() => setPrepId(null)}
+                onOpenExisting={id => setPrepId(id)}
                 onSaved={() => { setPrepId(null); refresh(); }}
                 onProduce={canProduce ? p => { setPrepId(null); setProduce({ product_id: p.product_id }); } : null} />
 

@@ -6,6 +6,7 @@ import ConfirmModal from "../ui/ConfirmModal";
 import { Spinner } from "../ui/Spinner";
 import AddonPicker, { faltante, precioExtras } from "./AddonPicker";
 import CuentaAcciones from "./CuentaAcciones";
+import { useApp } from "../../context/AppContext";
 
 // El menú de cada sucursal se recuerda mientras la sesión esté abierta: el mesonero entra y
 // sale de las mesas toda la noche, y el menú no cambia de una mesa a otra.
@@ -39,6 +40,7 @@ const Icono = {
     check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />,
     x:     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />,
     info:  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    carta: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4h10a1 1 0 011 1v15l-3-2-3 2-3-2-3 2V5a1 1 0 011-1zm2 4h6m-6 4h6" />,
 };
 const Svg = ({ d, className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">{d}</svg>;
 
@@ -137,9 +139,6 @@ function FichaPlato({ p, warehouseId, sym, onAdd, onClose }) {
                                     </ul>
                                 </div>
                             )}
-                            {!corta && !detalle.description?.length && !detalle.incluye?.length && !detalle.lleva?.length && !detalle.groups?.length && (
-                                <p className="text-[13px] text-content-subtle">Este plato todavía no tiene descripción. Se carga en Catálogo, en la ficha del producto.</p>
-                            )}
                             {!agotado && detalle.groups?.length > 0 && (
                                 <div className="pt-1 border-t border-border/60 dark:border-white/[0.06]">
                                     <div className="pt-4"><AddonPicker groups={detalle.groups} value={opciones} onChange={setOpciones} sym={sym} /></div>
@@ -220,14 +219,15 @@ function Plato({ p, qty, total = qty, sym, onAdd, onChange, onOpen }) {
                     <img src={resolveImageUrl(p.image_url)} alt={p.name} loading="lazy" onError={imgRetryOnError}
                         className={`w-full h-full object-cover ${agotado ? "grayscale opacity-50" : ""}`} />
                 ) : (
-                    <span className="absolute inset-0 flex items-center justify-center text-content-subtle/50"><Svg d={Icono.plato} className="w-10 h-10" /></span>
+                    <span className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-brand-500/10 to-brand-500/25 text-brand-600/60 dark:text-brand-300/60"><Svg d={Icono.plato} className="w-10 h-10" /></span>
                 )}
                 {agotado && (
                     <span className="absolute inset-x-0 bottom-0 py-1 bg-black/60 text-white text-[12px] font-semibold">Agotado</span>
                 )}
-                {/* Siempre visible, sin depender del cursor: en la tablet no hay hover. */}
-                <span className="absolute top-2 left-2 h-7 pl-1.5 pr-2.5 rounded-full bg-black/55 text-white text-[12px] font-medium flex items-center gap-1 backdrop-blur-sm">
-                    <Svg d={Icono.info} className="w-3.5 h-3.5" /> Ver
+                {/* Siempre visible, sin depender del cursor (en la tablet no hay hover), pero discreto:
+                    la tablet se le muestra al cliente y la pastilla "Ver" sobre cada foto se veía a sistema. */}
+                <span aria-hidden="true" className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/40 text-white flex items-center justify-center backdrop-blur-sm">
+                    <Svg d={Icono.info} className="w-4 h-4" />
                 </span>
                 {total > 0 && (
                     <span className="absolute top-2 right-2 min-w-[28px] h-7 px-2 rounded-full bg-brand-600 text-white text-[13px] font-bold flex items-center justify-center tabular-nums shadow">
@@ -277,11 +277,17 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
     const [ficha, setFicha] = useState(null);             // plato cuya ficha está abierta
     const [tocada, setTocada] = useState(false);          // la cuenta cambió (dividir, mover, pidió la cuenta)
     const buscador = useRef(null);
+    // "Mostrar al cliente": la tablet pasa a ser la carta. Sin cuentas, rondas ni totales de la
+    // mesa; el cliente puede sumar platos y el mesonero revisa y envía al volver.
+    const [cliente, setCliente] = useState(false);
+    const { companyInfo } = useApp();
 
     useEffect(() => {
         api.warehouses.getProducts(warehouseId, { sellable_only: true, limit: 1000 })
             .then(r => {
-                const lista = (r.data || []).filter(p => !p.is_variant_parent);
+                // Lo mismo que la carta del QR (services/mesaPublica): solo lo que tiene precio. Un
+                // insumo marcado como vendible y a 0 (el aceite) salía en el menú.
+                const lista = (r.data || []).filter(p => !p.is_variant_parent && parseFloat(p.price) > 0);
                 menus.set(warehouseId, lista);
                 setMenu(lista);
             })
@@ -311,6 +317,18 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
         const t = q.trim().toLowerCase();
         return (menu || []).filter(p => (cat === "todo" || p.category_name === cat) && (!t || p.name.toLowerCase().includes(t)));
     }, [menu, cat, q]);
+    // "Todo el menú" sin buscar se lee como una carta: por secciones, cada una con su título.
+    const secciones = useMemo(() => {
+        if (cat !== "todo" || q.trim()) return null;
+        const m = new Map();
+        for (const p of visibles) {
+            const k = p.category_name || "";
+            if (!m.has(k)) m.set(k, []);
+            m.get(k).push(p);
+        }
+        return [...m.entries()].sort(([a], [b]) => (!a ? 1 : !b ? -1 : a.localeCompare(b, "es")));
+    }, [visibles, cat, q]);
+    const nombreCat = (c) => (c ? c.charAt(0) + c.slice(1).toLowerCase() : "Otros");
 
     // Un plato con nota es otra línea: "sin cebolla" y "normal" van separados a la cocina. Las
     // tarjetas del menú suman sobre la línea SIN nota del producto.
@@ -371,7 +389,7 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
         const onKey = (e) => {
             if (e.key !== "Escape") return;
             e.stopPropagation();
-            if (ficha) setFicha(null); else if (hoja) setHoja(false); else volver();
+            if (ficha) setFicha(null); else if (hoja) setHoja(false); else if (cliente) setCliente(false); else volver();
         };
         window.addEventListener("keydown", onKey, true);
         return () => window.removeEventListener("keydown", onKey, true);
@@ -537,22 +555,48 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
         <div className="fixed inset-0 z-[150] bg-surface-2 dark:bg-surface-dark flex flex-col modal-in">
             {/* Cabecera: volver, la mesa y el buscador. */}
             <header className="shrink-0 h-16 px-3 sm:px-4 flex items-center gap-3 bg-white dark:bg-surface-dark-2 border-b border-border/40 dark:border-white/[0.06]">
-                <button onClick={volver} aria-label="Volver al mapa" title="Volver al mapa"
-                    className="w-11 h-11 shrink-0 rounded-xl btn-outline flex items-center justify-center">
-                    <Svg d={Icono.atras} />
-                </button>
-                <div className="min-w-0">
-                    <h2 className="text-[20px] font-semibold tracking-[-0.015em] text-content dark:text-white leading-tight truncate">{table.name}</h2>
-                    <p className="text-[12px] text-content-subtle truncate tabular-nums">
-                        {cuenta ? `Cuenta ${fmtMoney(cuenta.total, sym)} · ${rondasMesa.length} ${rondasMesa.length === 1 ? "ronda" : "rondas"}` : `${table.seats} ${table.seats === 1 ? "puesto" : "puestos"} · mesa libre`}
-                    </p>
-                </div>
+                {cliente ? (
+                    // Modo cliente: la carta con la marca de la tienda; nada de la cuenta de la mesa.
+                    <div className="min-w-0 flex items-center gap-3">
+                        {companyInfo?.logo_url && (
+                            <img src={resolveImageUrl(companyInfo.logo_url)} alt="" className="h-11 max-w-[120px] object-contain shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                            <h2 className="text-[20px] font-semibold tracking-[-0.015em] text-content dark:text-white leading-tight truncate">{companyInfo?.name || "Nuestra carta"}</h2>
+                            <p className="text-[12px] text-content-subtle truncate">Carta · {table.name}</p>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <button onClick={volver} aria-label="Volver al mapa" title="Volver al mapa"
+                            className="w-11 h-11 shrink-0 rounded-xl btn-outline flex items-center justify-center">
+                            <Svg d={Icono.atras} />
+                        </button>
+                        <div className="min-w-0">
+                            <h2 className="text-[20px] font-semibold tracking-[-0.015em] text-content dark:text-white leading-tight truncate">{table.name}</h2>
+                            <p className="text-[12px] text-content-subtle truncate tabular-nums">
+                                {cuenta ? `Cuenta ${fmtMoney(cuenta.total, sym)} · ${rondasMesa.length} ${rondasMesa.length === 1 ? "ronda" : "rondas"}` : `${table.seats} ${table.seats === 1 ? "puesto" : "puestos"} · mesa libre`}
+                            </p>
+                        </div>
+                    </>
+                )}
                 <label className="ml-auto relative w-full max-w-[320px] hidden sm:block">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle"><Svg d={Icono.lupa} /></span>
                     <input ref={buscador} value={q} onChange={e => setQ(e.target.value)} autoComplete="off" type="search"
                         placeholder="Buscar en el menú"
                         className="w-full h-11 pl-10 pr-3 rounded-xl border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.04] text-[14px] text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                 </label>
+                {cliente ? (
+                    <button onClick={() => setCliente(false)} className="btn-accent h-11 px-5 rounded-xl text-[14px] font-semibold shrink-0 ml-auto sm:ml-0">
+                        Listo
+                    </button>
+                ) : (
+                    <button onClick={() => { setCliente(true); setHoja(false); }} title="Mostrar la carta al cliente"
+                        className="btn-outline h-11 px-3 sm:px-4 rounded-xl text-[13px] font-semibold shrink-0 ml-auto sm:ml-0 inline-flex items-center gap-2">
+                        <Svg d={Icono.carta} />
+                        <span className="hidden md:inline">Mostrar al cliente</span>
+                    </button>
+                )}
             </header>
 
             <div className="flex-1 min-h-0 flex">
@@ -570,40 +614,57 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
                                     className={`h-10 px-4 rounded-full text-[13px] font-semibold whitespace-nowrap shrink-0 border transition-colors ${cat === c
                                         ? "bg-content text-white border-content dark:bg-white dark:text-surface-dark dark:border-white"
                                         : "bg-white dark:bg-white/[0.04] text-content-subtle border-border dark:border-white/10"}`}>
-                                    {c === "todo" ? "Todo el menú" : c.charAt(0) + c.slice(1).toLowerCase()}
+                                    {c === "todo" ? "Todo el menú" : nombreCat(c)}
                                 </button>
                             ))}
                         </div>
                     </div>
-                    <div className="flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 pt-2 pb-28 lg:pb-6">
+                    <div className={`flex-1 min-h-0 overflow-y-auto px-3 sm:px-4 pt-2 pb-28 ${cliente ? "" : "lg:pb-6"}`}>
                         {!menu ? (
                             <div className="py-16 flex justify-center"><Spinner /></div>
                         ) : visibles.length === 0 ? (
                             <div className="py-16 text-center text-[13px] text-content-subtle">Nada en el menú con ese nombre.</div>
                         ) : (
-                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3">
-                                {visibles.map(p => (
-                                    <Plato key={p.id} p={p} sym={sym} qty={qtyEnMenu(p)} total={ronda.filter(l => l.product.id === p.id).reduce((s, l) => s + l.qty, 0)} onAdd={agregar} onChange={setQtyMenu} onOpen={setFicha} />
-                                ))}
-                            </div>
+                            (secciones || [["", visibles]]).map(([nombre, platos]) => (
+                                <section key={nombre || "_"} className={secciones ? "pt-2 pb-4" : ""}>
+                                    {secciones && (
+                                        <h3 className="px-0.5 pb-2.5 text-[18px] font-semibold tracking-[-0.01em] text-content dark:text-white">{nombreCat(nombre)}</h3>
+                                    )}
+                                    <div className={`grid grid-cols-2 sm:grid-cols-3 gap-3 ${cliente ? "lg:grid-cols-4 xl:grid-cols-5" : "xl:grid-cols-4 2xl:grid-cols-5"}`}>
+                                        {platos.map(p => (
+                                            <Plato key={p.id} p={p} sym={sym} qty={qtyEnMenu(p)} total={ronda.filter(l => l.product.id === p.id).reduce((s, l) => s + l.qty, 0)} onAdd={agregar} onChange={setQtyMenu} onOpen={setFicha} />
+                                        ))}
+                                    </div>
+                                </section>
+                            ))
                         )}
                     </div>
                 </main>
 
                 {/* Ronda: columna fija desde lg. */}
-                <aside className="hidden lg:flex w-[380px] shrink-0 flex-col bg-white dark:bg-surface-dark-2 border-l border-border/40 dark:border-white/[0.06]">
+                <aside className={`${cliente ? "hidden" : "hidden lg:flex"} w-[380px] shrink-0 flex-col bg-white dark:bg-surface-dark-2 border-l border-border/40 dark:border-white/[0.06]`}>
                     {panelRonda}
                 </aside>
             </div>
 
+            {/* Modo cliente: lo que lleva pedido, a la vista. Revisarlo y enviarlo es del mesonero. */}
+            {cliente && ronda.length > 0 && (
+                <div className="fixed inset-x-0 bottom-0 p-3 flex justify-center pointer-events-none">
+                    <div className="pointer-events-auto h-14 px-5 rounded-full bg-content text-white dark:bg-white dark:text-surface-dark shadow-[0_12px_32px_-8px_rgb(0_0_0/0.45)] flex items-center gap-4 text-[15px] font-semibold">
+                        <span>Tu pedido · {fmtQty(unidades)} {unidades === 1 ? "plato" : "platos"}</span>
+                        <span className="tabular-nums">{fmtMoney(totalRonda, sym)}</span>
+                    </div>
+                </div>
+            )}
+
             {/* Tablet vertical y teléfono: la ronda se abre desde la barra de abajo. */}
-            <div className="lg:hidden fixed inset-x-0 bottom-0 p-3 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur border-t border-border/40 dark:border-white/[0.06]">
+            {!cliente && <div className="lg:hidden fixed inset-x-0 bottom-0 p-3 bg-white/95 dark:bg-surface-dark-2/95 backdrop-blur border-t border-border/40 dark:border-white/[0.06]">
                 <button onClick={() => setHoja(true)}
                     className={`w-full h-14 rounded-xl px-4 flex items-center justify-between text-[15px] font-semibold ${ronda.length ? "btn-accent" : "btn-outline"}`}>
                     <span>{ronda.length ? `Ver ronda · ${fmtQty(unidades)} ${unidades === 1 ? "plato" : "platos"}` : "Ver la mesa"}</span>
                     {ronda.length > 0 && <span className="tabular-nums">{fmtMoney(totalRonda, sym)}</span>}
                 </button>
-            </div>
+            </div>}
             {hoja && (
                 <div className="lg:hidden fixed inset-0 z-[160] flex flex-col justify-end bg-black/40" onClick={() => setHoja(false)}>
                     <div onClick={e => e.stopPropagation()} className="h-[88%] bg-white dark:bg-surface-dark-2 rounded-t-2xl flex flex-col overflow-hidden">

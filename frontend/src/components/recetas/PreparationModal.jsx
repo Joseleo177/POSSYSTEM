@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useDebounce } from "../../hooks/useDebounce";
 import Modal from "../ui/Modal";
 import Money from "../ui/Money";
 import Segmented from "../ui/Segmented";
@@ -18,8 +19,13 @@ import IngredientLines, { aLinea, calcular } from "./IngredientLines";
 // que debería costar; el real sale de cada tanda que se registra.
 //
 // `productId`: null cerrado · "new" nueva · id de la preparación.
+//
+// Nueva: el nombre busca primero entre los productos (la salsa que ya se compra, la masa que ya
+// está en el catálogo). Si existe se usa ese producto, con su existencia y su costo; si ya es
+// preparación, se abre (`onOpenExisting`); y si no existe, se crea. Antes siempre creaba uno
+// nuevo y el producto quedaba repetido (pedido del usuario, 03-11-2026).
 
-export default function PreparationModal({ productId, warehouseId, onClose, onSaved, onProduce }) {
+export default function PreparationModal({ productId, warehouseId, onClose, onSaved, onProduce, onOpenExisting }) {
     const { notify, baseCurrency, can } = useApp();
     const canEdit = can("products.edit");
     const money = (n) => fmtBase(n, baseCurrency);
@@ -35,10 +41,15 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
     const [instructions, setInstructions] = useState("");
     const [minutos, setMinutos] = useState("");
     const [removing, setRemoving] = useState(false);
+    // Producto existente que pasa a ser preparación (null = se crea uno con `name`).
+    const [base, setBase] = useState(null);
+    // Ya se eligió qué es: un producto existente o "crear nuevo". Hasta entonces solo se busca.
+    const [elegido, setElegido] = useState(false);
 
     useEffect(() => {
         if (!open) return;
         setPrep(null); setName(""); setUnit("PORCION"); setRinde(""); setLines([]); setInstructions(""); setMinutos("");
+        setBase(null); setElegido(false);
         if (nueva) return;
         let vivo = true;
         setLoading(true);
@@ -71,7 +82,8 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
     }]));
 
     const save = async () => {
-        if (nueva && name.trim().length < 2) return notify("Escribe el nombre de la preparación", "err");
+        if (nueva && !elegido) return notify("Busca el producto o créalo como preparación nueva", "err");
+        if (nueva && !base && name.trim().length < 2) return notify("Escribe el nombre de la preparación", "err");
         if (!(rindeN > 0)) return notify("Escribe cuánto rinde una tanda", "err");
         if (!lines.length) return notify("Agrega al menos un ingrediente", "err");
         const vacia = lines.find((l, i) => !(calc[i].neto > 0));
@@ -85,7 +97,7 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
         };
         try {
             const r = nueva
-                ? await api.production.createPreparation({ ...body, name: name.trim(), unit })
+                ? await api.production.createPreparation(base ? { ...body, product_id: base.id } : { ...body, name: name.trim(), unit })
                 : await api.production.savePreparation(productId, body);
             notify("Preparación guardada");
             onSaved?.(r.data);
@@ -101,6 +113,13 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
     );
 
     const titulo = nueva ? "Nueva preparación" : prep ? toNameCase(prep.name) : "Preparación";
+
+    const usarProducto = (p) => {
+        if (p.is_preparation) { onOpenExisting?.(p.id); return; }
+        setBase(p); setName(p.name); setUnit(String(p.unit).toUpperCase()); setElegido(true);
+    };
+    const crearNuevo = (texto) => { setBase(null); setName(texto); setElegido(true); };
+    const cambiar = () => { setBase(null); setElegido(false); };
 
     return (
         <>
@@ -123,7 +142,7 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
                                     </button>
                                 )}
                                 <button onClick={onClose} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
-                                <Button onClick={save} className="h-12 sm:h-10 px-5">{nueva ? "Crear preparación" : "Guardar"}</Button>
+                                {(!nueva || elegido) && <Button onClick={save} className="h-12 sm:h-10 px-5">{nueva ? "Crear preparación" : "Guardar"}</Button>}
                             </div>
                         ) : (
                             <div className="flex flex-col-reverse sm:flex-row gap-2">
@@ -137,18 +156,34 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
                     <div className="py-16 flex justify-center"><Spinner /></div>
                 ) : (
                     <div className="space-y-6">
-                        {nueva && (
+                        {nueva && !elegido && (
+                            <Field label="Qué vas a preparar">
+                                <PrepPicker warehouseId={warehouseId} inicial={name} onUse={usarProducto} onCreate={crearNuevo} />
+                            </Field>
+                        )}
+                        {nueva && elegido && (
                             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
-                                <Field label="Nombre">
-                                    <input className={INPUT} value={name} onChange={e => setName(e.target.value)} maxLength={200} autoComplete="off"
-                                        placeholder="Sopa de res, salsa de la casa, masa de arepa…" data-autofocus />
+                                <Field label={base ? "Producto" : "Nombre"} hint={base ? "Ya existe: se usa con su existencia y su costo" : "Preparación nueva"}>
+                                    <div className="flex items-center gap-2">
+                                        {base ? (
+                                            <div className={`${INPUT} flex items-center font-semibold min-w-0`}><span className="truncate">{toNameCase(base.name)}</span></div>
+                                        ) : (
+                                            <input className={INPUT} value={name} onChange={e => setName(e.target.value)} maxLength={200} autoComplete="off" data-autofocus />
+                                        )}
+                                        <button type="button" onClick={cambiar} className="btn-outline h-10 px-3 rounded-lg text-[13px] font-medium shrink-0">Cambiar</button>
+                                    </div>
                                 </Field>
                                 <Field label="Se cuenta en">
-                                    <Segmented value={unit} onChange={setUnit} options={UNIDADES_PREP.map(u => ({ key: u.key, label: u.label }))} />
+                                    {base ? (
+                                        <div className="h-10 flex items-center text-[13px] font-semibold text-content dark:text-white">{unidad.label}</div>
+                                    ) : (
+                                        <Segmented value={unit} onChange={setUnit} options={UNIDADES_PREP.map(u => ({ key: u.key, label: u.label }))} />
+                                    )}
                                 </Field>
                             </div>
                         )}
 
+                        {(!nueva || elegido) && <>
                         <dl className={`${CARD} px-4 py-3 grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3`}>
                             <div className="min-w-0">
                                 <dt className="text-[12px] text-content-subtle">Una tanda rinde</dt>
@@ -177,7 +212,7 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
                                 medidaDe={medidaTanda} netoLabel="Lleva" />
                             {canEdit && (
                                 <div className="mt-3">
-                                    <IngredientSearch warehouseId={warehouseId} onPick={agregar} exclude={yaEsta} excludeId={prep?.product_id ?? null}
+                                    <IngredientSearch warehouseId={warehouseId} onPick={agregar} exclude={yaEsta} excludeId={prep?.product_id ?? base?.id ?? null}
                                         placeholder="Agregar ingrediente: carne, papa, auyama…" />
                                 </div>
                             )}
@@ -204,6 +239,8 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
                             </Field>
                         </div>
 
+                        </>}
+
                         {canEdit && !nueva && prep && (
                             <button onClick={() => setRemoving(true)} className="sm:hidden w-full h-12 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400">
                                 Quitar ficha
@@ -229,5 +266,70 @@ export default function PreparationModal({ productId, warehouseId, onClose, onSa
                 }}
             />
         </>
+    );
+}
+
+// Busca entre los productos que pueden ser preparación (con existencia propia). Cada resultado
+// se usa tal cual; uno que ya es preparación se abre; y al final, crear uno nuevo con lo escrito.
+function PrepPicker({ warehouseId, inicial = "", onUse, onCreate }) {
+    const [q, setQ] = useState(inicial);
+    const dq = useDebounce(q, 250);
+    const [res, setRes] = useState(null);
+
+    useEffect(() => {
+        if (!dq.trim()) { setRes(null); return; }
+        let vivo = true;
+        api.recipes.ingredients({ search: dq.trim(), ...(warehouseId ? { warehouse_id: warehouseId } : {}) })
+            .then(r => { if (vivo) setRes(r.data || []); })
+            .catch(() => { if (vivo) setRes([]); });
+        return () => { vivo = false; };
+    }, [dq, warehouseId]);
+
+    const unidadDe = (p) => UNIDADES_PREP.find(u => u.key === String(p.unit || "").toUpperCase());
+    const texto = q.trim();
+    const exacto = res?.some(p => p.name.trim().toLowerCase() === texto.toLowerCase());
+
+    return (
+        <div className="space-y-2">
+            <div className="relative">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input className={`${INPUT} pl-9`} value={q} onChange={e => setQ(e.target.value)} maxLength={200} autoComplete="off" spellCheck={false}
+                    placeholder="Busca el producto: sopa de res, salsa de la casa, masa de arepa…" data-autofocus />
+            </div>
+            {texto.length >= 2 && res && dq === q && (
+                <div className="rounded-lg border border-border/70 dark:border-white/10 divide-y divide-border/60 dark:divide-white/[0.06] overflow-hidden">
+                    {res.length > 0 && (
+                        <div className="max-h-64 overflow-y-auto divide-y divide-border/60 dark:divide-white/[0.06]">
+                            {res.map(p => {
+                                const unidad = unidadDe(p);
+                                return (
+                                    <button key={p.id} type="button" disabled={!unidad} onClick={() => onUse(p)}
+                                        className="w-full flex items-center gap-3 px-3 min-h-11 py-2 text-left hover:bg-surface-2 dark:hover:bg-white/[0.04] disabled:hover:bg-transparent disabled:cursor-not-allowed">
+                                        <span className="flex-1 min-w-0">
+                                            <span className={`block text-[13px] truncate ${unidad ? "text-content dark:text-white" : "text-content-subtle"}`}>{toNameCase(p.name)}</span>
+                                            <span className="block text-[12px] text-content-subtle truncate">
+                                                {p.is_preparation ? "Ya es preparación" : !unidad ? "Se cuenta en otra unidad: no sirve para una tanda"
+                                                    : `${p.sellable ? "Producto que se vende" : "Insumo"} · se cuenta en ${unidad.label.toLowerCase()}`}
+                                            </span>
+                                        </span>
+                                        {unidad && <span className="text-[12px] font-medium text-brand-700 dark:text-brand-300 shrink-0">{p.is_preparation ? "Abrir" : "Usar este"}</span>}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                    {!exacto && (
+                        <button type="button" onClick={() => onCreate(texto)}
+                            className="w-full flex items-center gap-2 px-3 h-11 text-left text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:bg-surface-2 dark:hover:bg-white/[0.04]">
+                            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.25} d="M12 5v14M5 12h14" /></svg>
+                            <span className="truncate">Crear «{texto}» como preparación nueva</span>
+                        </button>
+                    )}
+                </div>
+            )}
+            {texto.length < 2 && <p className="text-[12px] text-content-subtle">Si ya existe en el catálogo, se usa ese mismo producto. Si no, lo creas aquí.</p>}
+        </div>
     );
 }

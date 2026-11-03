@@ -176,6 +176,10 @@ async function createPreparation(req, body = {}) {
         throw fail(`"${p.name}" no lleva existencia propia: una preparación tiene que poder guardarse`);
       }
       if (await RecipeSheet.findOne({ where: { product_id: p.id }, transaction })) throw fail(`"${p.name}" ya tiene ficha`);
+      // Lo que rinde una tanda se cuenta en la unidad del producto: tiene que ser una de estas.
+      if (!UNIDADES.includes(String(p.unit || "").toUpperCase())) {
+        throw fail(`"${p.name}" se cuenta en ${String(p.unit || "otra unidad").toLowerCase()}: una preparación va en porciones, kilos, litros o unidades`);
+      }
     } else {
       const name = String(body.name || "").replace(/\s+/g, " ").trim();
       if (name.length < 2 || name.length > 200) throw fail("Escribe el nombre de la preparación");
