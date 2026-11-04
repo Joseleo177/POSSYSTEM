@@ -38,41 +38,46 @@ export default function RegaloFila({ r, conCliente = false, onChanged }) {
             ? `Anulado ${fmtDateShort(r.voided_at)}${r.void_reason ? ` · ${r.void_reason}` : ""}`
             : `Apartado ${fmtDateShort(r.assigned_at)}${r.assigned_by_name ? ` · ${toNameCase(r.assigned_by_name)}` : ""}`;
 
+    const hayAcciones = (pendiente && puedeDar) || puedeAnular;
+
+    // Una fila por regalo. En escritorio todo va en una línea (qué · para quién · estado y
+    // acciones) para que quepa la ruta entera; en el teléfono las acciones bajan a su renglón.
+    // Entregar va con borde: en una lista de diez, diez botones rojos eran puro ruido.
     return (
-        <div className={`relative px-3.5 py-3 ${pendiente ? "pl-4" : ""}`}>
+        <div className={`relative px-3.5 py-2.5 ${pendiente ? "pl-4" : ""}`}>
             {pendiente && <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px] bg-amber-500" />}
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <p className={`text-[13px] font-semibold text-content dark:text-white ${r.status === "anulado" ? "line-through decoration-1 text-content-subtle" : ""}`}>
+            <div className={`flex flex-col gap-2 ${conCliente
+                ? "md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)_auto] md:items-center md:gap-4"
+                : "sm:flex-row sm:items-center sm:gap-4"}`}>
+                <div className="min-w-0 sm:flex-1">
+                    <p className={`text-[13px] font-semibold text-content dark:text-white truncate ${r.status === "anulado" ? "line-through decoration-1 text-content-subtle" : ""}`}>
                         {fmtCant(r.qty)} × {r.product_name}
                     </p>
-                    {conCliente && (
-                        <p className="text-[13px] text-content dark:text-white/85 truncate">
-                            {toNameCase(r.customer_name)}{r.sector_name ? <span className="text-content-subtle"> · {r.sector_name}</span> : null}
-                        </p>
-                    )}
                     <p className="text-[12px] text-content-subtle tabular-nums truncate">
                         {r.code}{r.invoice_number ? ` · por ${r.invoice_number}` : ""} · {cuando}
                     </p>
-                    {conCliente && pendiente && r.customer_address && (
-                        <p className="text-[12px] text-content-subtle truncate">{r.customer_address}</p>
-                    )}
                 </div>
-                <div className="shrink-0 mt-0.5"><StatusMark status={r.status} map={GIFT_STATUS} /></div>
-            </div>
-            {(pendiente && puedeDar) || puedeAnular ? (
-                <div className="mt-2.5 flex flex-col sm:flex-row gap-2">
-                    {pendiente && puedeDar && (
-                        <Button onClick={entregar} loading={entregando} className="!h-12 sm:!h-9 sm:flex-1">Marcar entregado</Button>
+                {conCliente && (
+                    <div className="min-w-0">
+                        <p className="text-[13px] text-content dark:text-white/85 truncate">
+                            {toNameCase(r.customer_name)}{r.sector_name ? <span className="text-content-subtle"> · {r.sector_name}</span> : null}
+                        </p>
+                        {r.customer_address && <p className="text-[12px] text-content-subtle truncate">{r.customer_address}</p>}
+                    </div>
+                )}
+                <div className="flex items-center gap-2 sm:justify-end">
+                    <span className="shrink-0 mr-auto sm:mr-1"><StatusMark status={r.status} map={GIFT_STATUS} /></span>
+                    {hayAcciones && pendiente && puedeDar && (
+                        <Button variant="ghost" onClick={entregar} loading={entregando} className="!h-12 sm:!h-9 px-3.5">Marcar entregado</Button>
                     )}
-                    {puedeAnular && (
+                    {hayAcciones && puedeAnular && (
                         <button type="button" onClick={() => setAnulando(true)}
-                            className="h-12 sm:h-9 px-3 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/[0.06]">
+                            className="h-12 sm:h-9 px-2.5 rounded-lg text-[13px] font-medium text-content-subtle hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/[0.06]">
                             Anular
                         </button>
                     )}
                 </div>
-            ) : null}
+            </div>
 
             {anulando && <AnularRegaloModal r={r} onClose={() => setAnulando(false)} onDone={() => { setAnulando(false); onChanged?.(); }} />}
         </div>
