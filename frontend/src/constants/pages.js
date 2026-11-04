@@ -18,6 +18,7 @@ import RecetasPage from "../pages/RecetasPage";
 import PedidosPage from "../pages/PedidosPage";
 import ComisionesPage from "../pages/ComisionesPage";
 import AgendaPage from "../pages/AgendaPage";
+import CobranzaPage from "../pages/CobranzaPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
@@ -33,6 +34,7 @@ export const PAGE_COMPONENTS = {
     Inventario: InventarioPage,
     Clientes: ClientesPage,
     Comisiones: ComisionesPage,
+    Cobranza: CobranzaPage,
     Contabilidad: ContabilidadPage,
     Reportes: ReportesPage,
     Empleados: EmpleadosPage,

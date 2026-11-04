@@ -12,7 +12,19 @@ import StatusMark, { statusTone } from "../ui/StatusMark";
 import Money from "../ui/Money";
 import Segmented from "../ui/Segmented";
 import { ledgerRow, stopRow, LedgerSkeleton, LedgerEmpty, JournalDot, RowIcon, RowCta } from "../ui/Ledger";
-import { journalsForWarehouse, fmtDate, toNameCase } from "../../helpers";
+import { journalsForWarehouse, fmtDate, fmtDateShort, toLocalISO, toNameCase } from "../../helpers";
+
+// Un cobro puede registrarse después del día en que se pagó (el cobrador de calle que pasa los
+// abonos días más tarde). La fecha que manda es la del PAGO; la del registro se muestra aparte
+// solo cuando es otro día. Los cobros viejos sin fecha de referencia usan la del registro.
+const diaDelPago = (p) => (p?.reference_date ? String(p.reference_date).slice(0, 10) : null);
+const registradoOtroDia = (p) => {
+    const dia = diaDelPago(p);
+    return !!(dia && p?.created_at && dia !== toLocalISO(new Date(p.created_at)));
+};
+const fmtFechaPago = (p) => (registradoOtroDia(p) ? fmtDateShort(diaDelPago(p)) : fmtDate(p.created_at));
+// "04/11": dd/mm de la fecha completa (con solo día y mes, es-VE quita el cero: "4/11").
+const fmtRegistrado = (p) => fmtDateShort(p.created_at).slice(0, 5);
 
 // Cobro casado con una línea del extracto del banco (Conciliación). Es la confirmación de que
 // el dinero llegó: lo normal, así que va en gris con su visto.
@@ -225,7 +237,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 <th className="pl-4">Referencia</th>
                                 <th>{viewType === "pendientes" ? "Estado" : "Diario"}</th>
                                 <th>Cliente</th>
-                                <th>Fecha</th>
+                                <th>{viewType === "pendientes" ? "Fecha" : "Fecha del pago"}</th>
                                 <th className="text-right">Monto</th>
                                 <th className="pr-4 w-px"><span className="sr-only">Acciones</span></th>
                             </tr>
@@ -295,7 +307,10 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                             <span className="block truncate font-semibold text-content dark:text-white">{toNameCase(item.customer_name) || "Consumidor final"}</span>
                                         </td>
                                         <td>
-                                            <span className="text-[12px] font-medium text-content-subtle tabular-nums whitespace-nowrap">{fmtDate(item.created_at)}</span>
+                                            <span className="text-[12px] font-medium text-content-subtle tabular-nums whitespace-nowrap">{isInvoice ? fmtDate(item.created_at) : fmtFechaPago(item)}</span>
+                                            {!isInvoice && registradoOtroDia(item) && (
+                                                <div className="text-[12px] text-content-subtle tabular-nums whitespace-nowrap">Registrado {fmtRegistrado(item)}</div>
+                                            )}
                                         </td>
                                         <td className="text-right">
                                             {/* Con avance, el monto es el pase completo (el que muestra el banco)
@@ -394,9 +409,12 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 </div>
                                 <div className="mt-1 pr-1 flex items-baseline justify-between gap-3">
                                     <span className="min-w-0 text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(item.customer_name) || "Consumidor final"}</span>
-                                    <span className="shrink-0 text-[12px] text-content-subtle tabular-nums whitespace-nowrap">{fmtDate(item.created_at)}</span>
+                                    <span className="shrink-0 text-[12px] text-content-subtle tabular-nums whitespace-nowrap">{isInvoice ? fmtDate(item.created_at) : fmtFechaPago(item)}</span>
                                 </div>
                                 {detalle && <div className="pr-1 text-[12px] text-content-subtle truncate">{detalle}</div>}
+                                {!isInvoice && registradoOtroDia(item) && (
+                                    <div className="pr-1 text-[12px] text-content-subtle tabular-nums">Registrado {fmtRegistrado(item)}</div>
+                                )}
                                 {item.batch_journal_count > 1 && (
                                     <div className="pr-1 text-[12px] font-medium text-amber-700 dark:text-amber-400">Pago combinado · {item.batch_journal_count} formas</div>
                                 )}
@@ -535,7 +553,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 {[
                                     !conjunto && ["Factura", p.invoice_number || `#${p.sale_id}`],
                                     p.customer_name && ["Cliente", toNameCase(p.customer_name)],
-                                    p.created_at && ["Fecha", fmtDate(p.created_at)],
+                                    p.created_at && ["Fecha del pago", fmtFechaPago(p)],
+                                    registradoOtroDia(p) && ["Registrado", `${fmtDate(p.created_at)}${p.employee_name ? ` · ${toNameCase(p.employee_name)}` : ""}`],
                                     p.payment_method && ["Método", methodName(p.payment_method)],
                                     p.reference_number && ["N° de referencia", p.reference_number],
                                     p.journal_name && ["Banco", p.verified ? "Conciliado con el extracto" : "Sin conciliar"],

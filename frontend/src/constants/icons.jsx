@@ -117,6 +117,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Un punto de mapa sobre una ruta: el cobrador recorre su sector.
+    Cobranza: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M12 21s-6-5.3-6-10a6 6 0 1112 0c0 4.7-6 10-6 10zM12 13a2 2 0 100-4 2 2 0 000 4zM4 21h3m10 0h3"
+            />
+        </svg>
+    ),
     // Una persona con un porcentaje: lo que gana cada vendedor.
     Comisiones: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">

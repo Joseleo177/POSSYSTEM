@@ -476,6 +476,11 @@ export const api = {
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
     // Tasa publicada por el BCV con su fecha valor, sin aplicarla.
     bcv:          (fresh)    => request(`/currencies/bcv${fresh ? "?fresh=1" : ""}`),
+    // Historial: tasa de cada moneda un día (para cobros con fecha anterior), días guardados de
+    // una moneda, y corregir un día pasado.
+    ratesOn:      (date)     => request(`/currencies/rates/on?date=${encodeURIComponent(date)}`),
+    history:      (id, params = {}) => request(`/currencies/${id}/rates?` + new URLSearchParams(params)),
+    setDayRate:   (id, date, rate) => request(`/currencies/${id}/rates/${date}`, { method: "PUT", body: JSON.stringify({ rate }) }),
   },
   journals: {
     getAll:       ()              => request("/payment-journals"),
@@ -753,6 +758,26 @@ export const api = {
     setStatus: (id, status)    => request(`/kitchen/orders/${id}/status`, { method: "PATCH", body: JSON.stringify({ status }) }),
     // Lo que la caja acaba de cobrar, a cocina (restaurante donde se paga antes de pedir).
     fromSale:  (saleId, body)  => request(`/kitchen/sales/${saleId}/ticket`, { method: "POST", body: JSON.stringify(body) }),
+  },
+  // Cobranza por sectores (extra por empresa): ruta del cobrador, abonos y mercancía a crédito.
+  cobranza: {
+    sectores:   (all = false)    => request(`/cobranza/sectores${all ? "?all=1" : ""}`),
+    crearSector:   (body)        => request("/cobranza/sectores", { method: "POST", body: JSON.stringify(body) }),
+    editarSector:  (id, body)    => request(`/cobranza/sectores/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    asignar:    (body)           => request("/cobranza/asignar", { method: "PUT", body: JSON.stringify(body) }),
+    config:     ()               => request("/cobranza/config"),
+    guardarConfig: (body)        => request("/cobranza/config", { method: "PUT", body: JSON.stringify(body) }),
+    productos:  (search)         => request(`/cobranza/productos?search=${encodeURIComponent(search || "")}`),
+    clientes:   (params = {})    => request("/cobranza/clientes?" + new URLSearchParams(params)),
+    ficha:      (id)             => request(`/cobranza/clientes/${id}`),
+    dejarBolsa: (id, body)       => request(`/cobranza/clientes/${id}/bolsas`, { method: "POST", body: JSON.stringify(body) }),
+    abonar:     (id, body)       => request(`/cobranza/clientes/${id}/abonos`, { method: "POST", body: JSON.stringify(body) }),
+    // Regalos: lo que hay para dar en la sucursal del cliente, darlo (o apartarlo), y los de la ruta.
+    regalosOpciones: (id)        => request(`/cobranza/clientes/${id}/regalos/opciones`),
+    darRegalo:  (id, body)       => request(`/cobranza/clientes/${id}/regalos`, { method: "POST", body: JSON.stringify(body) }),
+    regalos:    (params = {})    => request("/cobranza/regalos?" + new URLSearchParams(params)),
+    entregarRegalo: (id)         => request(`/cobranza/regalos/${id}/entregar`, { method: "POST" }),
+    anularRegalo:   (id, body)   => request(`/cobranza/regalos/${id}/anular`, { method: "POST", body: JSON.stringify(body) }),
   },
   // Comisiones por vendedor (extra por empresa). La caja solo usa `sellers`.
   commissions: {

@@ -37,6 +37,8 @@ module.exports = (sequelize, DataTypes) => {
     // Comisiones por vendedor (ver services/commissions): vendedores sin usuario, el vendedor
     // en cada venta y su liquidación. Extra que enciende el superusuario.
     comisiones_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Cobranza por sectores: cobradores de calle que abonan y dejan mercancía a crédito.
+    cobranza_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Agenda de citas (barberías, consultorios, autolavados; ver services/agenda). Extra que
     // enciende el superusuario.
     citas_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

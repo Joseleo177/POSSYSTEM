@@ -24,7 +24,7 @@ const { assertProductAccess } = require('../products/productAccess');
 const { imageUrl } = require('../../utils/imageStorage');
 const { TZ, sanitizeDate } = require('../reports/shared');
 
-const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia', 'fabricacion', 'produccion'];
+const GRUPOS = ['venta', 'devolucion', 'compra', 'ajuste', 'transferencia', 'fabricacion', 'produccion', 'regalo'];
 
 const esAdmin = (req) => !!(req.is_superuser || req.employee?.permissions?.all);
 
@@ -128,17 +128,21 @@ const MOV_SQL = `
               -- Producción de cocina (la olla de sopa): el documento es la tanda (OP-0001). Un
               -- ajuste manual con motivo 'produccion' no lleva el prefijo y sigue siendo ajuste.
               WHEN l.reason = 'produccion' AND l.notes ~ '^OP-[0-9]+ · ' THEN 'produccion'
+              -- Regalo de la cobranza: el documento es el regalo (RG-0001) y el detalle, el cliente.
+              WHEN l.reason = 'regalo' AND l.notes ~ '^RG-[0-9]+ · ' THEN 'regalo'
               ELSE 'ajuste' END,
          l.reason,
          CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN substring(l.notes from '#[0-9]+')
               WHEN l.reason = 'fabricacion' THEN substring(l.notes from '^(OF-[0-9]+)')
-              WHEN l.reason = 'produccion' THEN substring(l.notes from '^(OP-[0-9]+)') END,
+              WHEN l.reason = 'produccion' THEN substring(l.notes from '^(OP-[0-9]+)')
+              WHEN l.reason = 'regalo' THEN substring(l.notes from '^(RG-[0-9]+)') END,
          p.id,
          p.supplier_name,
          ss.employee_id,
          CASE WHEN l.notes ~ '^Compra #[0-9]+' THEN NULL
               WHEN l.reason = 'fabricacion' AND l.notes ~ '^OF-[0-9]+ · ' THEN substring(l.notes from '^OF-[0-9]+ · (.*)$')
               WHEN l.reason = 'produccion' AND l.notes ~ '^OP-[0-9]+ · ' THEN substring(l.notes from '^OP-[0-9]+ · (.*)$')
+              WHEN l.reason = 'regalo' AND l.notes ~ '^RG-[0-9]+ · ' THEN substring(l.notes from '^RG-[0-9]+ · (.*)$')
               ELSE l.notes END,
          NULL, false, NULL,
          7, l.id
@@ -208,6 +212,7 @@ const GRUPO_SQL = `CASE
     WHEN m.kind = 'ajuste' THEN 'ajuste'
     WHEN m.kind = 'fabricacion' THEN 'fabricacion'
     WHEN m.kind = 'produccion' THEN 'produccion'
+    WHEN m.kind = 'regalo' THEN 'regalo'
     ELSE 'transferencia' END`;
 
 const num = (v) => parseFloat(v) || 0;

@@ -47,11 +47,16 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   if (query.verified === "yes") andClauses.push(Sequelize.literal(conciliado));
   if (query.verified === "no")  andClauses.push(Sequelize.literal(`NOT ${conciliado}`));
 
+  // Fecha del PAGO, la que dijo quien cobró (reference_date), no la del registro: un cobrador
+  // de calle que pasa el 04/11 un abono del 20/10 tiene que verlo el 20/10 (04-11-2026). Es el
+  // mismo criterio del reporte de diarios y de la conciliación; los cobros viejos sin fecha de
+  // referencia caen en su día de registro.
+  const payDay = `COALESCE("Payment"."reference_date", ("Payment"."created_at" AT TIME ZONE 'America/Caracas')::date)`;
   const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;
   const safeFrom = sd(date_from);
   const safeTo   = sd(date_to);
-  if (safeFrom) andClauses.push(Sequelize.literal(`("Payment"."created_at" AT TIME ZONE 'America/Caracas')::date >= '${safeFrom}'`));
-  if (safeTo)   andClauses.push(Sequelize.literal(`("Payment"."created_at" AT TIME ZONE 'America/Caracas')::date <= '${safeTo}'`));
+  if (safeFrom) andClauses.push(Sequelize.literal(`${payDay} >= '${safeFrom}'`));
+  if (safeTo)   andClauses.push(Sequelize.literal(`${payDay} <= '${safeTo}'`));
 
   if (search) {
     const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
@@ -79,7 +84,7 @@ module.exports = async function getAllPayments(query, tenant = {}) {
   const unidadesRaw = await Payment.findAll({
     where,
     attributes: ["id", "batch_id", "payment_journal_id", "created_at"],
-    order: [["created_at", "DESC"]],
+    order: [[Sequelize.literal(payDay), "DESC"], ["created_at", "DESC"]],
     include: [{ model: Sale, attributes: [], required: true, ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}) }],
     raw: true,
     subQuery: false,

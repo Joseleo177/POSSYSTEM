@@ -3,6 +3,7 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import CustomSelect from "../ui/CustomSelect";
 import { useApp } from "../../context/AppContext";
+import { api } from "../../services/api";
 
 const DOC_PREFIXES = ["V", "E", "J", "G", "P"];
 const RIF_PREFIXES = ["J", "G", "P"];
@@ -18,11 +19,20 @@ const EMPTY = {
   tax_name: "",
   notes: "",
   credit_days: "",
+  sector_id: "",
 };
 
 export default function CustomerModal({ open, onClose, onSave, editData, loading }) {
   const [form, setForm] = useState(EMPTY);
-  const { settings } = useApp();
+  const { settings, company, can } = useApp();
+  // Sector de cobranza: solo en empresas con el extra y para quien ve la cobranza. Si la lista no
+  // llegó, el campo no se manda y el cliente conserva el suyo.
+  const conCobranza = !!company?.cobranza_enabled && (can("cobranza.view") || can("cobranza.manage"));
+  const [sectores, setSectores] = useState(null);
+  useEffect(() => {
+    if (!open || !conCobranza) return;
+    api.cobranza.sectores().then(r => setSectores(r.data || [])).catch(() => setSectores(null));
+  }, [open, conCobranza]);
   const generalDays = parseInt(settings?.customer_credit_days, 10) || 0;
   const generalLabel = generalDays > 0 ? `${generalDays} días` : "de contado";
   const nameRef = useRef(null);
@@ -41,6 +51,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           rif: match ? match[2] : fullRif,
           // 0 se conserva: es "de contado" a propósito, distinto de vacío (plazo general).
           credit_days: editData.credit_days === null || editData.credit_days === undefined ? "" : String(editData.credit_days),
+          sector_id: editData.sector_id ? String(editData.sector_id) : "",
         });
       } else {
         // En alta también aceptamos un documento prellenado (ej. desde el buscador de
@@ -78,6 +89,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
       notes: (form.notes || "").trim(),
       rif: form.rif ? `${form.doc_prefix}-${form.rif}` : "",
       credit_days: form.credit_days === "" ? null : parseInt(form.credit_days, 10),
+      ...(sectores && !isProveedor ? { sector_id: form.sector_id ? parseInt(form.sector_id, 10) : null } : { sector_id: undefined }),
     });
   };
 
@@ -186,6 +198,15 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
               placeholder="+58 412 0000000"
             />
           </div>
+
+          {sectores && sectores.length > 0 && !isProveedor && (
+            <div className="sm:col-span-2">
+              <label className="label mb-1.5">Sector de cobranza</label>
+              <CustomSelect value={form.sector_id} onChange={v => setForm(p => ({ ...p, sector_id: v }))}
+                options={[{ value: "", label: "Sin sector" }, ...sectores.map(s => ({ value: String(s.id), label: s.name }))]} />
+              <p className="text-[11px] font-medium text-content-subtle dark:text-white/35 mt-1">El cobrador de ese sector lo ve en su ruta.</p>
+            </div>
+          )}
 
           {/* Días de crédito: de aquí sale cuándo vence cada documento en Cuentas por Pagar
               (proveedor) o en Cuentas por Cobrar (cliente). */}

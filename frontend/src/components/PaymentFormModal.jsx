@@ -10,6 +10,9 @@ import RateField, { resolveRate } from "./ui/RateField";
 import { journalsForWarehouse, toNameCase, calcularAvance } from "../helpers";
 import Money from "./ui/Money";
 import ImmediatePayPicker from "./cobro/ImmediatePayPicker";
+import { useRatesOn } from "../hooks/useRatesOn";
+import AvisoTasaFecha from "./cobro/AvisoTasaFecha";
+import { fmtDateShort } from "../helpers/dates";
 import JournalPickerButton from "./cobro/JournalPickerButton";
 
 const getEmpty = () => ({
@@ -124,15 +127,21 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
       }
     : venta;
 
+  // Tasa del DÍA DEL PAGO (decisión del usuario, 04-11-2026). Un abono que se registra tarde
+  // —el cobrador de calle lo pasa días después— va a la tasa de la fecha que se elige abajo,
+  // no a la de hoy. Con fecha de hoy es la tasa cargada, como siempre. Sin dato para esa
+  // fecha (o sin conexión) sigue con la de hoy y lo avisa junto a la fecha.
+  const tasasFecha = useRatesOn(form.reference_date);
+  const tasaSistema = (cur) => tasasFecha.rateOf(cur?.id) || parseFloat(cur?.exchange_rate || 1);
   const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
   // Factura con tasa de divisas (ver services/sales/fxRate.js en el backend): todo lo que se
   // cobre en bolívares va a esa tasa, ahora o en un abono posterior, y no se escribe a mano.
   const tasaFx = parseFloat(sale?.fx_rate) > 0 ? parseFloat(sale.fx_rate) : null;
-  const defaultRate = (!displayCur || displayCur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(displayCur.exchange_rate || 1));
+  const defaultRate = (!displayCur || displayCur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(displayCur));
   const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "Ref.";
 
   const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
-  const payCurRate = (!payCur || payCur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(payCur.exchange_rate || 1));
+  const payCurRate = (!payCur || payCur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(payCur));
   // Tasa de ESTE cobro. Arranca en la del sistema y se puede escribir a mano: la deuda se pacta
   // en divisas y el cliente paga con la tasa del día en que paga, que no siempre es la que está
   // cargada —una factura vieja se cobra semanas después, o el negocio trabaja con una tasa y el
@@ -169,7 +178,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const partesComb = (form.pay_parts || []).map(p => {
     const j = activeJournals.find(x => x.id === p.journal_id);
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
+    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
     const n = parseFloat(String(p.amount).replace(",", "."));
     return {
       ...p, j, cur, rate: r,
@@ -203,8 +212,8 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const avancePct = parseFloat(String(avance.pct).replace(",", ".")) || 0;
   const avanceCalc = calcularAvance({
     efectivo: avanceEfectivo, pct: avancePct,
-    rateCaja: (!curCajaAvance || curCajaAvance.is_base) ? 1 : parseFloat(curCajaAvance.exchange_rate || 1),
-    rateCuenta: (!payCur || payCur.is_base) ? 1 : parseFloat(payCur.exchange_rate || 1),
+    rateCaja: (!curCajaAvance || curCajaAvance.is_base) ? 1 : tasaSistema(curCajaAvance),
+    rateCuenta: (!payCur || payCur.is_base) ? 1 : tasaSistema(payCur),
     mismaMoneda: String(curCajaAvance?.id ?? "") === String(payCur?.id ?? baseCurrency?.id ?? ""),
   });
   const avanceActivo = puedeAvance && avance.on && avanceEfectivo > 0 && !!cajaAvance;
@@ -344,7 +353,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const datosCaja = (journalId) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
+    const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
     return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
   };
 
@@ -432,7 +441,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
     const newCurId = j.currency_id || baseCurrency?.id;
     const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
     const isNonBase = newCur && !newCur.is_base;
-    const newRate = isNonBase ? tasaDeVenta(sale, parseFloat(newCur.exchange_rate || 1)) : 1;
+    const newRate = isNonBase ? tasaDeVenta(sale, tasaSistema(newCur)) : 1;
     const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
     avanceEnRecibidoRef.current = 0;
     setForm(p => ({
@@ -463,6 +472,24 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
       return { ...p, received_amount: (abono + avanceEnPago).toFixed(2) };
     });
   }, [avanceEnPago, form.payment_journal_id]);
+
+  // Cambiar la fecha del pago cambia la tasa, y con ella cuántos bolívares es el saldo: el monto
+  // prellenado la sigue, igual que al escribir la tasa a mano. Solo si nadie lo tocó y no hay
+  // tasa manual: una cifra del cajero no se pisa.
+  const tasaPreviaRef = useRef(payCurRate);
+  useEffect(() => {
+    const previa = tasaPreviaRef.current;
+    tasaPreviaRef.current = payCurRate;
+    if (!(previa > 1) || !(payCurRate > 1) || Math.abs(previa - payCurRate) < 1e-9) return;
+    setForm(p => {
+      if (String(p.rate || "").trim() || (p.pay_parts?.length || 0) >= 2) return p;
+      const tecleado = parseFloat(String(p.amount).replace(",", "."));
+      if (isNaN(tecleado) || Math.abs(tecleado - pendingBsAt(previa)) >= 0.01) return p;
+      const nuevo = pendingBsAt(payCurRate).toFixed(2);
+      return { ...p, amount: nuevo, received_amount: (parseFloat(nuevo) + avanceEnPago).toFixed(2) };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payCurRate]);
 
   // Cobro inmediato: el diario ya viene elegido de la botonera. Se aplica una sola vez, al
   // abrir; el campo "MÉTODO DE PAGO" no se muestra (ver más abajo).
@@ -942,7 +969,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
                           const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-                          const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, parseFloat(cur.exchange_rate || 1));
+                          const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
                           parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
@@ -1073,6 +1100,9 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
               })}
               configuredRate={payCurRate}
               currency={payCur}
+              configuredLabel={tasasFecha.rateOf(payCur.id)
+                ? `Tasa del ${fmtDateShort(tasasFecha.infoOf(payCur.id)?.rate_date)}`
+                : "Tasa de configuración"}
             />
           </Field>
         )}
@@ -1361,12 +1391,14 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
           </div>
         )}
 
-        <Field label="Fecha de referencia *">
+        <Field label="Fecha del pago *">
           <DatePicker
             value={form.reference_date}
             onChange={v => setForm(p => ({ ...p, reference_date: v }))}
             className="w-full"
+            clearable={false}
           />
+          <AvisoTasaFecha estado={tasasFecha} fecha={form.reference_date} />
         </Field>
 
         {/* N° Referencia (oculto si es efectivo) */}

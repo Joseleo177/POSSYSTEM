@@ -432,7 +432,8 @@ module.exports = async function createBulkPayment(body, req) {
           employee_id: employee_id || null,
           reference_date,
           reference_number: c.reference_number,
-          notes: [notes?.trim(), `Cobro conjunto de ${conSaldo.length} facturas`].filter(Boolean).join(" · "),
+          // Con una sola factura no hay nada "conjunto": el abono del cobrador pasa por acá.
+          notes: [notes?.trim(), conSaldo.length > 1 ? `Cobro conjunto de ${conSaldo.length} facturas` : null].filter(Boolean).join(" · ") || null,
           idempotency_key: idempotency_key ? `${idempotency_key}-${venta.id}${parts ? `-${c.mIdx}` : ""}` : null,
           batch_id: batchId,
         }, { transaction: t });

@@ -168,6 +168,21 @@ const MODULES = [
     ],
   },
   {
+    // Cobranza por sectores: solo en empresas con companies.cobranza_enabled (ver
+    // routes/cobranza.js). Nuevo, fuera de todo LEGACY_MAP: de entrada solo el admin. Quien no
+    // tiene 'all' ve solo los sectores donde está asignado.
+    key: 'cobranza',
+    label: 'Cobranza por sectores',
+    actions: [
+      { key: 'view',    label: 'Ver los clientes de sus sectores' },
+      { key: 'collect', label: 'Registrar abonos' },
+      { key: 'leave',   label: 'Dejar mercancía a crédito' },
+      { key: 'gifts',   label: 'Dar y entregar regalos' },
+      { key: 'all',     label: 'Ver todos los sectores' },
+      { key: 'manage',  label: 'Crear sectores y asignar cobradores' },
+    ],
+  },
+  {
     // Agenda de citas: solo en empresas con companies.citas_enabled (ver routes/agenda.js). Nuevo,
     // fuera de todo LEGACY_MAP. 'own' es lo del rol Profesional: ve y atiende las citas del recurso
     // enlazado a su usuario (agenda_resources.employee_id). Cobrarlas sigue siendo sales.create.

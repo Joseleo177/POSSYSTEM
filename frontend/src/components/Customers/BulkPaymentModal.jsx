@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import Modal from "../ui/Modal";
 import DatePicker from "../ui/DatePicker";
 import JournalPickerButton from "../cobro/JournalPickerButton";
@@ -8,6 +8,8 @@ import { fmtBase, todayISO, saleTotalAtRate, tasaDeVenta, journalsForSales, fmtD
 import Money from "../ui/Money";
 import Segmented from "../ui/Segmented";
 import RateField, { resolveRate } from "../ui/RateField";
+import { useRatesOn } from "../../hooks/useRatesOn";
+import AvisoTasaFecha from "../cobro/AvisoTasaFecha";
 import { Spinner } from "../ui/Spinner";
 
 /**
@@ -21,7 +23,9 @@ import { Spinner } from "../ui/Spinner";
  * El monto se escribe en la moneda del diario elegido, igual que en la devolución de crédito
  * y en el cobro de una factura suelta; al servidor viaja en moneda base.
  */
-export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }) {
+// `submitBulk`: a dónde se manda el cobro. Por omisión el cobro conjunto de siempre; la app
+// Cobranza lo manda por su ruta, que además comprueba que el cliente sea del sector de quien cobra.
+export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, submitBulk = null }) {
   const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies, can, settings } = useApp();
   // Cobro en divisas aplicado a las facturas que no traen tasa (ver más abajo).
   const [fxOn, setFxOn] = useState(false);
@@ -104,6 +108,10 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // una sola sucursal contra la que cobrar.
   const activeJournals = journalsForSales(allActiveJournals, ordenadas);
 
+  // Tasa del DÍA DEL PAGO (04-11-2026): el abono que el cobrador registra días después va a la
+  // tasa de la fecha elegida, no a la de hoy. Ver hooks/useRatesOn.
+  const tasasFecha = useRatesOn(form.reference_date);
+  const tasaSistema = (cur) => tasasFecha.rateOf(cur?.id) || parseFloat(cur?.exchange_rate || 1);
   const journal  = activeJournals.find(j => j.id === form.journal_id);
   const currency = journal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(journal.currency_id)) : null;
   // Tasa de configuración de esa moneda, y la que de verdad rige este cobro.
@@ -113,7 +121,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   // estaba cargada cuando se emitieron. Sin esto había que mover la tasa global —a todo el
   // mundo— para registrar un cobro. Vale solo para este lote: viaja en payments.exchange_rate
   // y es la que usan el arqueo y los reportes para convertir ESTOS movimientos.
-  const rateConfig = (!currency || currency.is_base) ? 1 : parseFloat(currency.exchange_rate || 1);
+  const rateConfig = (!currency || currency.is_base) ? 1 : tasaSistema(currency);
   const rate       = (!currency || currency.is_base) ? 1 : resolveRate(form.rate, rateConfig);
   const sym        = currency?.symbol || baseCurrency?.symbol || "Ref.";
 
@@ -123,7 +131,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const partesComb = (form.pay_parts || []).map(p => {
     const j = activeJournals.find(x => x.id === p.journal_id);
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
     const n = parseFloat(String(p.amount).replace(",", "."));
     return {
       ...p, j, cur, rate: r,
@@ -213,9 +221,24 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const deudaEnPagoAt = (r) => round2(ordenadas.reduce((acc, s) => acc + saldoEnMonedaDePagoAt(s, r), 0));
   const saldoEnMonedaDePago = (s) => saldoEnMonedaDePagoAt(s, rate);
   const deudaEnPago = deudaEnPagoAt(rate);
+
+  // Cambiar la fecha del pago cambia la tasa: el monto escrito con la deuda completa la sigue,
+  // como al escribir la tasa a mano. Uno parcial es del cajero y no se toca.
+  const tasaPreviaRef = useRef(rate);
+  useEffect(() => {
+    const previa = tasaPreviaRef.current;
+    tasaPreviaRef.current = rate;
+    if (!(previa > 1) || !(rate > 1) || Math.abs(previa - rate) < 1e-9) return;
+    setForm(p => {
+      if (String(p.rate || "").trim() || p.amount === "") return p;
+      if (parseFloat(String(p.amount).replace(",", ".")) !== round2(deudaEnPagoAt(previa))) return p;
+      return { ...p, amount: deudaEnPagoAt(rate).toFixed(2) };
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rate]);
   // Moneda local del sistema, para mostrar la deuda en Bs mientras no hay método elegido.
   const bsCurSistema  = activeCurrencies.find(c => !c.is_base);
-  const bsRateSistema = parseFloat(bsCurSistema?.exchange_rate) || 0;
+  const bsRateSistema = bsCurSistema ? tasaSistema(bsCurSistema) : 0;
   const fmtBsSistema  = (n) => `${bsCurSistema?.symbol || "Bs."} ${(parseFloat(n) || 0).toFixed(2)}`;
   const metodoElegido = combinado || !!form.journal_id;
 
@@ -235,7 +258,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
       if (isNaN(n) || n <= 0) return [];
       const jj = activeJournals.find(x => x.id === q.journal_id);
       const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
-      const rr = (!cc || cc.is_base) ? 1 : parseFloat(cc.exchange_rate || 1);
+      const rr = (!cc || cc.is_base) ? 1 : tasaSistema(cc);
       return [{ base: rr === 1 ? round2(n) : n / rr, rate: rr }];
     });
     const { rest } = simularReparto(otras);
@@ -269,7 +292,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
   const datosCaja = (journalId) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
     const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-    const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+    const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
     return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
   };
 
@@ -324,7 +347,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
       keyRef.current = crypto?.randomUUID?.() ?? `b-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
     try {
-      const res = await api.payments.createBulk({
+      const res = await (submitBulk || api.payments.createBulk)({
         idempotency_key:    keyRef.current,
         sale_ids:           ordenadas.map(s => s.id),
         // Simple: monto único en base + su diario. Combinado: un tramo por forma de pago.
@@ -525,7 +548,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
                           const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
-                          const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+                          const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
                           parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
@@ -613,7 +636,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
             methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga el cliente?" }}
             onSelect={(j) => {
               const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
-              const r = (!cur || cur.is_base) ? 1 : parseFloat(cur.exchange_rate || 1);
+              const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
               // Elegir el método deja el monto listo, igual que en el cobro de una factura:
               // el caso corriente es cobrar la deuda completa, y cambiar de diario cambia de
               // moneda, así que la cifra se recalcula con la tasa de la moneda nueva.
@@ -656,6 +679,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               clearable={false}
               className="w-full"
             />
+            <AvisoTasaFecha estado={tasasFecha} fecha={form.reference_date} />
           </Field>
         </div>
 
@@ -675,6 +699,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               }))}
               configuredRate={rateConfig}
               currency={currency}
+              configuredLabel={tasasFecha.rateOf(currency.id)
+                ? `Tasa del ${fmtDateShort(tasasFecha.infoOf(currency.id)?.rate_date)}`
+                : "Tasa de configuración"}
             />
           </Field>
         )}
@@ -723,6 +750,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess }
               clearable={false}
               className="w-full"
             />
+            <AvisoTasaFecha estado={tasasFecha} fecha={form.reference_date} />
           </Field>
         )}
 

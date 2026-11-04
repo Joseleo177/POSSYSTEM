@@ -315,7 +315,7 @@ const normalizarNombre = (v) => {
   return limpio ? limpio.toUpperCase() : null;
 };
 
-function buildPayload({ type, name, phone, email, address, rif, tax_name, notes, credit_days }) {
+function buildPayload({ type, name, phone, email, address, rif, tax_name, notes, credit_days, sector_id }) {
   if (!name) { const e = new Error("El nombre es requerido");      e.status = 400; throw e; }
   if (!rif)  { const e = new Error("La cédula / RIF es requerida"); e.status = 400; throw e; }
   const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
@@ -333,8 +333,17 @@ function buildPayload({ type, name, phone, email, address, rif, tax_name, notes,
     }
     creditDays.credit_days = dias;
   }
+  // Sector de cobranza: igual que el crédito, solo se toca si viene (el alta rápida del POS no
+  // lo manda y no debe sacar al cliente de su ruta).
+  const sector = {};
+  if (sector_id !== undefined) {
+    const sid = sector_id === "" || sector_id === null ? null : parseInt(sector_id, 10);
+    if (sid !== null && !(sid > 0)) { const e = new Error("Sector inválido"); e.status = 400; throw e; }
+    sector.sector_id = sid;
+  }
   return {
     ...creditDays,
+    ...sector,
     type:     recordType,
     name:     normalizarNombre(name),
     phone:    phone    || null,
@@ -356,9 +365,18 @@ function wrapUniqueError(err) {
   throw err;
 }
 
+// El sector tiene que ser de la misma empresa: el hook de empresa filtra la búsqueda.
+async function assertSector(payload) {
+  if (!payload.sector_id) return;
+  const { CobranzaSector } = require("../../models");
+  const s = await CobranzaSector.findOne({ where: { id: payload.sector_id }, attributes: ["id"] });
+  if (!s) { const e = new Error("Sector no encontrado"); e.status = 400; throw e; }
+}
+
 async function createCustomer(body) {
   try {
     const payload  = buildPayload(body);
+    await assertSector(payload);
     const customer = await Customer.create(payload);
     return { data: customer };
   } catch (err) {
@@ -369,6 +387,7 @@ async function createCustomer(body) {
 async function updateCustomer(id, body) {
   try {
     const payload  = buildPayload(body);
+    await assertSector(payload);
     const customer = await Customer.findByPk(id);
     if (!customer) { const e = new Error("Registro no encontrado"); e.status = 404; throw e; }
     await customer.update(payload);

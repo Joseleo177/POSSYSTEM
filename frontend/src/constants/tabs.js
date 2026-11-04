@@ -27,6 +27,8 @@ export const ALL_TABS = [
     // Comisiones por vendedor: extra por empresa. Elegir el vendedor en la caja no pide este
     // permiso (va con cobrar); la pantalla es del dueño.
     { key: "Comisiones",    label: "Comisiones",    mobileLabel: "Comisiones", perm: "commissions.view", companyFlag: "comisiones_enabled", color: "from-fuchsia-500 to-fuchsia-700" },
+    // Cobranza por sectores: extra por empresa. El cobrador de calle ve solo sus sectores.
+    { key: "Cobranza",      label: "Cobranza",      mobileLabel: "Cobranza",   perm: ["cobranza.view", "cobranza.manage"], companyFlag: "cobranza_enabled", color: "from-emerald-500 to-emerald-700" },
     { key: "Contabilidad",  label: "Contabilidad",  mobileLabel: "Contab.",    perm: "accounting.view", color: "from-green-500 to-green-700" },
     { key: "Reportes",      label: "Reportes",      mobileLabel: "Reportes",   perm: "reports.view",    color: "from-indigo-500 to-indigo-700" },
     // Deja de ser exclusivo del admin: con el permiso `employees` un encargado gestiona el

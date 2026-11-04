@@ -83,7 +83,7 @@ export default function RateBanner() {
         if (applying) return;
         setApplying(true);
         try {
-            await api.currencies.updateRate(ves.id, { exchange_rate: data.rate });
+            await api.currencies.updateRate(ves.id, { exchange_rate: data.rate, source: "bcv" });
             await loadCurrencies();
             notify(`Tasa aplicada: ${sym} ${fmtRate(data.rate)}`);
             clearBcvManual();

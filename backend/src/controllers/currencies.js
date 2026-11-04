@@ -4,6 +4,10 @@ const fs    = require("fs");
 const path  = require("path");
 const { Currency, Sequelize } = require("../models");
 const { broadcast } = require("../services/sseService");
+const rates = require("../services/currencyRates");
+
+const companyOf = (req) => req.company_id ?? req.employee?.company_id ?? null;
+const RATE_SOURCES = new Set(["manual", "bcv"]);
 
 // GET /api/currencies
 const getAll = async (req, res) => {
@@ -30,6 +34,11 @@ const updateRate = async (req, res) => {
     // aplicarla desde el aviso del BCV dejaba la tarjeta de Monedas diciendo "no se ha
     // actualizado hoy".
     await currency.update({ exchange_rate, updated_at: new Date() });
+    // El aviso del BCV manda source "bcv"; Monedas, nada (a mano).
+    await rates.recordRate(currency, {
+      source: RATE_SOURCES.has(req.body.source) ? req.body.source : "manual",
+      employee_id: req.employee?.id ?? null,
+    });
     const all = await Currency.findAll({ order: [['is_base', 'DESC'], ['code', 'ASC']] });
     broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: all.map(c => c.toJSON()) });
     res.json({ ok: true, data: currency });
@@ -58,6 +67,7 @@ const create = async (req, res) => {
     if (!code || !name || !symbol || !exchange_rate) return res.status(400).json({ ok: false, message: "Todos los campos son requeridos" });
 
     const currency = await Currency.create({ code: code.toUpperCase(), name, symbol, exchange_rate });
+    await rates.recordRate(currency, { employee_id: req.employee?.id ?? null });
     res.status(201).json({ ok: true, data: currency });
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ ok: false, message: "Esa moneda ya existe" });
@@ -184,6 +194,7 @@ const refreshRates = async (req, res) => {
         const bcv = await getBcvRateCached(true);
         log("BCV =", bcv.rate, "fecha valor", bcv.value_date);
         await vesCur.update({ exchange_rate: bcv.rate, updated_at: new Date() });
+        await rates.recordRate(vesCur, { source: "bcv", employee_id: req.employee?.id ?? null });
         log("VES updated in DB");
         updated.push({ code: "VES", rate: bcv.rate, value_date: bcv.value_date, source: "BCV" });
       } catch (e) {
@@ -209,6 +220,7 @@ const refreshRates = async (req, res) => {
           const rate = rates[cur.code];
           if (rate && rate > 0) {
             await cur.update({ exchange_rate: rate, updated_at: new Date() });
+            await rates.recordRate(cur, { source: "er-api", employee_id: req.employee?.id ?? null });
             updated.push({ code: cur.code, rate, source: "er-api" });
           }
         }
@@ -253,4 +265,42 @@ const remove = async (req, res) => {
   }
 };
 
-module.exports = { getAll, updateRate, toggle, create, refreshRates, getBcvPreview, remove };
+// ── Historial de tasas (services/currencyRates) ──────────────────────────────
+const sendError = (res, err, fallback) => res.status(err.status || 500)
+  .json({ ok: false, message: err.isOperational ? err.message : fallback });
+
+// GET /api/currencies/rates/on?date=YYYY-MM-DD — tasa de cada moneda ese día. La pide la
+// pantalla de cobro cuando el pago es de una fecha anterior: cualquiera que cobre la necesita.
+const getRatesOn = async (req, res) => {
+  try {
+    res.json({ ok: true, data: await rates.ratesOn(companyOf(req), req.query.date) });
+  } catch (err) {
+    if (!err.isOperational) console.error("[currencies] rates/on:", err);
+    sendError(res, err, "Error al consultar la tasa de esa fecha");
+  }
+};
+
+// GET /api/currencies/:id/rates?from&to&limit
+const getHistory = async (req, res) => {
+  try {
+    res.json({ ok: true, data: await rates.history(companyOf(req), { ...req.query, currency_id: req.params.id }) });
+  } catch (err) {
+    if (!err.isOperational) console.error("[currencies] history:", err);
+    sendError(res, err, "Error al obtener el historial de tasas");
+  }
+};
+
+// PUT /api/currencies/:id/rates/:date { rate } — corrige o completa un día pasado.
+const putDayRate = async (req, res) => {
+  try {
+    const data = await rates.setDayRate(companyOf(req), {
+      currency_id: req.params.id, date: req.params.date, rate: req.body?.rate, employee_id: req.employee?.id,
+    });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (!err.isOperational) console.error("[currencies] day rate:", err);
+    sendError(res, err, "Error al guardar la tasa de ese día");
+  }
+};
+
+module.exports = { getAll, updateRate, toggle, create, refreshRates, getBcvPreview, remove, getRatesOn, getHistory, putDayRate };

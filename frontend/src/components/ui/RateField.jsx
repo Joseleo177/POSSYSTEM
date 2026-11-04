@@ -34,6 +34,9 @@ export default function RateField({
     currency,
     disabled = false,
     className = "",
+    // De dónde sale la tasa de referencia. En un cobro de fecha anterior es la de ese día
+    // ("Tasa del 20/10/2026"), no la de configuración.
+    configuredLabel = "Tasa de configuración",
 }) {
     const configured = parseFloat(configuredRate) || 1;
     const edited = isRateEdited(value, configured);
@@ -77,8 +80,8 @@ export default function RateField({
             </div>
             <p className={`text-[11px] font-semibold mt-1 ${edited ? "text-warning" : "text-content-subtle dark:text-white/30"}`}>
                 {edited
-                    ? `Tasa manual · configurada ${configured.toFixed(4)}`
-                    : `Tasa de configuración · ${configured.toFixed(4)}`}
+                    ? `Tasa manual · ${configuredLabel.toLowerCase()} ${configured.toFixed(4)}`
+                    : `${configuredLabel} · ${configured.toFixed(4)}`}
             </p>
         </div>
     );

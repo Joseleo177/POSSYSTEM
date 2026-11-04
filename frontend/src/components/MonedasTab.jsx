@@ -7,6 +7,7 @@ import { Button } from "./ui/Button";
 import { Spinner } from "./ui/Spinner";
 import { useApp } from "../context/AppContext";
 import { fmtTime } from "../helpers/dates";
+import RateHistoryModal from "./RateHistoryModal";
 
 // Antes vivía como una pestaña más de Configuración Global. Se separó a su propio módulo
 // porque tocar la tasa del día es una tarea de caja/administración, no de dueño de empresa:
@@ -42,6 +43,7 @@ export default function MonedasTab({ notify }) {
     const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "" });
     const [showNewCurrency, setShowNewCurrency] = useState(false);
     const [deleteCurrencyDialog, setDeleteCurrencyDialog] = useState(null);
+    const [historial, setHistorial] = useState(null);
 
     // Solo `/currencies`, nunca `/settings`: esta pantalla no necesita —ni debe pedir— los
     // datos de la empresa que vive detrás del permiso de Configuración.
@@ -151,7 +153,8 @@ export default function MonedasTab({ notify }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {divisas.map(c => (
                                 <RateCard key={c.id} c={c} base={base} puedeEditar={puedeEditar}
-                                    onSave={updateRate} onToggle={() => toggle(c)} onDelete={() => setDeleteCurrencyDialog(c)} />
+                                    onSave={updateRate} onToggle={() => toggle(c)} onDelete={() => setDeleteCurrencyDialog(c)}
+                                    onHistory={() => setHistorial(c)} />
                             ))}
                         </div>
                     )}
@@ -193,6 +196,8 @@ export default function MonedasTab({ notify }) {
                 </div>
             </Modal>
 
+            {historial && <RateHistoryModal currency={historial} notify={notify} onClose={() => setHistorial(null)} />}
+
             {/* Confirmar eliminación */}
             <ConfirmModal
                 isOpen={!!deleteCurrencyDialog}
@@ -206,7 +211,7 @@ export default function MonedasTab({ notify }) {
     );
 }
 
-function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete }) {
+function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete, onHistory }) {
     const [editing, setEditing] = useState(false);
     const [val, setVal] = useState("");
     const [saving, setSaving] = useState(false);
@@ -298,6 +303,10 @@ function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete }) {
                             <button onClick={abrir} disabled={!c.active}
                                 className="btn-accent flex-1 h-9 rounded-lg text-[13px] font-semibold active:scale-[0.99] disabled:!bg-surface-3 disabled:!bg-none disabled:!text-content-subtle disabled:!shadow-none dark:disabled:!bg-white/[0.06]">
                                 Cambiar tasa
+                            </button>
+                            <button onClick={onHistory}
+                                className="h-9 px-3 rounded-lg text-[13px] font-medium text-content-muted dark:text-white/60 hover:bg-surface-2 dark:hover:bg-white/[0.05] hover:text-content dark:hover:text-white transition-colors">
+                                Historial
                             </button>
                             <button onClick={onToggle}
                                 className="h-9 px-3 rounded-lg text-[13px] font-medium text-content-muted dark:text-white/60 hover:bg-surface-2 dark:hover:bg-white/[0.05] hover:text-content dark:hover:text-white transition-colors">

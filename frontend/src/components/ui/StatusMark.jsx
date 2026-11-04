@@ -32,6 +32,13 @@ export const SALE_STATUS = {
     pedido:    { label: "Pedido",    tone: "violet" },
 };
 
+// Regalos de la cobranza: lo que falta por entregar pide atención (ámbar); entregado es lo normal.
+export const GIFT_STATUS = {
+    por_entregar: { label: "Por entregar", tone: "warning" },
+    entregado:    { label: "Entregado",    tone: "success", quiet: "check" },
+    anulado:      { label: "Anulado",      tone: "neutral", quiet: "void" },
+};
+
 // Configuración (métodos, diarios): activo es lo normal, gris con su visto. El inactivo
 // tampoco es una alarma: solo está apagado.
 export const ACTIVE_STATUS = {

@@ -50,7 +50,7 @@ const tenantModels = [
   'ModifierGroup', 'ModifierOption', 'ProductModifierGroup', 'RecipeSheet',
   'PreparationItem', 'ProductionBatch', 'ProductionBatchItem', 'TableOrder',
   'PaymentReport', 'ProductImage', 'Seller', 'CommissionPayout',
-  'CasheaSettlement',
+  'CasheaSettlement', 'CurrencyRate', 'CobranzaSector',
   'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
 ];
 

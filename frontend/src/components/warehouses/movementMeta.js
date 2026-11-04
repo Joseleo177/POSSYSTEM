@@ -14,6 +14,8 @@ export const ICON = {
     search:   "M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z",
     clock:    "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z",
     close:    "M6 18L18 6M6 6l12 12",
+    // Un paquete con lazo: el regalo de la cobranza.
+    gift:     "M20 12v9H4v-9M2 7h20v5H2zM12 21V7M12 7H7.5a2.5 2.5 0 110-5C11 2 12 7 12 7zm0 0h4.5a2.5 2.5 0 100-5C13 2 12 7 12 7z",
     // Una olla: la producción de cocina.
     pot:      "M4 10h16M5 10v7a3 3 0 003 3h8a3 3 0 003-3v-7M3 10h1m16 0h1M9 6.5c0-1 1-1.5 1-2.5m4 2.5c0-1 1-1.5 1-2.5",
 };
@@ -36,6 +38,7 @@ export const REASON_LABELS = {
     importacion:    "Importación desde Excel",
     compra_anulada: "Compra anulada",
     fabricacion:    "Fabricación",
+    regalo:         "Regalo de cobranza",
 };
 export const reasonLabel = (r) => REASON_LABELS[r] || (r ? toNameCase(String(r).replace(/_/g, " ")) : "Ajuste");
 
@@ -48,6 +51,7 @@ export const GROUPS = [
     { key: "ajuste",        label: "Ajustes" },
     { key: "fabricacion",   label: "Fabricación" },
     { key: "produccion",    label: "Producción" },
+    { key: "regalo",        label: "Regalos" },
 ];
 
 // Título, documento y contraparte de una fila del kardex.
@@ -75,6 +79,9 @@ export function describe(m) {
         // preparación, "Producción" o "Anulada".
         case "produccion":
             return { icon: ICON.pot, title: "Producción", doc: doc || "Cocina", party: null, extra: m.notes };
+        // Cobranza: el regalo (RG-0001); el detalle es el cliente, o "Anulado · cliente" si volvió.
+        case "regalo":
+            return { icon: ICON.gift, title: m.qty > 0 ? "Regalo anulado" : "Regalo", doc: doc || "Cobranza", party: m.notes ? toNameCase(m.notes.replace(/^Anulado · /, "")) : null, extra: null };
         case "compra_anulada":
             return { icon: ICON.ban, title: "Compra anulada", doc, party: m.party ? toNameCase(m.party) : null, extra: null };
         case "transferencia_salida":
