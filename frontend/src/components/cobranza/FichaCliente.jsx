@@ -58,7 +58,8 @@ export default function FichaCliente({ id, onChanged }) {
         );
     }
 
-    const { cliente, deuda, facturas, historial, bolsa, regalos = [], ganados = [], regalos_activos } = ficha;
+    const { cliente, deuda, facturas, historial, productos = [], regalos = [], ganados = [], regalos_activos } = ficha;
+    const hayProductos = productos.length > 0;
     const regalosVivos = regalos.filter(r => r.status !== "anulado");
     const debe = deuda > 0.004;
 
@@ -112,10 +113,10 @@ export default function FichaCliente({ id, onChanged }) {
                             </button>
                         )}
                         {puedeDejar && (
-                            <button type="button" onClick={() => setDejando(true)} disabled={!bolsa}
-                                title={bolsa ? undefined : "Falta elegir qué producto se deja (Sectores)"}
+                            <button type="button" onClick={() => setDejando(true)} disabled={!hayProductos}
+                                title={hayProductos ? undefined : "Falta elegir qué productos se dejan (Sectores)"}
                                 className={`${puedeAbonar && debe ? "btn-outline" : "btn-accent"} h-12 sm:h-10 sm:flex-1 rounded-lg text-[14px] sm:text-[13px] font-semibold active:scale-[0.99] disabled:opacity-50`}>
-                                {bolsa ? `Dejar ${bolsa.name.toLowerCase()}` : "Dejar mercancía"}
+                                {productos.length === 1 ? `Dejar ${productos[0].name.toLowerCase()}` : "Dejar mercancía"}
                             </button>
                         )}
                     </div>
@@ -130,7 +131,7 @@ export default function FichaCliente({ id, onChanged }) {
                         <div className="relative mb-2 rounded-xl border border-amber-500/30 bg-amber-500/[0.06] pl-4 pr-3 py-3 overflow-hidden">
                             <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px] bg-amber-500" />
                             <p className="text-[13px] font-semibold text-content dark:text-white">
-                                {ganados.length === 1 ? "Saldó una bolsa sin regalo" : `Saldó ${ganados.length} bolsas sin regalo`}
+                                {ganados.length === 1 ? "Saldó una factura sin regalo" : `Saldó ${ganados.length} facturas sin regalo`}
                             </p>
                             <p className="text-[12px] text-content-subtle">{ganados.map(g => g.invoice_number).join(", ")}</p>
                             {puedeRegalar && (
@@ -243,8 +244,8 @@ export default function FichaCliente({ id, onChanged }) {
                     onClose={() => setRegalando(null)}
                     onDone={() => { setRegalando(null); despues(); }} />
             )}
-            {dejando && bolsa && (
-                <DejarBolsaModal cliente={cliente} bolsa={bolsa}
+            {dejando && hayProductos && (
+                <DejarBolsaModal cliente={cliente} productos={productos}
                     onClose={() => setDejando(false)}
                     onDone={() => { setDejando(false); despues(); }} />
             )}

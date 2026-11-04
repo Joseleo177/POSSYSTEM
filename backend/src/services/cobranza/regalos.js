@@ -10,47 +10,32 @@
  *    "RG-0001 · Cliente"), y el kardex lo muestra como Regalo;
  *  - anular uno entregado lo devuelve a la existencia con otra línea.
  */
-const { sequelize, Sequelize, Setting } = require("../../models");
+const { sequelize, Sequelize } = require("../../models");
 const { hasPermission, isAdmin } = require("../../middleware/auth");
 const { moveStock, lockNumbering } = require("../factory/shared");
+const { GIFT_CATEGORIES_KEY, leerLista } = require("./config");
 
-const CATEGORY_KEY = "cobranza_regalos_category_id";
 const MAX_QTY = 50;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
 const int = (v) => { const n = parseInt(v, 10); return Number.isInteger(n) ? n : null; };
 const Q = (sql, replacements, transaction) => sequelize.query(sql, { replacements, type: Sequelize.QueryTypes.SELECT, transaction });
-const companyOf = (req) => req.company_id ?? req.employee?.company_id ?? null;
 const rgCode = (n) => `RG-${String(n).padStart(4, "0")}`;
 const fmtQty = (n) => String(parseFloat(n)).replace(".", ",");
 
 // Perezoso: index.js también requiere este archivo.
 const base = () => require("./index");
 
-async function categoriaRegalos(companyId) {
-  const row = await Setting.findOne({ where: { key: CATEGORY_KEY, company_id: companyId }, attributes: ["value"] });
-  const id = int(row?.value);
-  if (!id) return null;
-  const [c] = await Q(`SELECT id, name FROM categories WHERE id = :id AND company_id = :companyId`, { id, companyId });
-  return c || null;
-}
-
-async function guardarCategoria(req, categoryId) {
-  const companyId = companyOf(req);
-  if (categoryId === null || categoryId === "") {
-    await Setting.destroy({ where: { key: CATEGORY_KEY, company_id: companyId } });
-    return null;
-  }
-  const id = int(categoryId);
-  const [c] = id ? await Q(`SELECT id FROM categories WHERE id = :id AND company_id = :companyId`, { id, companyId }) : [];
-  if (!c) throw fail("Categoría no encontrada");
-  await Setting.upsert({ key: CATEGORY_KEY, company_id: companyId, value: String(c.id) });
-  return categoriaRegalos(companyId);
+// Las categorías de las que salen los regalos. Una borrada del catálogo simplemente no aparece.
+async function categoriasRegalos(companyId) {
+  const ids = await leerLista(GIFT_CATEGORIES_KEY, companyId);
+  if (!ids.length) return [];
+  return Q(`SELECT id, name FROM categories WHERE id IN (:ids) AND company_id = :companyId ORDER BY lower(name)`, { ids, companyId });
 }
 
 // Existencia, apartado y disponible de cada regalo en una sucursal.
 const DISPONIBLE_SQL = `
-  SELECT p.id, p.name, p.unit,
+  SELECT p.id, p.name, p.unit, p.category_id,
          COALESCE(ps.qty, 0)::float AS stock,
          COALESCE((SELECT SUM(r.qty) FROM cobranza_regalos r
                     WHERE r.product_id = p.id AND r.warehouse_id = :wid AND r.status = 'por_entregar'), 0)::float AS apartado
@@ -60,15 +45,14 @@ const DISPONIBLE_SQL = `
 /** Regalos que se pueden dar en la sucursal del cliente, con lo que queda libre de cada uno. */
 async function opciones(req, customerId) {
   const { a, cliente } = await base().clienteAlAlcance(req, customerId);
-  const categoria = await categoriaRegalos(a.companyId);
-  if (!categoria) return { data: { categoria: null, productos: [] } };
-  if (!cliente.warehouse_id) return { data: { categoria, productos: [] } };
+  const categorias = await categoriasRegalos(a.companyId);
+  if (!categorias.length || !cliente.warehouse_id) return { data: { categorias, productos: [] } };
   const productos = await Q(`${DISPONIBLE_SQL}
-     WHERE p.company_id = :companyId AND p.category_id = :cat AND NOT p.is_variant_parent
-     ORDER BY lower(p.name)`, { companyId: a.companyId, cat: categoria.id, wid: cliente.warehouse_id });
+     WHERE p.company_id = :companyId AND p.category_id IN (:cats) AND NOT p.is_variant_parent
+     ORDER BY lower(p.name)`, { companyId: a.companyId, cats: categorias.map(c => c.id), wid: cliente.warehouse_id });
   return {
     data: {
-      categoria,
+      categorias,
       productos: productos.map(p => ({ ...p, disponible: Math.round((p.stock - p.apartado) * 1000) / 1000 })),
     },
   };
@@ -97,6 +81,43 @@ const SELECT_REGALO = `
     LEFT JOIN employees ea ON ea.id = r.assigned_by
     LEFT JOIN employees ed ON ed.id = r.delivered_by`;
 
+/**
+ * Lo que queda: de cada regalo, cuánto hay en la sucursal, cuánto está apartado y cuánto está
+ * libre. Solo las sucursales de los sectores al alcance: el cobrador ve el galpón del que sale
+ * su mercancía, no el resto de la empresa. Una sola consulta, con todo lo que la pantalla pide.
+ */
+async function existencia(req, { sector_id } = {}) {
+  const a = await base().alcance(req);
+  const categorias = await categoriasRegalos(a.companyId);
+  const sid = int(sector_id);
+  if (sid && !a.todos && !a.sectorIds.includes(sid)) throw fail("Ese sector no es tuyo", 403);
+  if (!categorias.length) return { data: [], categorias };
+  const filtro = sid ? "s.id = :sid" : (a.todos ? "TRUE" : (a.sectorIds.length ? `s.id IN (${a.sectorIds.join(",")})` : "FALSE"));
+  const rows = await Q(`
+    WITH suc AS (
+      SELECT DISTINCT w.id, w.name
+        FROM cobranza_sectors s JOIN warehouses w ON w.id = s.warehouse_id
+       WHERE s.company_id = :companyId AND s.active AND ${filtro}
+    ), apartado AS (
+      SELECT r.warehouse_id, r.product_id, SUM(r.qty) AS qty
+        FROM cobranza_regalos r
+       WHERE r.company_id = :companyId AND r.status = 'por_entregar'
+       GROUP BY r.warehouse_id, r.product_id
+    )
+    SELECT suc.id AS warehouse_id, suc.name AS warehouse_name,
+           p.id AS product_id, p.name, p.unit, c.id AS category_id, c.name AS category_name,
+           COALESCE(ps.qty, 0)::float AS stock, COALESCE(ap.qty, 0)::float AS apartado
+      FROM suc
+     CROSS JOIN products p
+      JOIN categories c ON c.id = p.category_id
+      LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = suc.id
+      LEFT JOIN apartado ap ON ap.product_id = p.id AND ap.warehouse_id = suc.id
+     WHERE p.company_id = :companyId AND p.category_id IN (:cats) AND NOT p.is_variant_parent
+     ORDER BY lower(suc.name), lower(c.name), lower(p.name)`,
+    { companyId: a.companyId, cats: categorias.map(c => c.id), sid });
+  return { data: rows.map(r => ({ ...r, libre: Math.round((r.stock - r.apartado) * 1000) / 1000 })), categorias };
+}
+
 /** Regalos de los sectores al alcance; por omisión, los que faltan por entregar. */
 async function listar(req, { status, sector_id } = {}) {
   const a = await base().alcance(req);
@@ -121,18 +142,18 @@ async function listar(req, { status, sector_id } = {}) {
  * Lo que la ficha necesita: los regalos del cliente y las bolsas que ya pagó sin regalo (la
  * sugerencia). Solo las de los últimos 180 días: lo viejo no tiene por qué reaparecer.
  */
-async function deCliente(companyId, customerId, productId) {
+async function deCliente(companyId, customerId, productIds = []) {
   const regalos = await Q(`${SELECT_REGALO}
      WHERE r.company_id = :companyId AND r.customer_id = :cid
      ORDER BY r.assigned_at DESC LIMIT 30`, { companyId, cid: customerId });
-  const ganados = productId ? await Q(`
+  const ganados = productIds.length ? await Q(`
     SELECT s.id, s.invoice_number, to_char((s.created_at AT TIME ZONE 'America/Caracas')::date, 'YYYY-MM-DD') AS day
       FROM sales s
      WHERE s.company_id = :companyId AND s.customer_id = :cid AND s.status = 'pagado'
        AND s.created_at > NOW() - INTERVAL '180 days'
-       AND EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = s.id AND si.product_id = :pid)
+       AND EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = s.id AND si.product_id IN (:productIds))
        AND NOT EXISTS (SELECT 1 FROM cobranza_regalos r WHERE r.sale_id = s.id AND r.status <> 'anulado')
-     ORDER BY s.created_at ASC`, { companyId, cid: customerId, pid: productId }) : [];
+     ORDER BY s.created_at ASC`, { companyId, cid: customerId, productIds }) : [];
   return { regalos, ganados };
 }
 
@@ -151,13 +172,13 @@ async function salidaDeStock(req, regalo, cliente, transaction, signo = -1, anul
 async function asignar(req, customerId, body = {}) {
   const { a, cliente } = await base().clienteAlAlcance(req, customerId);
   if (!cliente.sector_id || !cliente.warehouse_id) throw fail("El cliente necesita un sector para recibir regalos");
-  const categoria = await categoriaRegalos(a.companyId);
-  if (!categoria) throw fail("Falta elegir la categoría de los regalos (Cobranza → Sectores)");
+  const categorias = await categoriasRegalos(a.companyId);
+  if (!categorias.length) throw fail("Falta elegir las categorías de los regalos (Cobranza → Sectores)");
   const pid = int(body.product_id);
   const qty = int(body.qty) || 1;
   if (qty < 1 || qty > MAX_QTY) throw fail(`La cantidad va de 1 a ${MAX_QTY}`);
-  const [prod] = pid ? await Q(`SELECT id, name FROM products WHERE id = :pid AND company_id = :companyId AND category_id = :cat`,
-    { pid, companyId: a.companyId, cat: categoria.id }) : [];
+  const [prod] = pid ? await Q(`SELECT id, name FROM products WHERE id = :pid AND company_id = :companyId AND category_id IN (:cats)`,
+    { pid, companyId: a.companyId, cats: categorias.map(c => c.id) }) : [];
   if (!prod) throw fail("Elige un regalo de la lista");
   const saleId = int(body.sale_id);
   if (saleId) {
@@ -173,7 +194,7 @@ async function asignar(req, customerId, body = {}) {
     await lockNumbering("regalo", a.companyId, t);
     if (saleId) {
       const [ya] = await Q(`SELECT id FROM cobranza_regalos WHERE sale_id = :saleId AND status <> 'anulado'`, { saleId }, t);
-      if (ya) throw fail("Esa bolsa ya tiene su regalo");
+      if (ya) throw fail("Esa factura ya tiene su regalo");
     }
     const d = await disponibleDe(prod.id, cliente.warehouse_id, t);
     if (!d || d.disponible < qty) {
@@ -260,4 +281,4 @@ async function anular(req, id, { reason } = {}) {
   }
 }
 
-module.exports = { categoriaRegalos, guardarCategoria, opciones, listar, deCliente, asignar, entregar, anular, rgCode };
+module.exports = { categoriasRegalos, opciones, existencia, listar, deCliente, asignar, entregar, anular, rgCode };

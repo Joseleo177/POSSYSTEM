@@ -11,8 +11,8 @@ const MAX = 50;
 const fmtCant = (n) => (Number(n) || 0).toLocaleString("es-VE", { maximumFractionDigits: 3 });
 
 /**
- * Dar un regalo: qué (de la categoría de regalos, con lo que queda libre en la sucursal del
- * sector), por qué bolsa (la que saldó, si la hay) y si se entrega ya o queda apartado para la
+ * Dar un regalo: qué (de las categorías de regalos, con lo que queda libre en la sucursal del
+ * sector), por qué factura (la que saldó, si la hay) y si se entrega ya o queda apartado para la
  * próxima visita. Entregarlo lo descuenta de la existencia; apartarlo lo reserva.
  */
 export default function DarRegaloModal({ cliente, ganados = [], bolsaInicial = null, onClose, onDone }) {
@@ -31,6 +31,11 @@ export default function DarRegaloModal({ cliente, ganados = [], bolsaInicial = n
     }, [cliente.id]);   // eslint-disable-line react-hooks/exhaustive-deps
 
     const productos = ops?.productos || [];
+    const categorias = ops?.categorias || [];
+    // Con una sola categoría el rótulo no dice nada: se muestra solo cuando hay varias.
+    const grupos = categorias.length > 1
+        ? categorias.map(c => ({ id: c.id, name: c.name, items: productos.filter(p => p.category_id === c.id) })).filter(g => g.items.length)
+        : [{ id: "todos", name: null, items: productos }];
     const elegido = productos.find(p => p.id === pid);
     // Entregar ahora necesita que esté en la sucursal; apartar, que quede libre (no apartado).
     const tope = elegido ? Math.floor(modo === "ahora" ? Math.min(elegido.stock, elegido.disponible) : elegido.disponible) : 0;
@@ -56,11 +61,11 @@ export default function DarRegaloModal({ cliente, ganados = [], bolsaInicial = n
 
                 {ganados.length > 0 && (
                     <div>
-                        <p className="text-[12px] text-content-subtle mb-1.5">Por la bolsa</p>
+                        <p className="text-[12px] text-content-subtle mb-1.5">Por la factura</p>
                         <CustomSelect value={venta} onChange={setVenta}
                             options={[
                                 ...ganados.map(g => ({ value: String(g.id), label: `${g.invoice_number} · ${fmtDateShort(g.day)}` })),
-                                { value: "", label: "Sin bolsa (regalo suelto)" },
+                                { value: "", label: "Sin factura (regalo suelto)" },
                             ]} />
                     </div>
                 )}
@@ -69,13 +74,15 @@ export default function DarRegaloModal({ cliente, ganados = [], bolsaInicial = n
                     <p className="text-[12px] text-content-subtle mb-1.5">Regalo</p>
                     {ops === null ? (
                         <div className="space-y-2">{[0, 1, 2].map(i => <div key={i} className="h-12 rounded-lg bg-surface-2 dark:bg-white/[0.04] animate-pulse" />)}</div>
-                    ) : !ops.categoria ? (
-                        <p className="text-[13px] text-warning">Falta elegir la categoría de los regalos en Cobranza → Sectores.</p>
+                    ) : categorias.length === 0 ? (
+                        <p className="text-[13px] text-warning">Falta elegir las categorías de los regalos en Cobranza → Sectores.</p>
                     ) : productos.length === 0 ? (
-                        <p className="text-[13px] text-content-subtle">La categoría {ops.categoria.name} no tiene productos. Créalos en Catálogo y carga su existencia.</p>
+                        <p className="text-[13px] text-content-subtle">{categorias.map(c => c.name).join(", ")} no tiene productos. Créalos en Catálogo y carga su existencia.</p>
                     ) : (
                         <div className="rounded-xl border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.06] lg:max-h-64 lg:overflow-y-auto custom-scrollbar">
-                            {productos.map(p => {
+                            {grupos.map(g => (<div key={g.id}>
+                            {g.name && <p className="px-3.5 pt-2.5 pb-1 text-[12px] font-medium text-content-subtle bg-surface-2/50 dark:bg-white/[0.02]">{g.name}</p>}
+                            {g.items.map(p => {
                                 const libre = Math.max(0, p.disponible);
                                 const sin = libre <= 0;
                                 const on = pid === p.id;
@@ -92,6 +99,7 @@ export default function DarRegaloModal({ cliente, ganados = [], bolsaInicial = n
                                     </button>
                                 );
                             })}
+                            </div>))}
                         </div>
                     )}
                 </div>

@@ -776,6 +776,7 @@ export const api = {
     regalosOpciones: (id)        => request(`/cobranza/clientes/${id}/regalos/opciones`),
     darRegalo:  (id, body)       => request(`/cobranza/clientes/${id}/regalos`, { method: "POST", body: JSON.stringify(body) }),
     regalos:    (params = {})    => request("/cobranza/regalos?" + new URLSearchParams(params)),
+    regalosExistencia: (params = {}) => request("/cobranza/regalos/existencia?" + new URLSearchParams(params)),
     entregarRegalo: (id)         => request(`/cobranza/regalos/${id}/entregar`, { method: "POST" }),
     anularRegalo:   (id, body)   => request(`/cobranza/regalos/${id}/anular`, { method: "POST", body: JSON.stringify(body) }),
   },

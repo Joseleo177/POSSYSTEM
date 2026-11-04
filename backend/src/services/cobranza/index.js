@@ -14,12 +14,12 @@
  * (cobranza_sector_employees). Toda operación sobre un cliente revisa que su sector esté al
  * alcance: el id viaja en la URL y bastaría con cambiarlo para cobrar en el pueblo de otro.
  */
-const { sequelize, Sequelize, Setting, Currency, Serie, UserSerie } = require("../../models");
+const { sequelize, Sequelize, Currency, Serie, UserSerie } = require("../../models");
 const { Op } = Sequelize;
 const { hasPermission, isAdmin, employeeWarehouseIds } = require("../../middleware/auth");
 const { settleToleranceSql } = require("../../utils/saleBalance");
 
-const PRODUCT_KEY = "cobranza_product_id";
+const { PRODUCTS_KEY, GIFT_CATEGORIES_KEY, leerLista, guardarLista } = require("./config");
 const MAX_BOLSAS = 20;
 
 const fail = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
@@ -216,33 +216,38 @@ async function asignarClientes(req, { sector_id, customer_ids }) {
 async function leerConfig(req, { conCategorias = false } = {}) {
   const companyId = companyOf(req);
   const regalos = require("./regalos");
-  const row = await Setting.findOne({ where: { key: PRODUCT_KEY, company_id: companyId }, attributes: ["value"] });
-  const pid = int(row?.value);
-  const [[p], categoria_regalos] = await Promise.all([
-    pid ? Q(`SELECT id, name, price::float AS price FROM products WHERE id = :pid AND company_id = :companyId`, { pid, companyId }) : [[]],
-    regalos.categoriaRegalos(companyId),
+  const ids = await leerLista(PRODUCTS_KEY, companyId);
+  const [productos, categorias_regalos] = await Promise.all([
+    ids.length ? Q(`SELECT id, name, price::float AS price FROM products WHERE id IN (:ids) AND company_id = :companyId ORDER BY lower(name)`, { ids, companyId }) : [],
+    regalos.categoriasRegalos(companyId),
   ]);
-  // Para elegir la categoría de los regalos (solo la pantalla de Sectores la pide).
+  // Para elegir las categorías de los regalos (solo la pantalla de Sectores la pide).
   const categorias = conCategorias
     ? await Q(`SELECT c.id, c.name, (SELECT COUNT(*)::int FROM products p WHERE p.category_id = c.id) AS productos
                  FROM categories c WHERE c.company_id = :companyId ORDER BY lower(c.name)`, { companyId })
     : undefined;
-  return { data: { product: p || null, categoria_regalos, ...(categorias ? { categorias } : {}) } };
+  return { data: { productos, categorias_regalos, ...(categorias ? { categorias } : {}) } };
 }
 
-async function guardarConfig(req, { product_id, regalos_category_id }) {
+// Solo se toca la lista que venga: quitar un producto no mueve los regalos, ni al revés. Quitar
+// un producto no afecta lo ya dejado: sus facturas siguen por cobrar.
+async function guardarConfig(req, { product_ids, regalos_category_ids }) {
   const companyId = companyOf(req);
-  // Solo la categoría de los regalos: el producto que se deja no se toca.
-  if (regalos_category_id !== undefined && product_id === undefined) {
-    await require("./regalos").guardarCategoria(req, regalos_category_id);
-    return leerConfig(req, { conCategorias: true });
+  const limpia = (lista) => [...new Set((Array.isArray(lista) ? lista : []).map(int).filter(Boolean))];
+  if (product_ids !== undefined) {
+    const ids = limpia(product_ids);
+    const ok = ids.length ? await Q(
+      `SELECT id FROM products WHERE id IN (:ids) AND company_id = :companyId AND sellable AND NOT is_variant_parent`,
+      { ids, companyId }) : [];
+    if (ok.length !== ids.length) throw fail("Elige productos que estén a la venta");
+    await guardarLista(PRODUCTS_KEY, companyId, ids);
   }
-  const pid = int(product_id);
-  const [p] = pid ? await Q(
-    `SELECT id FROM products WHERE id = :pid AND company_id = :companyId AND sellable AND NOT is_variant_parent`,
-    { pid, companyId }) : [];
-  if (!p) throw fail("Elige un producto que esté a la venta");
-  await Setting.upsert({ key: PRODUCT_KEY, company_id: companyId, value: String(p.id) });
+  if (regalos_category_ids !== undefined) {
+    const ids = limpia(regalos_category_ids);
+    const ok = ids.length ? await Q(`SELECT id FROM categories WHERE id IN (:ids) AND company_id = :companyId`, { ids, companyId }) : [];
+    if (ok.length !== ids.length) throw fail("Categoría no encontrada");
+    await guardarLista(GIFT_CATEGORIES_KEY, companyId, ids);
+  }
   return leerConfig(req, { conCategorias: true });
 }
 
@@ -367,36 +372,40 @@ async function fichaCliente(req, customerId) {
   // Lo que se le puede dejar, con el precio de la sucursal del sector (product_stock manda, como
   // al facturar) y lo que queda en existencia.
   const { data: cfg } = await leerConfig(req);
-  let bolsa = null;
-  if (cfg.product && cliente.warehouse_id) {
-    const [p] = await Q(`SELECT p.id, p.name, COALESCE(ps.price, p.price)::float AS price, COALESCE(ps.qty, 0)::float AS stock
-                          FROM products p LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
-                         WHERE p.id = :pid`, { pid: cfg.product.id, wid: cliente.warehouse_id });
-    bolsa = p || null;
-  }
+  const productIds = cfg.productos.map(p => p.id);
+  const productos = productIds.length && cliente.warehouse_id
+    ? await Q(`SELECT p.id, p.name, COALESCE(ps.price, p.price)::float AS price, COALESCE(ps.qty, 0)::float AS stock
+                 FROM products p LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid
+                WHERE p.id IN (:productIds) ORDER BY lower(p.name)`, { productIds, wid: cliente.warehouse_id })
+    : [];
 
-  const { regalos, ganados } = await require("./regalos").deCliente(a.companyId, cliente.id, cfg.product?.id);
+  const { regalos, ganados } = await require("./regalos").deCliente(a.companyId, cliente.id, productIds);
 
   const deuda = r2(facturas.reduce((s, f) => s + parseFloat(f.balance ?? 0), 0));
-  return { data: { cliente, deuda, facturas, historial, bolsa, regalos, ganados, regalos_activos: !!cfg.categoria_regalos } };
+  return { data: { cliente, deuda, facturas, historial, productos, regalos, ganados, regalos_activos: cfg.categorias_regalos.length > 0 } };
 }
 
 // ── Operaciones del cobrador ─────────────────────────────────────────────────────────────────
 
 /**
- * Deja `qty` bolsas a crédito: una factura por visita, con el producto configurado, desde la
- * sucursal del sector. La factura se numera en el acto (confirmCreditSale): es una deuda pactada
- * y tiene que aparecer en Cuentas por cobrar y en el cierre.
+ * Deja mercancía a crédito: una factura por visita, con los productos configurados que se
+ * elijan, desde la sucursal del sector. La factura se numera en el acto (confirmCreditSale): es
+ * una deuda pactada y tiene que aparecer en Cuentas por cobrar y en el cierre.
  */
-async function dejarBolsa(req, customerId, { qty, idempotency_key } = {}) {
+async function dejarBolsa(req, customerId, { items, idempotency_key } = {}) {
   const { a, cliente } = await clienteAlAlcance(req, customerId);
   if (!cliente.sector_id) throw fail("Asígnale un sector al cliente antes de dejarle mercancía");
   if (!cliente.sector_active) throw fail("El sector de este cliente está inactivo");
-  const cantidad = int(qty);
-  if (!cantidad || cantidad < 1 || cantidad > MAX_BOLSAS) throw fail(`La cantidad va de 1 a ${MAX_BOLSAS}`);
+  const lineas = (Array.isArray(items) ? items : []).map(i => ({ product_id: int(i?.product_id), quantity: int(i?.qty) }));
+  if (!lineas.length) throw fail("Elige qué se deja");
+  if (new Set(lineas.map(l => l.product_id)).size !== lineas.length) throw fail("Un producto está repetido");
+  for (const l of lineas) {
+    if (!l.quantity || l.quantity < 1 || l.quantity > MAX_BOLSAS) throw fail(`La cantidad va de 1 a ${MAX_BOLSAS}`);
+  }
 
-  const { data: cfg } = await leerConfig(req);
-  if (!cfg.product) throw fail("Falta elegir qué producto se deja (Cobranza → Sectores → Producto)");
+  const permitidos = await leerLista(PRODUCTS_KEY, a.companyId);
+  if (!permitidos.length) throw fail("Falta elegir qué productos se dejan (Cobranza → Sectores)");
+  if (lineas.some(l => !permitidos.includes(l.product_id))) throw fail("Ese producto no está entre los que deja el cobrador");
 
   const wid = cliente.warehouse_id;
   // La serie: la del usuario en esa sucursal o la primera de facturas activa (como la agenda).
@@ -413,7 +422,7 @@ async function dejarBolsa(req, customerId, { qty, idempotency_key } = {}) {
   const createSale = require("../sales/createSale");
   const confirmCreditSale = require("../sales/confirmCreditSale");
   const venta = await createSale({
-    items: [{ product_id: cfg.product.id, quantity: cantidad }],
+    items: lineas,
     paid: 0,
     employee_id: req.employee?.id || null,
     customer_id: cliente.id,
@@ -424,7 +433,7 @@ async function dejarBolsa(req, customerId, { qty, idempotency_key } = {}) {
     idempotency_key: idempotency_key ? String(idempotency_key).slice(0, 100) : undefined,
   }, req);
   const saleId = venta?.id ?? venta?.data?.id;
-  if (!saleId) throw fail("No se pudo registrar la bolsa", 500);
+  if (!saleId) throw fail("No se pudo registrar lo que se dejó", 500);
 
   // Un reintento devuelve la venta ya creada (idempotencia) y quizás ya numerada.
   if (["borrador", "espera"].includes(venta.status)) await confirmCreditSale(saleId, req);

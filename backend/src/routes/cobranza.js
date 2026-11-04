@@ -46,6 +46,7 @@ router.post("/clientes/:id/abonos", permit("cobranza.collect"), enviar(req => sv
 const regalos = require("../services/cobranza/regalos");
 router.get ("/clientes/:id/regalos/opciones", permit("cobranza.gifts"), enviar(req => regalos.opciones(req, req.params.id)));
 router.post("/clientes/:id/regalos", permit("cobranza.gifts"),  enviar(req => regalos.asignar(req, req.params.id, req.body || {}), 201));
+router.get ("/regalos/existencia",   permit(...VER),            enviar(req => regalos.existencia(req, req.query)));
 router.get ("/regalos",              permit(...VER),            enviar(req => regalos.listar(req, req.query)));
 router.post("/regalos/:id/entregar", permit("cobranza.gifts"),  enviar(req => regalos.entregar(req, req.params.id)));
 router.post("/regalos/:id/anular",   permit("cobranza.gifts", "cobranza.manage"), enviar(req => regalos.anular(req, req.params.id, req.body || {})));
