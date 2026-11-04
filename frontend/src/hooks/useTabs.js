@@ -20,6 +20,8 @@ export function useTabs(employee, can, setReceipt, company) {
         if (t.superuserOnly) return !!employee?.is_superuser;
         if (t.adminOnly)     return !!employee?.permissions?.all;
         if (t.perm === null) return !!employee;
+        // Una lista de permisos: alcanza con tener uno.
+        if (Array.isArray(t.perm)) return t.perm.some(p => can(p));
         return can(t.perm);
     });
 

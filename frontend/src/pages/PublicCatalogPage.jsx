@@ -1,4 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { publicApi } from "../services/api";
+import BookingSheet from "../components/PublicCatalog/BookingSheet";
 import { usePublicCatalog } from "../hooks/usePublicCatalog";
 import { resolveTheme, sheetPanelFor } from "./catalogThemes";
 import VariantChooserModal from "../components/PublicCatalog/VariantChooserModal";
@@ -45,11 +47,42 @@ export default function PublicCatalogPage({ token, initialProductId = null }) {
     const Layout = resolveTheme(nombreTema);
     const panel = sheetPanelFor(nombreTema, catalog.store);
 
+    // Reservar una cita (Agenda de citas): el equipo y los servicios de la sucursal se piden
+    // aparte, solo si la tienda reserva en línea. La hoja vale para cualquier tema; el de
+    // servicios la pone al frente.
+    const [agendaInfo, setAgendaInfo] = useState(null);
+    const [reservando, setReservando] = useState(null);   // null cerrada · { serviceId?, resourceId? }
+    const conAgenda = !!catalog.store?.agenda;
+    const sucursalId = catalog.branch?.id || null;
+    useEffect(() => {
+        if (!conAgenda) { setAgendaInfo(null); return undefined; }
+        let vivo = true;
+        publicApi.agenda(token, sucursalId ? { warehouse_id: sucursalId } : {})
+            .then(r => { if (vivo) setAgendaInfo(r.data); })
+            .catch(() => { if (vivo) setAgendaInfo(null); });
+        return () => { vivo = false; };
+    }, [conAgenda, sucursalId, token]);
+    const agenda = { info: agendaInfo, open: (initial = {}) => setReservando(initial) };
+
     // El selector de talla y color va fuera del tema: así sirve igual en todos, que agregan
     // por el mismo addToCart.
     return (
         <>
-            <Layout catalog={catalog} token={token} />
+            <Layout catalog={catalog} token={token} agenda={agenda} />
+            <BookingSheet
+                open={!!reservando && !!agendaInfo}
+                onClose={() => setReservando(null)}
+                token={token}
+                store={catalog.store}
+                info={agendaInfo}
+                initial={reservando}
+                identity={catalog.identity}
+                onIdentified={catalog.saveIdentity}
+                fmt={catalog.fmt}
+                baseCur={catalog.baseCur}
+                altCur={catalog.altCur}
+                panel={panel === "#FFFFFF" ? null : panel}
+            />
             {catalog.variantPick && (
                 <VariantChooserModal
                     token={token}

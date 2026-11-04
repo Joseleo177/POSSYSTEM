@@ -764,6 +764,31 @@ export const api = {
     pay:          (id, body)      => request(`/commissions/sellers/${id}/payouts`, { method: "POST", body: JSON.stringify(body) }),
     voidPayout:   (id)            => request(`/commissions/payouts/${id}`, { method: "DELETE" }),
   },
+  // Agenda de citas (extra por empresa, ver services/agenda en el backend).
+  agenda: {
+    day:        (params = {})   => request("/agenda/day?" + new URLSearchParams(params)),
+    slots:      (params = {})   => request("/agenda/slots?" + new URLSearchParams(params)),
+    products:   (params = {})   => request("/agenda/products?" + new URLSearchParams(params)),
+    create:     (body)          => request("/agenda/appointments", { method: "POST", body: JSON.stringify(body) }),
+    update:     (id, body)      => request(`/agenda/appointments/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    setStatus:  (id, status)    => request(`/agenda/appointments/${id}/status`, { method: "POST", body: JSON.stringify({ status }) }),
+    finish:     (id, body = {}) => request(`/agenda/appointments/${id}/finish`, { method: "POST", body: JSON.stringify(body) }),
+    charge:     (id, body = {}) => request(`/agenda/appointments/${id}/charge`, { method: "POST", body: JSON.stringify(body) }),
+    resources:  (params = {})   => request("/agenda/resources?" + new URLSearchParams(params)),
+    createResource: (body)      => request("/agenda/resources", { method: "POST", body: JSON.stringify(body) }),
+    updateResource: (id, body)  => request(`/agenda/resources/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    saveHours:  (id, hours)     => request(`/agenda/resources/${id}/hours`, { method: "PUT", body: JSON.stringify({ hours }) }),
+    blocks:     (id)            => request(`/agenda/resources/${id}/blocks`),
+    addBlock:   (id, body)      => request(`/agenda/resources/${id}/blocks`, { method: "POST", body: JSON.stringify(body) }),
+    removeBlock: (id)           => request(`/agenda/blocks/${id}`, { method: "DELETE" }),
+    services:   (params = {})   => request("/agenda/services?" + new URLSearchParams(params)),
+    saveService: (id, body)     => request(`/agenda/services/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    settings:   ()              => request("/agenda/settings"),
+    saveSettings: (body)        => request("/agenda/settings", { method: "PUT", body: JSON.stringify(body) }),
+    setupOptions: ()            => request("/agenda/setup/options"),
+    location:   (params = {})   => request("/agenda/location?" + new URLSearchParams(params)),
+    saveLocation: (body)        => request("/agenda/location", { method: "PUT", body: JSON.stringify(body) }),
+  },
   // Adicionales de los platos (Catálogo → Adicionales).
   addons: {
     list:   ()         => request("/addons"),
@@ -903,6 +928,17 @@ export const publicApi = {
   // Pago de un pedido ya enviado (desde "Mis pedidos"). La cédula prueba que es suyo.
   reportPayment: (token, orderId, body) =>
     publicRequest(`/public/catalog/${encodeURIComponent(token)}/orders/${encodeURIComponent(orderId)}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  // Reservar una cita (Agenda de citas): equipo y servicios de la sucursal, horas libres y reservar.
+  agenda: (token, params = {}) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/agenda?` + new URLSearchParams(params)),
+  agendaSlots: (token, params = {}) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/agenda/slots?` + new URLSearchParams(params)),
+  agendaBook: (token, body) =>
+    publicRequest(`/public/catalog/${encodeURIComponent(token)}/agenda/book`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

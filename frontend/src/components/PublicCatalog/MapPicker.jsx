@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Spinner } from "../ui/Spinner";
 import CatalogSheet, { SheetHeader } from "./CatalogSheet";
+import { cargarLeaflet, MENSAJE_DESACTUALIZADO } from "../../helpers/cargarLeaflet";
 
 // Elegir en un mapa dónde se entrega el pedido. El delivery no siempre va a donde está el
 // cliente: pide desde el trabajo para su casa, o para otra persona. El pin queda fijo en el
@@ -53,8 +54,7 @@ export default function MapPicker({
         let vivo = true;
         (async () => {
             try {
-                const L = (await import("leaflet")).default;
-                await import("leaflet/dist/leaflet.css");
+                const L = await cargarLeaflet();
                 if (!vivo || !boxRef.current) return;
                 const inicio = initial || CENTRO_POR_DEFECTO;
                 const map = L.map(boxRef.current, { zoomControl: true, attributionControl: true })
@@ -70,12 +70,17 @@ export default function MapPicker({
                 setCargando(false);
                 // Sin punto previo, se arranca donde está el cliente, pero solo si ya dio permiso:
                 // preguntar al abrir el mapa sería raro cuando justo quiere marcar otro lugar.
+                // Va aparte: hay navegadores donde esta consulta falla, y no debe tapar un mapa
+                // que ya cargó con "no se pudo cargar".
                 if (!initial && navigator.permissions?.query) {
-                    const p = await navigator.permissions.query({ name: "geolocation" }).catch(() => null);
-                    if (p?.state === "granted") irAMiUbicacion();
+                    try {
+                        const p = await navigator.permissions.query({ name: "geolocation" });
+                        if (p?.state === "granted") irAMiUbicacion();
+                    } catch { /* sin permiso que consultar: el mapa queda en el centro por defecto */ }
                 }
-            } catch {
-                if (vivo) { setError("No se pudo cargar el mapa. Revisa tu conexión."); setCargando(false); }
+            } catch (err) {
+                console.error("[mapa]", err);
+                if (vivo) { setError(err?.desactualizado ? MENSAJE_DESACTUALIZADO : "No se pudo cargar el mapa. Revisa tu conexión."); setCargando(false); }
             }
         })();
         return () => { vivo = false; mapRef.current?.remove(); mapRef.current = null; };
@@ -157,7 +162,12 @@ export default function MapPicker({
                     </div>
                 )}
                 {error && (
-                    <div className="absolute inset-0 z-[500] flex items-center justify-center bg-neutral-100 text-neutral-600 text-[13px] px-6 text-center">{error}</div>
+                    <div className="absolute inset-0 z-[500] flex flex-col items-center justify-center gap-3 bg-neutral-100 text-neutral-600 text-[13px] px-6 text-center">
+                        <span>{error}</span>
+                        {error === MENSAJE_DESACTUALIZADO && (
+                            <button type="button" onClick={() => window.location.reload()} className="h-10 px-5 rounded-full bg-neutral-900 text-white text-[13px] font-semibold">Recargar</button>
+                        )}
+                    </div>
                 )}
 
                 {/* Resultados del buscador, sobre el mapa. */}

@@ -72,4 +72,4 @@ function endOfLocalDay(value) {
   return zonedInstant(+m[1], +m[2], +m[3], 23, 59, 59, 999);
 }
 
-module.exports = { toLocalDate, endOfLocalDay, TIMEZONE };
+module.exports = { toLocalDate, endOfLocalDay, zonedInstant, TIMEZONE };

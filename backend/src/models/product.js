@@ -22,6 +22,8 @@ module.exports = (sequelize, DataTypes) => {
     bulk_price: { type: DataTypes.DECIMAL(14, 5) },
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Minutos que dura el servicio en la agenda de citas. Nulo = no se agenda.
+    duration_min: { type: DataTypes.SMALLINT, allowNull: true },
     min_stock: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 0 },
     barcode: { type: DataTypes.STRING(50), allowNull: true },
     // Campos de vitrina: solo los lee el catálogo público (marca sobre el nombre y frase de

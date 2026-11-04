@@ -342,6 +342,9 @@ async function getStore(token, { warehouse_id } = {}) {
           facebook: publicLink(s.catalog_facebook),
         },
         highlights: parseHighlights(s.catalog_highlights),
+        // Reserva citas en línea (Agenda de citas, ver services/agenda/publico.js). El detalle
+        // (equipo, servicios, horas) se pide aparte, por sucursal.
+        agenda: await require("./agenda/publico").activa(company_id),
       },
       // Categorías destacadas en la cabecera, con su etiqueta. Vacío = cabecera estándar.
       menu: parseMenu(s.catalog_menu, categories),
@@ -1533,6 +1536,6 @@ async function sitemapStore(slug) {
 }
 
 module.exports = {
-  getStore, getProducts, getProduct, getMeta, sitemapStores, sitemapStore, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote, parseDocument,
+  getStore, getProducts, getProduct, getMeta, sitemapStores, sitemapStore, identifyCustomer, getMyOrders, createOrder, reportPayment, deliveryQuote, parseDocument, resolveCompanyId,
   SLUG_KEY, LEGACY_TOKEN_KEY, slugify, isValidSlug,
 };

@@ -508,3 +508,7 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
   .print-avoid-break { page-break-inside: avoid; }
   .print-force-break { page-break-before: always; }
 }
+
+/* Agenda de citas: cada cita teñida con el color de su profesional (--tinte). */
+.agenda-cita { background: color-mix(in srgb, var(--tinte) 13%, white); }
+.dark .agenda-cita { background: color-mix(in srgb, var(--tinte) 24%, #11151f); }

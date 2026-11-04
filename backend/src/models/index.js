@@ -51,6 +51,7 @@ const tenantModels = [
   'PreparationItem', 'ProductionBatch', 'ProductionBatchItem', 'TableOrder',
   'PaymentReport', 'ProductImage', 'Seller', 'CommissionPayout',
   'CasheaSettlement',
+  'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
 ];
 
 const applyTenantFilter = (modelName, options) => {

@@ -106,6 +106,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Un calendario con un reloj: las citas.
+    Agenda: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M8 3v3m8-3v3M4.5 9.5h15M11 20H6a2 2 0 01-2-2V7a2 2 0 012-2h12a2 2 0 012 2v4M17 13.5a3.5 3.5 0 110 7 3.5 3.5 0 010-7zm0 1.8V17l1.2.8"
+            />
+        </svg>
+    ),
     // Una persona con un porcentaje: lo que gana cada vendedor.
     Comisiones: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">

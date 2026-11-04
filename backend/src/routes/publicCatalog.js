@@ -228,6 +228,35 @@ router.post("/:slug/orders/:id/payments", paymentLimiter, async (req, res) => {
 // ── Administración del enlace (autenticado) ───────────────────
 // Va en un router aparte, montado en otra ruta base, para que estos endpoints nunca
 // queden colgando del prefijo público por accidente.
+// ── Agenda: reservar una cita desde la vitrina (ver services/agenda/publico.js) ──
+// Consultar horas es navegar (límite general); reservar crea trabajo para la tienda y va con
+// un tope propio, como los pedidos.
+const agendaPublica = require("../services/agenda/publico");
+const bookLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 8,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Has hecho demasiadas reservas. Intenta más tarde o escríbenos." },
+});
+const agendaHandler = (fn, { status = 200, label = "agenda" } = {}) => async (req, res) => {
+  try {
+    const cid = await svc.resolveCompanyId(req.params.slug);
+    if (!cid) return res.status(404).json({ ok: false, message: "Catálogo no disponible" });
+    const data = await fn(cid, req);
+    if (data == null) return res.status(404).json({ ok: false, message: "Esta tienda no recibe reservas en línea" });
+    res.status(status).json({ ok: true, data });
+  } catch (err) {
+    // Los errores con status son de validación, escritos para el cliente final.
+    if (err.status) return res.status(err.status).json({ ok: false, message: err.message, ...(err.code ? { code: err.code } : {}) });
+    console.error(`[public-catalog:${label}]`, err.message);
+    res.status(500).json({ ok: false, message: "No se pudo completar. Intenta de nuevo." });
+  }
+};
+router.get("/:slug/agenda", publicLimiter, agendaHandler((cid, req) => agendaPublica.info(cid, req.query.warehouse_id)));
+router.get("/:slug/agenda/slots", publicLimiter, agendaHandler((cid, req) => agendaPublica.slots(cid, req.query)));
+router.post("/:slug/agenda/book", bookLimiter, agendaHandler((cid, req) => agendaPublica.reservar(cid, req.body || {}), { status: 201, label: "agenda-book" }));
+
 const adminRouter = require("express").Router();
 
 // El slug se deriva del nombre de la tienda, pero se guarda: si el comercio se renombra, el

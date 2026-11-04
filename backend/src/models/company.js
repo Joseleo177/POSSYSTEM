@@ -37,6 +37,9 @@ module.exports = (sequelize, DataTypes) => {
     // Comisiones por vendedor (ver services/commissions): vendedores sin usuario, el vendedor
     // en cada venta y su liquidación. Extra que enciende el superusuario.
     comisiones_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Agenda de citas (barberías, consultorios, autolavados; ver services/agenda). Extra que
+    // enciende el superusuario.
+    citas_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // La vitrina aparece en Google: entra al sitemap y su cabecera no lleva noindex. Encendido
     // por defecto (el catálogo ya es público); lo apaga el superusuario a quien no lo quiera.
     seo_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

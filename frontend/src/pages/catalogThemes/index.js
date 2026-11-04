@@ -1,6 +1,7 @@
 import DefaultLayout from "./default/CatalogLayout";
 import BoutiqueLayout from "./boutique/CatalogLayout";
 import MenuLayout from "./menu/CatalogLayout";
+import ServiciosLayout, { SERVICIOS_PANEL } from "./servicios/CatalogLayout";
 import { MENU_PANEL_DEFAULT } from "../../components/PublicCatalog/shared";
 
 // Temas del catálogo público. Cada tienda elige el suyo con el ajuste `catalog_theme`, y
@@ -25,6 +26,9 @@ const THEMES = {
     // de cada uno una lista de platos en filas. Fondo oscuro fijo, no ligado al claro/oscuro
     // del visitante — es la identidad del tema, no una preferencia de accesibilidad.
     menu: MenuLayout,
+    // Negocio de servicios (barbería, spa, consultorio): portada con "Reservar cita", servicios
+    // con duración y precio, el equipo y el horario. La reserva es la de la Agenda de citas.
+    servicios: ServiciosLayout,
 };
 
 export const DEFAULT_THEME = "default";
@@ -36,7 +40,9 @@ export function resolveTheme(name) {
 // Color de papel de las hojas compartidas (checkout, pagos, pedidos) en este tema: el panel de
 // la carta en el menú, blanco en los otros dos. Ver CatalogSheet.
 export function sheetPanelFor(name, store) {
-    return name === "menu" ? (store?.panel_color || MENU_PANEL_DEFAULT) : "#FFFFFF";
+    if (name === "menu") return store?.panel_color || MENU_PANEL_DEFAULT;
+    if (name === "servicios") return store?.panel_color || SERVICIOS_PANEL;
+    return "#FFFFFF";
 }
 
 export default THEMES;

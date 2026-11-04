@@ -17,10 +17,12 @@ import MesasPage from "../pages/MesasPage";
 import RecetasPage from "../pages/RecetasPage";
 import PedidosPage from "../pages/PedidosPage";
 import ComisionesPage from "../pages/ComisionesPage";
+import AgendaPage from "../pages/AgendaPage";
 
 export const PAGE_COMPONENTS = {
     Dashboard: DashboardPage,
     Cobro: CobroPage,
+    Agenda: AgendaPage,
     Pedidos: PedidosPage,
     "Catálogo": CatalogPage,
     Compras: PurchasesPage,

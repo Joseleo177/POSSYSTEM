@@ -36,6 +36,7 @@ const TEMAS = [
     { value: "", label: "Estándar", detalle: "Lista de productos con buscador y filtros, sin portada.", usa: [] },
     { value: "boutique", label: "Tienda", detalle: "Portada con carrusel, menú superior, frases de marca y destacados.", usa: ["banners", "destacados", "menu", "frases", "anuncio"] },
     { value: "menu", label: "Menú", detalle: "Carta por categorías, pensada para restaurantes. Avisos arriba y colores propios.", usa: ["banners", "fondos"] },
+    { value: "servicios", label: "Servicios", detalle: "Barberías, spas, consultorios: portada con «Reservar cita», servicios con duración y precio, el equipo y el horario.", usa: ["banners", "destacados", "frases", "anuncio", "fondos"] },
 ];
 
 // placement: 'hero' = carrusel de portada; 'feature' = destacados con texto al pie de la
@@ -289,9 +290,10 @@ export default function StorefrontSettings({ notify }) {
                             )}
                             {usa("fondos") && (
                                 <ColorFila
-                                    titulo="Panel de la carta" ayuda="Donde van la foto de categoría y los platos, con texto oscuro: conviene un tono claro."
+                                    titulo={tema.value === "servicios" ? "Fondo del contenido" : "Panel de la carta"}
+                                    ayuda={tema.value === "servicios" ? "Donde van los servicios y el equipo, con texto oscuro: conviene un tono claro." : "Donde van la foto de categoría y los platos, con texto oscuro: conviene un tono claro."}
                                     value={settings.catalog_panel_color} onChange={v => set("catalog_panel_color", v)}
-                                    opciones={COLORES_PANEL} porDefecto="#F4FAF6" restablecer="Tono por defecto"
+                                    opciones={COLORES_PANEL} porDefecto={tema.value === "servicios" ? "#F5F0E8" : "#F4FAF6"} restablecer="Tono por defecto"
                                 />
                             )}
                         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { cargarLeaflet } from "../helpers/cargarLeaflet";
 
 // Mapa pequeño y quieto con el punto de entrega de un pedido: se ve a dónde va sin abrir otra
 // app. No se arrastra ni hace zoom (dentro de un panel que se desplaza, robaría el gesto);
@@ -13,8 +14,7 @@ export default function MiniMapa({ lat, lng, className = "h-36" }) {
         let vivo = true;
         (async () => {
             try {
-                const L = (await import("leaflet")).default;
-                await import("leaflet/dist/leaflet.css");
+                const L = await cargarLeaflet();
                 if (!vivo || !box.current) return;
                 mapa = L.map(box.current, {
                     zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false,

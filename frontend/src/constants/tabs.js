@@ -5,6 +5,9 @@ export const ALL_TABS = [
     // cajero no debe verla, y antes la veía porque el tab no pedía permiso alguno.
     { key: "Dashboard",     label: "Dashboard",     mobileLabel: "Inicio",     perm: "reports.view",    color: "from-teal-500 to-teal-700" },
     { key: "Cobro",         label: "Venta (POS)",   mobileLabel: "Venta",      perm: "sales.view",      color: "from-emerald-500 to-emerald-700" },
+    // Agenda de citas: extra por empresa. Varios permisos abren la pantalla: el profesional
+    // (agenda.own) ve solo la suya.
+    { key: "Agenda",        label: "Agenda",        mobileLabel: "Agenda",     perm: ["agenda.own", "agenda.view", "agenda.book", "agenda.setup"], companyFlag: "citas_enabled", color: "from-teal-500 to-teal-700" },
     // Bandeja de los pedidos del catálogo: se revisan y se aceptan antes de pasar a la caja.
     // Para toda empresa con el catálogo público encendido.
     { key: "Pedidos",       label: "Pedidos",       mobileLabel: "Pedidos",    perm: "sales.create",    companyFlag: "catalog_enabled",     color: "from-sky-500 to-sky-700" },

@@ -168,6 +168,19 @@ const MODULES = [
     ],
   },
   {
+    // Agenda de citas: solo en empresas con companies.citas_enabled (ver routes/agenda.js). Nuevo,
+    // fuera de todo LEGACY_MAP. 'own' es lo del rol Profesional: ve y atiende las citas del recurso
+    // enlazado a su usuario (agenda_resources.employee_id). Cobrarlas sigue siendo sales.create.
+    key: 'agenda',
+    label: 'Agenda de citas',
+    actions: [
+      { key: 'own',   label: 'Ver y atender su propia agenda' },
+      { key: 'view',  label: 'Ver la agenda de toda la sucursal' },
+      { key: 'book',  label: 'Dar, mover y cancelar citas' },
+      { key: 'setup', label: 'Configurar profesionales, puestos y horarios' },
+    ],
+  },
+  {
     key: 'reports',
     label: 'Reportes',
     actions: [
