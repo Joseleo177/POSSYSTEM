@@ -2,6 +2,7 @@ const router    = require("express").Router();
 const rateLimit = require("express-rate-limit");
 const svc = require("../services/mesaPublica");
 const clientes = require("../services/mesaClientes");
+const avisos = require("../services/avisosPush");
 
 // Página del QR de la mesa: responde sin sesión, por el código secreto de la mesa. La página se
 // refresca sola cada 15 s y en un restaurante muchos teléfonos salen por la MISMA IP (el wifi
@@ -47,6 +48,10 @@ const identificarLimiter = rateLimit({
   message: { ok: false, message: "Demasiados intentos. Espera unos minutos." },
 });
 
+// Avisos al teléfono (services/avisosPush.js): aceptar / dejar de recibir. Mismo tope que pedir la
+// cuenta: un cliente lo hace una o dos veces por visita.
+router.post  ("/:token/avisos",       cuentaLimiter,      handle(req => avisos.suscribir(req.params.token, req.body)));
+router.delete("/:token/avisos",       cuentaLimiter,      handle(req => avisos.desuscribir(req.params.token, req.body)));
 router.get ("/:token/yo",             verLimiter,         handle(req => clientes.quien(req.params.token, req.query.d)));
 router.post("/:token/yo",             cuentaLimiter,      handle(req => clientes.confirmar(req.params.token, req.body?.device, req.body?.yes === true)));
 router.post("/:token/identificar",    identificarLimiter, handle(req => clientes.identificar(req.params.token, req.body?.device, req.body?.document)));

@@ -62,7 +62,7 @@ const HUELLA_SQL = `
     COALESCE((SELECT string_agg(o.id || ':' || o.status, ',' ORDER BY o.id) FROM table_orders o
                WHERE o.table_id = t.id AND o.created_at > NOW() - INTERVAL '3 hours'), '')
     || '|' ||
-    COALESCE((SELECT string_agg(st.key || '=' || st.value, ',' ORDER BY st.key) FROM settings st WHERE st.company_id = t.company_id AND st.key IN ('mesa_qr_pedidos', 'mesa_clientes')), '')
+    COALESCE((SELECT string_agg(st.key || '=' || st.value, ',' ORDER BY st.key) FROM settings st WHERE st.company_id = t.company_id AND st.key IN ('mesa_qr_pedidos', 'mesa_clientes', 'mesa_avisos')), '')
   ) AS v
     FROM dining_tables t
    WHERE t.public_token = :token AND t.active`;
@@ -87,7 +87,7 @@ async function armar(token) {
     const ajustes = Object.fromEntries((await Setting.findAll({
       where: {
         company_id: cid,
-        key: { [Op.in]: ["store_name", "store_slogan", "logo_filename", "brand_color", "catalog_brand_color", "catalog_bg_color", "catalog_panel_color", "mesa_clientes", SLUG_KEY, MODO_KEY] },
+        key: { [Op.in]: ["store_name", "store_slogan", "logo_filename", "brand_color", "catalog_brand_color", "catalog_bg_color", "catalog_panel_color", "mesa_clientes", "mesa_avisos", SLUG_KEY, MODO_KEY] },
       },
       attributes: ["key", "value"],
     })).map(s => [s.key, s.value]));
@@ -189,6 +189,9 @@ async function armar(token) {
         currency: { symbol: base?.symbol || "Ref.", bs_symbol: bs?.symbol || null, bs_rate: tasa },
         // Reconocer al cliente en la mesa (services/mesaClientes.js), extra apagado por defecto.
         customers: ajustes.mesa_clientes === "true",
+        // Avisos al teléfono (services/avisosPush.js): la llave pública si la tienda los encendió
+        // y el servidor tiene llaves VAPID; null = no se ofrecen.
+        push_key: ajustes.mesa_avisos === "true" ? require("./avisosPush").clavePublica() : null,
         // Si se puede pedir desde el QR: 'confirmar' (lo acepta el mesonero) o 'directo'.
         ordering: leerModo(ajustes[MODO_KEY]) === "apagado" ? null : leerModo(ajustes[MODO_KEY]),
         qr_orders: pedidosQr.map(o => ({
@@ -396,6 +399,8 @@ async function pedir(token, body = {}) {
     });
     // Si se registró en la mesa (cédula nueva + nombre), su ficha nace con su primer pedido.
     if (aparato && body.registro && typeof body.registro === "object") await clientes.alPedir(cid, aparato, body.registro);
+    // Con avisos aceptados, el aparato sigue a esta mesa: cuando la ronda quede lista, le llega.
+    if (aparato) await require("./avisosPush").seguirMesa(cid, aparato, mesa.id);
     if (modo === "directo") directo = { id: pedido.id, cid };
     // El mesonero lo ve en la siguiente vuelta del mapa, sin esperar el caché de la huella.
     olvidar(`mesas:${cid}:`);

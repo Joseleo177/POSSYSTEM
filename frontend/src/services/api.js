@@ -981,6 +981,17 @@ export const publicApi = {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }),
+  // Avisos al teléfono: guardar la suscripción del navegador (y seguir la mesa) o borrarla.
+  mesaAvisos:      (token, body) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/avisos`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }),
+  mesaQuitarAvisos: (token, endpoint) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/avisos`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ endpoint }),
+  }),
   // Quién es el cliente en la mesa (por el código de su aparato), "sí/no soy yo" y su cédula.
   mesaYo:          (token, device) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/yo?d=${encodeURIComponent(device)}`),
   mesaConfirmar:   (token, device, yes) => publicRequest(`/public/mesa/${encodeURIComponent(token)}/yo`, {

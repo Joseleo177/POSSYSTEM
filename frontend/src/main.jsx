@@ -29,8 +29,12 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
     try { usaErp = Boolean(localStorage.getItem("pos_token") || localStorage.getItem("nexus_equipo_codigo")); }
     catch { /* modo privado: no tocar nada */ }
     if (usaErp) return;
+    // Solo el del ERP (/sw.js): el de los avisos al teléfono (/push-sw.js, ver
+    // components/mesas/avisos.js) es de la vitrina y se queda.
     navigator.serviceWorker.getRegistrations()
-      .then((regs) => Promise.all(regs.map((r) => r.unregister())))
+      .then((regs) => Promise.all(regs
+        .filter((r) => /\/sw\.js$/.test((r.active || r.waiting || r.installing)?.scriptURL || ""))
+        .map((r) => r.unregister())))
       .then(() => caches.keys())
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith("nexus-app-")).map((k) => caches.delete(k))))
       .catch(() => { /* sin efecto en la vitrina */ });

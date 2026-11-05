@@ -143,6 +143,7 @@ async function setStatus(req, id, { status } = {}) {
   const ticket = await KitchenTicket.findOne({ where: { id: parseInt(id, 10) || 0, company_id: req.company_id } });
   if (!ticket) throw fail("Comanda no encontrada", 404);
   await assertWarehouseAccess(req, ticket.warehouse_id, { optional: true });
+  const antes = ticket.status;
 
   await sequelize.transaction(async (transaction) => {
     // ready_at guarda la primera vez que quedó lista: si alguien la devuelve a preparación por
@@ -155,6 +156,14 @@ async function setStatus(req, id, { status } = {}) {
     await resumirCuenta(ticket.sale_id, transaction);
   });
   olvidarHuellas(req.company_id);
+
+  // Ronda de mesa que ACABA de quedar lista: aviso al teléfono de quienes están en esa mesa
+  // (services/avisosPush.js). Se espera antes de responder —en Vercel lo pendiente se corta—,
+  // con tope por envío; si falla, la cocina sigue igual.
+  if (status === "lista" && antes !== "lista" && ticket.table_id) {
+    await require("./avisosPush").pedidoListo(req.company_id, ticket)
+      .catch(e => console.error("[avisos] pedido listo:", e.message));
+  }
 
   return { data: { id: ticket.id, kitchen_status: status } };
 }

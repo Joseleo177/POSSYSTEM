@@ -6,6 +6,7 @@ import { applyBrandColor } from "../helpers/brandColor";
 import { pintarFondo, fijarDocumento } from "../helpers/fondoPagina";
 import MenuMesaPublico from "../components/mesas/MenuMesaPublico";
 import QuienSoy, { aparato, leerRegistro, guardarRegistro, omitido, nombreDePila } from "../components/mesas/QuienSoy";
+import { avisosPosibles, permisoAvisos, suscripcionActual, activarAvisos, desactivarAvisos } from "../components/mesas/avisos";
 
 // La página del QR de la mesa (/mesa/<código>): el cliente, desde su teléfono, ve cómo va cada
 // ronda en la cocina, lo que lleva pedido y cuánto va la cuenta, y la pide sin levantar la
@@ -283,6 +284,50 @@ export default function MesaPublicPage({ token }) {
             onClose={() => setHoja(null)} />
     );
 
+    // ── Avisos al teléfono: "Tu pedido está listo" (05-11-2026, components/mesas/avisos.js) ──
+    // Solo si la tienda los encendió y el navegador puede (HTTPS; en iPhone, con la página en la
+    // pantalla de inicio). Con el permiso ya dado, al abrir la página se renueva en silencio y el
+    // teléfono queda siguiendo esta mesa.
+    const llaveAvisos = d?.push_key || null;
+    const [avisos, setAvisos] = useState(null);       // null · ofrecer · activos · bloqueados
+    const [avisosCargando, setAvisosCargando] = useState(false);
+    const [avisosError, setAvisosError] = useState(null);
+    const avisosVistos = useRef(false);
+    useEffect(() => {
+        if (!llaveAvisos || avisosVistos.current) return;
+        avisosVistos.current = true;
+        if (!avisosPosibles()) return;
+        const p = permisoAvisos();
+        if (p === "denied") { setAvisos("bloqueados"); return; }
+        if (p !== "granted") { setAvisos("ofrecer"); return; }
+        suscripcionActual().then(async (sub) => {
+            if (!sub) { setAvisos("ofrecer"); return; }
+            await publicApi.mesaAvisos(token, { subscription: sub, device: disp }).catch(() => {});
+            setAvisos("activos");
+        }).catch(() => setAvisos("ofrecer"));
+    }, [llaveAvisos]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const encenderAvisos = async () => {
+        setAvisosCargando(true);
+        setAvisosError(null);
+        try {
+            const sub = await activarAvisos(llaveAvisos);
+            await publicApi.mesaAvisos(token, { subscription: sub, device: disp });
+            setAvisos("activos");
+        } catch (e) {
+            if (e?.motivo === "bloqueado") setAvisos("bloqueados");
+            else setAvisosError(e?.message || "No se pudieron activar los avisos");
+        } finally { setAvisosCargando(false); }
+    };
+    const apagarAvisos = async () => {
+        setAvisosCargando(true);
+        try {
+            const endpoint = await desactivarAvisos();
+            if (endpoint) await publicApi.mesaQuitarAvisos(token, endpoint).catch(() => {});
+            setAvisos("ofrecer");
+        } finally { setAvisosCargando(false); }
+    };
+
     const pedirCuenta = async () => {
         setPidiendo(true);
         setAvisoError(null);
@@ -416,6 +461,37 @@ export default function MesaPublicPage({ token }) {
                     </div>
                 )}
 
+                {/* Avisos al teléfono: se ofrecen cuando ya hay algo que esperar. */}
+                {avisos && (yaPidio || avisos === "activos") && (
+                    avisos === "activos" ? (
+                        <div className="mb-5 -mt-1 px-1 flex items-center gap-2 text-[13px] text-neutral-500">
+                            <Ico d={I.campana} className="w-4 h-4 text-brand-600" w={2} />
+                            <span className="flex-1">Te avisamos al teléfono cuando esté listo.</span>
+                            <button onClick={apagarAvisos} disabled={avisosCargando} className="font-medium text-neutral-500 underline underline-offset-2 decoration-neutral-300">Quitar</button>
+                        </div>
+                    ) : avisos === "bloqueados" ? (
+                        <p className="mb-5 -mt-1 px-1 text-[12px] text-neutral-500 leading-snug">
+                            Los avisos están bloqueados en este navegador. Si quieres que te avisemos, actívalos en sus ajustes.
+                        </p>
+                    ) : (
+                        <div className={`rise-in mb-5 ${TARJETA} px-4 py-3.5 flex items-center gap-3`}>
+                            <span className="w-10 h-10 rounded-full bg-brand-500/10 text-brand-600 flex items-center justify-center shrink-0">
+                                <span className="bell-ring"><Ico d={I.campana} className="w-5 h-5" w={2} /></span>
+                            </span>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-[14px] font-semibold leading-snug">¿Te avisamos cuando esté listo?</div>
+                                <div className="text-[12px] text-neutral-500 leading-snug">Te llega al teléfono aunque cierres esta página.</div>
+                                {avisosError && <div className="text-[12px] text-red-600 mt-0.5">{avisosError}</div>}
+                            </div>
+                            <button onClick={encenderAvisos} disabled={avisosCargando}
+                                className="btn-accent shrink-0 h-10 px-4 rounded-full text-[13px] font-semibold flex items-center gap-1.5 disabled:opacity-60">
+                                {avisosCargando && <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                                Avisarme
+                            </button>
+                        </div>
+                    )
+                )}
+
                 {/* Pedidos hechos desde aquí que todavía no son una ronda */}
                 {d.qr_orders?.length > 0 && (
                     <section className="mb-6">
@@ -534,7 +610,9 @@ export default function MesaPublicPage({ token }) {
                     cliente={confirmado} saludo={saludo}
                     // Con el pedido va el aparato (para reconocerlo después) y, si se registró en la
                     // mesa, sus datos: su ficha nace con este primer pedido.
-                    extraPedido={clientesOn && disp ? { device: disp, ...(registro && !yo?.customer ? { registro } : {}) } : null}
+                    // El aparato va siempre (también sin "reconocer al cliente"): con él la mesa
+                    // sabe a qué teléfono avisar cuando la ronda quede lista.
+                    extraPedido={disp ? { device: disp, ...(clientesOn && registro && !yo?.customer ? { registro } : {}) } : null}
                     onClose={() => setMenuAbierto(false)}
                     onEnviado={(r) => {
                         huella.current = r.v || null;

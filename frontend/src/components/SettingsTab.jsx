@@ -545,6 +545,14 @@ export default function SettingsTab({ notify }) {
                                         checked={settings.mesa_clientes === "true"}
                                         onChange={() => setSettings(p => ({ ...p, mesa_clientes: p.mesa_clientes === "true" ? "false" : "true" }))}
                                     />
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    {/* Avisos al teléfono (services/avisosPush.js). Apagado por defecto. */}
+                                    <Interruptor
+                                        titulo="Avisar al cliente cuando su pedido esté listo"
+                                        detalle="Desde el QR de la mesa, el cliente acepta los avisos y le llega una notificación al teléfono cuando la cocina marca su ronda como lista, aunque haya cerrado la página. Gratis. En Android funciona directo; en iPhone solo si agregó la página a su pantalla de inicio."
+                                        checked={settings.mesa_avisos === "true"}
+                                        onChange={() => setSettings(p => ({ ...p, mesa_avisos: p.mesa_avisos === "true" ? "false" : "true" }))}
+                                    />
                                 </div>
                             </Seccion>
                         )}

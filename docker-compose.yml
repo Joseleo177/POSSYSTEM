@@ -52,6 +52,11 @@ services:
       # Aquí el backend es un proceso permanente, así que sostener el stream no cuesta
       # nada. En serverless va apagado (ver SSE_ENABLED en config/envValidator.js).
       SSE_ENABLED: ${SSE_ENABLED:-true}
+      # ── Avisos al teléfono (Web Push, services/avisosPush.js) ──
+      # Sin llaves no se ofrecen. Ojo: el teléfono solo los acepta por HTTPS (o localhost).
+      VAPID_PUBLIC_KEY:  ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT:     ${VAPID_SUBJECT:-}
       # ── Modo NUBE — Supabase (dejar vacío para modo local) ─────
       # Si se proveen SUPABASE_URL y SUPABASE_SERVICE_KEY el
       # backend usará Supabase en lugar del contenedor db.
