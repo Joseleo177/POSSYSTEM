@@ -7,6 +7,7 @@ import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { cartKey } from "../../helpers/cartLine";
 import { desgloseIva, renglonesIva, tasaDeLinea } from "../../helpers/iva";
+import { monedaLocal } from "../../helpers/currency";
 
 // Mismo redondeo por línea que CartContext y CartSidebar: las líneas tienen que sumar el
 // total que se factura, al céntimo.
@@ -53,7 +54,7 @@ export default function CheckoutReview({
     const tope = !can("admin") && topeCfg > 0 ? topeCfg : null;
     // Cobro a tasa de divisas: permiso propio, y solo si la caja maneja bolívares. La tasa tiene
     // que pasar la del sistema; por debajo sería un recargo (el servidor también lo exige).
-    const monedaBs = activeCurrencies.find(c => !c.is_base) || null;
+    const monedaBs = monedaLocal(activeCurrencies) || null;
     const tasaSistema = parseFloat(monedaBs?.exchange_rate) || 0;
     // Además del permiso, la empresa tiene que tenerlo activo (Configuración → Punto de venta).
     const puedeFx = settings?.pos_fx_cobro === "true" && can("sales.fx") && tasaSistema > 1;

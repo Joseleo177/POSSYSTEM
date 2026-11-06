@@ -5,6 +5,7 @@ import { ROLE_COLORS, DEFAULT_ROLE_CLASS } from "../constants/roles";
 import { useApp } from "../context/AppContext";
 import { useBcvRate, checkBcvRate } from "../hooks/useBcvRate";
 import SucursalSwitcher from "./SucursalSwitcher";
+import { monedaLocal } from "../helpers/currency";
 
 function useDateTick() {
     const [now, setNow] = React.useState(new Date());
@@ -37,7 +38,7 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
     const dateStr = now.toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" });
 
     const baseCurrency = currencies.find(c => c.is_base);
-    const localCurrency = currencies.find(c => c.active && !c.is_base);
+    const localCurrency = monedaLocal(currencies);
     const rateStr = localCurrency
         ? `${localCurrency.symbol || localCurrency.name}/${baseCurrency?.symbol || "Ref."}: ${parseFloat(localCurrency.exchange_rate).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 })}`
         : null;

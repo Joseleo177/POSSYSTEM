@@ -7,6 +7,7 @@ import { Spinner } from "../ui/Spinner";
 import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
 import ReceiptModal, { montosEnBolivares } from "../ReceiptModal";
+import { monedaLocal, conFamilia } from "../../helpers/currency";
 
 /**
  * Props:
@@ -15,7 +16,7 @@ import ReceiptModal, { montosEnBolivares } from "../ReceiptModal";
  *   onChanged – opcional: se cambió el vencimiento (Cuentas por Cobrar recarga su listado)
  */
 export default function SaleDetailModal({ saleId, onClose, onChanged }) {
-    const { baseCurrency, activeCurrencies, can, notify } = useApp();
+    const { baseCurrency, activeCurrencies, monedasCobro = activeCurrencies, can, notify } = useApp();
     const [sale, setSale]   = useState(null);
     const [loading, setLoading] = useState(true);
     const [savingDue, setSavingDue] = useState(false);
@@ -66,7 +67,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
     // Misma moneda que el recibo: saldada con bolívares, todo en Bs a la tasa del cobro (con
     // los mismos céntimos que el papel); sin bolívares de por medio o con saldo pendiente, en
     // divisas. Antes el detalle iba siempre en Ref. y solo el botón del recibo lo convertía.
-    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const displayCurrency = conFamilia(monedaLocal(activeCurrencies), monedasCobro) || baseCurrency;
     const bs = montosEnBolivares(sale, displayCurrency, baseCurrency);
     const conv = (n) => bs ? fmtMoney(Math.round(parseFloat(n || 0) * bs.rate * 100) / 100, bs.sym) : fmt(n);
     const fmtTotal    = bs ? bs.fmtTotal    : fmt(sale?.total);

@@ -38,6 +38,8 @@ async function rateForDay(companyId, journal, day, t) {
       FROM payments p
       JOIN payment_journals pj ON pj.id = p.payment_journal_id
      WHERE p.company_id = :company_id AND pj.currency_id = :currency_id
+       -- La tasa de la moneda de la caja, no una alterna (Bs a la tasa USDT) cobrada por ella.
+       AND p.currency_id = :currency_id
        AND p.exchange_rate > 1
        AND ${localDate("p.created_at")} BETWEEN (CAST(:day AS date) - 7) AND CAST(:day AS date)
      ORDER BY p.created_at DESC

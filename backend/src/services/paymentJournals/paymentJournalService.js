@@ -20,7 +20,7 @@ function flattenJournal(j) {
   // Métodos de la cuenta, en su orden. El primero es el principal (`type`).
   jj.methods = (jj.methods || [])
     .sort((a, b) => a.sort_order - b.sort_order || a.id - b.id)
-    .map(m => ({ method_code: m.method_code, allows_inflow: m.allows_inflow, allows_outflow: m.allows_outflow }));
+    .map(m => ({ method_code: m.method_code, allows_inflow: m.allows_inflow, allows_outflow: m.allows_outflow, rate_currency_id: m.rate_currency_id ?? null }));
   if (!jj.methods.length && jj.type) jj.methods = [{ method_code: jj.type, allows_inflow: true, allows_outflow: true }];
   jj.opening_balance  = parseFloat(jj.opening_balance || 0);
   delete jj.Currency; delete jj.Bank; delete jj.Warehouse; delete jj.Sucursales;
@@ -165,7 +165,7 @@ async function getAll(req) {
     // la cuenta que los absorbió.
     where: { ...tenantWhere, merged_into_id: null, ...(await journalScope(req)) },
     include: [
-      { model: PaymentJournalMethod, as: 'methods', attributes: ['id', 'method_code', 'allows_inflow', 'allows_outflow', 'sort_order'], required: false },
+      { model: PaymentJournalMethod, as: 'methods', attributes: ['id', 'method_code', 'allows_inflow', 'allows_outflow', 'sort_order', 'rate_currency_id'], required: false },
       { model: Currency, attributes: ['code', 'symbol', 'is_base', 'exchange_rate'], required: false },
       { model: Bank,     attributes: ['name'],                                        required: false },
       { model: Warehouse, attributes: ['id', 'name'],                                 required: false },
@@ -229,7 +229,9 @@ function leerMetodos(body) {
     vistos.add(code);
     const allows_inflow = flag(m.allows_inflow), allows_outflow = flag(m.allows_outflow);
     if (!allows_inflow && !allows_outflow) throw bad(`El método "${code}" tiene que recibir, pagar o las dos cosas`);
-    lista.push({ method_code: code, allows_inflow, allows_outflow, sort_order: lista.length });
+    // Tasa con que cobra por defecto (Bs a la tasa USDT). Se valida al guardar contra la moneda de la caja.
+    const rate_currency_id = parseInt(m.rate_currency_id, 10) || null;
+    lista.push({ method_code: code, allows_inflow, allows_outflow, sort_order: lista.length, rate_currency_id });
   }
   if (!lista.length) throw bad("La cuenta necesita al menos un método de pago");
   return lista;
@@ -264,9 +266,20 @@ async function guardarMetodos(journal, metodos, transaction) {
     where: { journal_id: journal.id }, attributes: ["method_code", "catalog_visible", "catalog_info"], transaction,
   });
   const catalogo = new Map(previos.map(p => [p.method_code, { catalog_visible: p.catalog_visible, catalog_info: p.catalog_info }]));
+  // La tasa por defecto de un método solo puede ser una tasa alterna de la moneda de la caja
+  // (Bs a la tasa USDT en una caja de bolívares). La propia moneda de la caja es lo mismo que
+  // dejarlo vacío; cualquier otra moneda se descarta.
+  const pedidas = [...new Set(metodos.map(m => m.rate_currency_id).filter(Boolean))];
+  const alternas = pedidas.length && journal.currency_id
+    ? new Set((await Currency.findAll({ where: { id: pedidas, rate_of_id: journal.currency_id }, attributes: ['id'], transaction })).map(c => c.id))
+    : new Set();
   await PaymentJournalMethod.destroy({ where: { journal_id: journal.id }, transaction });
   await PaymentJournalMethod.bulkCreate(
-    metodos.map(m => ({ ...m, ...catalogo.get(m.method_code), journal_id: journal.id, company_id: journal.company_id })),
+    metodos.map(m => ({
+      ...m, ...catalogo.get(m.method_code),
+      rate_currency_id: alternas.has(m.rate_currency_id) ? m.rate_currency_id : null,
+      journal_id: journal.id, company_id: journal.company_id,
+    })),
     { transaction },
   );
 }

@@ -15,6 +15,7 @@ import { fmtQtyUnit } from "../helpers/unitFormatter";
 import Segmented from "./ui/Segmented";
 import { OPCIONES_IVA } from "../helpers/iva";
 import { MODES as PIECE_MODES, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm } from "./fabrica/shared";
+import { monedaLocal } from "../helpers/currency";
 
 // Unidad que impone cada modo de control por piezas.
 const PIECE_UNIT = { area: "M2", length: "METRO" };
@@ -42,7 +43,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const fabricaEnabled = !!company?.fabrica_enabled;
     const ivaEnabled = !!company?.iva_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
-    const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
+    const localCurrency = monedaLocal(activeCurrencies) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
 
     const [form, setForm] = useState(EMPTY);

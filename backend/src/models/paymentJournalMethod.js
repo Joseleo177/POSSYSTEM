@@ -19,6 +19,9 @@ module.exports = (sequelize, DataTypes) => {
     // necesita para hacerlo: { titular, documento, telefono, cuenta, correo, instrucciones }.
     catalog_visible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     catalog_info:    { type: DataTypes.JSONB, allowNull: true },
+    // Moneda o tasa con que cobra por defecto este método (pago móvil a la tasa USDT, punto a la
+    // del BCV). Vacío = la moneda de la caja. El cajero la puede cambiar en el cobro.
+    rate_currency_id: { type: DataTypes.INTEGER, allowNull: true },
   }, {
     sequelize,
     tableName: 'payment_journal_methods',

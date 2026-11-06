@@ -3,13 +3,14 @@ import { api } from "../../services/api";
 import { Button } from "../ui/Button";
 import { printQuotationDoc, printQuotationLetter, toNameCase } from "../../helpers";
 import { useEffect } from "react";
+import { monedaLocal } from "../../helpers/currency";
 
 export default function QuotationConfirmModal({ quotation, onNext }) {
     const { companyInfo, baseCurrency, activeCurrencies, notify, printerWidth } = useApp();
 
     const receiptRate   = parseFloat(quotation?.exchange_rate || 1);
     const receiptIsBase = receiptRate <= 1;
-    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const displayCurrency = monedaLocal(activeCurrencies) || baseCurrency;
     const sym = receiptIsBase ? (baseCurrency?.symbol || "Ref.") : (displayCurrency?.symbol || "Ref.");
     const rate = receiptIsBase ? 1 : parseFloat(receiptRate > 1 ? receiptRate : (displayCurrency?.exchange_rate || 1));
     const fmt = n => `${sym}${Number(parseFloat(n || 0) * rate).toFixed(2)}`;

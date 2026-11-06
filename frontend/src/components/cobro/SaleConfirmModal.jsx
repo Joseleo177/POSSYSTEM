@@ -12,6 +12,7 @@ import StatusMark from "../ui/StatusMark";
 import Money from "../ui/Money";
 import Kbd from "../ui/Kbd";
 import PaymentReportList from "../PaymentReports/PaymentReportList";
+import { monedaLocal, conFamilia } from "../../helpers/currency";
 
 // Número de atajo dentro del botón. Se dibuja como tecla para que se lea como "pulsa el 1"
 // y no como parte del texto de la acción.
@@ -24,7 +25,7 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
-    const { notify, activeCurrencies, activeJournals, companyInfo, printerWidth, company, settings } = useApp();
+    const { notify, activeCurrencies, monedasCobro = activeCurrencies, activeJournals, companyInfo, printerWidth, company, settings } = useApp();
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
@@ -103,7 +104,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // está en la factura: se registra con el cobro. Se cuenta en bolívares; lo que se cobra es
     // lo entregado más la comisión. `hecho` = ya quedó registrado.
     const avancePedido  = receipt?._avance?.cash_amount > 0 ? receipt._avance : null;
-    const simboloAvance = (activeCurrencies || []).find(c => !c.is_base)?.symbol || "Bs.";
+    const simboloAvance = monedaLocal(activeCurrencies)?.symbol || "Bs.";
     const avanceCobro   = avancePedido ? avancePedido.cash_amount + Math.round(avancePedido.cash_amount * (avancePedido.fee_pct || 0)) / 100 : 0;
     const mainRate      = receiptIsBase ? 1 : tasaDeVenta(receipt, liveRate > 0 ? liveRate : receiptRate);
     const rateChanged   = !tasaFx && !receiptIsBase && receiptRate > 1 && Math.abs(mainRate - receiptRate) > 0.000001;
@@ -113,7 +114,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // es donde se cuelan los errores. Los montos llegan siempre en base, así que convertir es
     // multiplicar por la tasa cuando el recibo ya está en base, o no hacer nada cuando no.
     const altCurrency = receiptIsBase
-        ? activeCurrencies?.find(c => !c.is_base)
+        ? monedaLocal(activeCurrencies)
         : baseCurrency;
     const altRate = receiptIsBase ? tasaDeVenta(receipt, parseFloat(altCurrency?.exchange_rate || 0)) : 1;
     // Sin segunda moneda configurada no hay nada que mostrar, y con tasa 1 la línea sería una
@@ -326,7 +327,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     payments,
                 },
                 companyInfo,
-                activeCurrencies?.find(c => !c.is_base) || baseCurrency,
+                conFamilia(monedaLocal(activeCurrencies), monedasCobro) || baseCurrency,
                 printerWidth,
                 // Cobrado todo en divisas, el papel sale en divisas (ver receiptCurrency).
                 baseCurrency,
@@ -691,7 +692,7 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     saldo={currentBalance}
                     baseSymbol={baseCurrency?.symbol || "Ref."}
                     alt={(() => {
-                        const bs = (activeCurrencies || []).find(c => !c.is_base);
+                        const bs = monedaLocal(activeCurrencies);
                         return bs ? { symbol: bs.symbol, rate: parseFloat(bs.exchange_rate) || 0 } : null;
                     })()}
                     onClose={() => setShowCashea(false)}

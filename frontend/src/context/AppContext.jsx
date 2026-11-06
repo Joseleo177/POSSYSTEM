@@ -6,6 +6,7 @@ import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBr
 import { pedirAlmacenamientoPersistente } from "../services/offline/store";
 import { iniciarSincronizacion } from "../services/offline/sync";
 import { esSinServidor } from "../services/offline/network";
+import { monedaLocal } from "../helpers/currency";
 
 const AppContext = createContext(null);
 
@@ -301,7 +302,12 @@ export function AppProvider({ children }) {
 
   // ── Derived ────────────────────────────────────────────────
   const baseCurrency     = currencies.find(c => c.is_base);
-  const activeCurrencies = currencies.filter(c => c.active);
+  // Sin las tasas alternas (Bs a la tasa USDT): son la misma moneda a otra tasa, no una divisa
+  // más para elegir en pantalla, en compras o en la ficha del producto. Las ofrece solo el cobro
+  // (monedasCobro), según el método.
+  const activeCurrencies = currencies.filter(c => c.active && !c.rate_of_id);
+  const localCurrency    = monedaLocal(activeCurrencies);
+  const monedasCobro     = currencies.filter(c => c.active);
   // El diario Cashea no es una caja: guarda lo que Cashea debe y solo se mueve al vender con
   // Cashea o al liquidar (services/cashea). No se ofrece para cobrar, pagar ni registrar nada.
   const activeJournals   = journals.filter(j => j.active && j.type !== "cashea");
@@ -358,7 +364,7 @@ export function AppProvider({ children }) {
       // Settings
       settings, loadSettings, storeName, companyInfo, company, printerWidth,
       // Currencies
-      currencies, activeCurrencies, baseCurrency, loadCurrencies,
+      currencies, activeCurrencies, baseCurrency, localCurrency, monedasCobro, loadCurrencies,
       // Journals
       journals, activeJournals, outflowJournals, inflowJournals, journalPays, journalReceives, loadJournals,
       // Banks

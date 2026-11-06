@@ -62,12 +62,12 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
   const diaVenta = localDate("s.created_at");
   const diaNc = localDate("r.created_at");
 
-  // Tasa de la fecha de cada factura (ver arriba). La moneda local es la primera no base de la
-  // empresa de la venta.
+  // Tasa de la fecha de cada factura (ver arriba). La moneda local es la marcada como tal en la
+  // empresa de la venta (is_local); nunca una tasa alterna como la USDT: el libro va a BCV.
   const tasaSql = `
     LEFT JOIN LATERAL (
       SELECT c.id, c.exchange_rate FROM currencies c
-       WHERE c.company_id = s.company_id AND NOT c.is_base ORDER BY c.id LIMIT 1
+       WHERE c.company_id = s.company_id AND c.is_local LIMIT 1
     ) loc ON true
     LEFT JOIN LATERAL (
       SELECT cr.rate FROM currency_rates cr
@@ -219,11 +219,11 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
   }
 
   const monedas = await q(`
-    SELECT symbol, is_base FROM currencies
+    SELECT symbol, is_base, is_local FROM currencies
      WHERE ${scoped ? "company_id = :cid" : "TRUE"}
      ORDER BY is_base DESC, id`);
   const base = monedas.find(c => c.is_base);
-  const local = monedas.find(c => !c.is_base);
+  const local = monedas.find(c => c.is_local);
 
   return {
     base_symbol: base?.symbol || "Ref.",

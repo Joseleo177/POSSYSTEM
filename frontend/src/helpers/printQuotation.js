@@ -1,5 +1,6 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
 import { printHtml } from "./printDocument";
+import { monedaLocal } from "./currency";
 
 // printerWidth viene de la configuración de la tienda (58 u 80 mm). Sin él, el documento
 // se maquetaba siempre a 80mm y en una impresora de 58 salía cortado por el lado derecho.
@@ -28,7 +29,7 @@ export function printQuotationDoc(quot, companyInfo, baseCurrency, activeCurrenc
     // Equivalencia informativa en la moneda secundaria, con la tasa VIGENTE al imprimir (no
     // la de quot.exchange_rate), que es la única que le sirve al cliente que tiene el papel
     // en la mano.
-    const secondary = activeCurrencies?.find(c => !c.is_base);
+    const secondary = monedaLocal(activeCurrencies);
     const rateHoy = parseFloat(secondary?.exchange_rate || 0);
     const fmtSecondary = rateHoy > 1 ? n => fmtMoney(parseFloat(n || 0) * rateHoy, secondary.symbol) : null;
     const storeName = companyInfo?.name || "MI TIENDA POS";

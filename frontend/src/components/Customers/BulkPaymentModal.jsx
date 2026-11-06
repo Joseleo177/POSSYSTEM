@@ -11,6 +11,8 @@ import RateField, { resolveRate } from "../ui/RateField";
 import { useRatesOn } from "../../hooks/useRatesOn";
 import AvisoTasaFecha from "../cobro/AvisoTasaFecha";
 import { Spinner } from "../ui/Spinner";
+import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa } from "../../helpers/currency";
+import TasaSelector from "../cobro/TasaSelector";
 
 /**
  * Cobro de varias facturas del mismo cliente con un solo monto.
@@ -26,13 +28,15 @@ import { Spinner } from "../ui/Spinner";
 // `submitBulk`: a dónde se manda el cobro. Por omisión el cobro conjunto de siempre; la app
 // Cobranza lo manda por su ruta, que además comprueba que el cliente sea del sector de quien cobra.
 export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, submitBulk = null }) {
-  const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies, can, settings } = useApp();
+  const { notify, baseCurrency, activeJournals: allActiveJournals, activeCurrencies, monedasCobro = activeCurrencies, can, settings } = useApp();
   // Cobro en divisas aplicado a las facturas que no traen tasa (ver más abajo).
   const [fxOn, setFxOn] = useState(false);
   const [fxText, setFxText] = useState("");
   const [form, setForm] = useState({
     amount: "",
     journal_id: "",
+    // Tasa con que se cobra en esa caja (Bs a BCV o a USDT). Vacío = la moneda de la caja.
+    pay_currency_id: "",
     // Vacío = la tasa del sistema de la moneda del diario. Solo se llena si el cajero la
     // escribe a mano para este cobro, igual que en el cobro de una factura suelta.
     rate: "",
@@ -63,7 +67,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   // tasa se le aplica la que se teclea. Su total no se toca y la diferencia se exonera en el
   // mismo cobro (createBulkPayment, `fx_cobro`). Las que ya traían tasa conservan la suya. Desde
   // ahí el modal trabaja con las facturas como si ya la tuvieran.
-  const monedaFx = activeCurrencies.find(c => !c.is_base) || null;
+  const monedaFx = monedaLocal(activeCurrencies) || null;
   const tasaSistemaFx = parseFloat(monedaFx?.exchange_rate) || 0;
   // Opción de la empresa (Configuración → Punto de venta) más el permiso.
   const puedeFx = settings?.pos_fx_cobro === "true" && can("sales.fx") && tasaSistemaFx > 1
@@ -113,7 +117,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   const tasasFecha = useRatesOn(form.reference_date);
   const tasaSistema = (cur) => tasasFecha.rateOf(cur?.id) || parseFloat(cur?.exchange_rate || 1);
   const journal  = activeJournals.find(j => j.id === form.journal_id);
-  const currency = journal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(journal.currency_id)) : null;
+  // La tasa elegida (Bs a la tasa USDT) o la moneda de la caja.
+  const currency = (form.pay_currency_id && monedasCobro.find(c => c.id === parseInt(form.pay_currency_id)))
+    || (journal?.currency_id ? monedasCobro.find(c => c.id === parseInt(journal.currency_id)) : null);
   // Tasa de configuración de esa moneda, y la que de verdad rige este cobro.
   //
   // Faltaba poder escribirla, y hace la misma falta que en el cobro de una factura suelta: el
@@ -130,7 +136,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   const round6 = (n) => Math.round((parseFloat(n) || 0) * 1e6) / 1e6;
   const partesComb = (form.pay_parts || []).map(p => {
     const j = activeJournals.find(x => x.id === p.journal_id);
-    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+    const cur = (p.currency_id && monedasCobro.find(c => c.id === parseInt(p.currency_id)))
+      || (j?.currency_id ? monedasCobro.find(c => c.id === parseInt(j.currency_id)) : baseCurrency);
     const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
     const n = parseFloat(String(p.amount).replace(",", "."));
     return {
@@ -237,7 +244,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rate]);
   // Moneda local del sistema, para mostrar la deuda en Bs mientras no hay método elegido.
-  const bsCurSistema  = activeCurrencies.find(c => !c.is_base);
+  const bsCurSistema  = monedaLocal(activeCurrencies);
   const bsRateSistema = bsCurSistema ? tasaSistema(bsCurSistema) : 0;
   const fmtBsSistema  = (n) => `${bsCurSistema?.symbol || "Bs."} ${(parseFloat(n) || 0).toFixed(2)}`;
   const metodoElegido = combinado || !!form.journal_id;
@@ -257,7 +264,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
       const n = parseFloat(String(q.amount).replace(",", "."));
       if (isNaN(n) || n <= 0) return [];
       const jj = activeJournals.find(x => x.id === q.journal_id);
-      const cc = jj?.currency_id ? activeCurrencies.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency;
+      const cc = (q.currency_id && monedasCobro.find(c => c.id === parseInt(q.currency_id)))
+        || (jj?.currency_id ? monedasCobro.find(c => c.id === parseInt(jj.currency_id)) : baseCurrency);
       const rr = (!cc || cc.is_base) ? 1 : tasaSistema(cc);
       return [{ base: rr === 1 ? round2(n) : n / rr, rate: rr }];
     });
@@ -289,18 +297,34 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
 
   // Tasa y símbolo de la caja de una salida de vuelto: cada tramo se escribe en la moneda de
   // SU caja, que es la que el cajero está contando al entregarlo.
-  const datosCaja = (journalId) => {
+  // `currencyId`: la tasa de ese tramo del vuelto (Bs a la tasa USDT); sin ella, la de la caja.
+  const datosCaja = (journalId, currencyId = null) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
-    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+    const cur = (currencyId && monedasCobro.find(c => c.id === parseInt(currencyId)))
+      || (j?.currency_id ? monedasCobro.find(c => c.id === parseInt(j.currency_id)) : null);
     const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
     return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
   };
+
+  // Tasa del vuelto en una caja: la misma del cobro si es la misma moneda (quien pagó en Bs a la
+  // tasa USDT recibe el vuelto en Bs a esa tasa); si no, la del método de esa caja.
+  const monedaVueltoDe = (j, method) => {
+    if (!j) return null;
+    const pagoCur = combinado ? partesComb[partesComb.length - 1]?.cur : currency;
+    if (pagoCur && !pagoCur.is_base && tasasDeMoneda(pagoCur, monedasCobro).some(c => c.id === parseInt(j.currency_id))) return pagoCur;
+    return monedaDeMetodo(j, method, monedasCobro);
+  };
+
+  // Tasas para elegir (BCV | USDT), cada una con lo que se cobraría a ella.
+  const opcionesTasa = (cur, falta) => tasasDeMoneda(cur, monedasCobro).map(c => ({
+    id: c.id, label: nombreTasa(c), monto: `${c.symbol} ${falta(tasaSistema(c)).toFixed(2)}`,
+  }));
 
   // El vuelto puede salir de VARIAS cajas: sin sencillo en divisas se devuelven 5$ en efectivo
   // y el resto en bolívares. Cada tramo sale de la gaveta por la que salió de verdad; cargarlo
   // todo a una dejaría esa corta y la otra larga.
   const salidas = (form.change_parts || []).map(p => {
-    const { rate: r, sym: s } = datosCaja(p.journal_id);
+    const { rate: r, sym: s } = datosCaja(p.journal_id, p.currency_id);
     const tecleado = parseFloat(String(p.amount).replace(",", "."));
     const montoPago = Number.isFinite(tecleado) && tecleado >= 0 ? round2(tecleado) : 0;
     return { ...p, rate: r, sym: s, montoPago, montoBase: parseFloat((montoPago / r).toFixed(6)) };
@@ -374,7 +398,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
         // dinero sin decir a dónde va.
         // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
         change_parts:      haySobrante && form.surplus_mode === "devolver"
-          ? salidas.filter(s => s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, amount: s.montoBase }))
+          ? salidas.filter(s => s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, currency_id: s.currency_id || null, amount: s.montoBase }))
           : undefined,
         // Al devolver, lo que no se entregó se queda en la caja: sin esto el servidor vería un
         // sobrante sin destino y rechazaría el cobro.
@@ -547,10 +571,11 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
                         methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga esta parte?" }}
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
-                          const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+                          // La tasa por defecto del método (pago móvil a USDT) o la moneda de la caja.
+                          const cur = monedaDeMetodo(j, j.payment_method || null, monedasCobro) || baseCurrency;
                           const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
-                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
+                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, currency_id: cur?.id || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
                         })}
                       />
@@ -580,6 +605,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
                             pay_parts: [],
                             journal_id: only.journal_id || "",
                             payment_method: only.payment_method || null,
+                            pay_currency_id: only.currency_id || "",
                             amount: only.amount || "",
                             reference_number: only.reference || "",
                             rate: "",
@@ -592,6 +618,18 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
                       </button>
                     )}
                   </div>
+                  {s.journal_id && (
+                    <TasaSelector
+                      opciones={opcionesTasa(s.cur, (r) => faltaEnMoneda(form.pay_parts, idx, r))}
+                      value={s.cur?.id}
+                      onChange={(curId) => setForm(p => {
+                        const parts = [...p.pay_parts];
+                        const c = monedasCobro.find(x => x.id === parseInt(curId));
+                        parts[idx] = { ...parts[idx], currency_id: c.id, amount: faltaEnMoneda(parts, idx, tasaSistema(c)).toFixed(2) };
+                        return { ...p, pay_parts: parts, change_parts: [{ journal_id: "", amount: "" }] };
+                      })}
+                    />
+                  )}
                   {s.cur && !s.cur.is_base && s.base > 0 && (
                     <p className="text-[12px] text-content-subtle tabular-nums">≈ {fmtP(s.base)} · tasa {s.rate}</p>
                   )}
@@ -635,7 +673,8 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
             boxClassName="rounded-lg"
             methodPrompt={{ tag: "Cobro conjunto", title: "¿Cómo paga el cliente?" }}
             onSelect={(j) => {
-              const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+              // La tasa por defecto del método (pago móvil a USDT) o la moneda de la caja.
+              const cur = monedaDeMetodo(j, j.payment_method || null, monedasCobro);
               const r = (!cur || cur.is_base) ? 1 : tasaSistema(cur);
               // Elegir el método deja el monto listo, igual que en el cobro de una factura:
               // el caso corriente es cobrar la deuda completa, y cambiar de diario cambia de
@@ -644,6 +683,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
                 ...p,
                 journal_id: j.id,
                 payment_method: j.payment_method || null,
+                pay_currency_id: cur?.id || "",
                 amount: deudaEnPagoAt(r).toFixed(2),
                 // La tasa escrita a mano era de la moneda anterior: arrastrarla convertiría
                 // este cobro a un número que no tiene nada que ver.
@@ -654,6 +694,20 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
             }}
           />
         </Field>
+
+        {/* BCV | USDT: la misma caja cobra a las dos tasas. Arranca en la del método. */}
+        {currency && !currency.is_base && tasasDeMoneda(currency, monedasCobro).length > 1 && (
+          <Field label="Tasa del cobro">
+            <TasaSelector
+              opciones={opcionesTasa(currency, deudaEnPagoAt)}
+              value={currency.id}
+              onChange={(curId) => {
+                const c = monedasCobro.find(x => x.id === parseInt(curId));
+                setForm(p => ({ ...p, pay_currency_id: c.id, rate: "", amount: deudaEnPagoAt(tasaSistema(c)).toFixed(2), change_parts: [{ journal_id: "", amount: "" }] }));
+              }}
+            />
+          </Field>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Monto recibido">
@@ -727,9 +781,9 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
               const isCashJ = j?.type === "efectivo";
               return {
                 ...p,
-                journal_id: "", amount: "", rate: "",
+                journal_id: "", pay_currency_id: "", amount: "", rate: "",
                 pay_parts: [
-                  { journal_id: p.journal_id, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
+                  { journal_id: p.journal_id, payment_method: p.payment_method || null, currency_id: p.pay_currency_id || null, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
                   { journal_id: "", amount: "", reference: "" },
                 ],
               };
@@ -792,18 +846,19 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
                         onSelect={(j) => setForm(p => {
                           const partes = [...p.change_parts];
                           const id = j.id;
-                          const { rate: r } = datosCaja(id);
+                          const curVuelto = monedaVueltoDe(j, j.payment_method || null);
+                          const { rate: r } = datosCaja(id, curVuelto?.id);
                           // Al elegir la caja se sugiere lo que falta por devolver, convertido
                           // a su moneda: en la primera es el sobrante entero, en la siguiente
                           // solo el resto.
                           const yaAsignado = partes.reduce((acc, q, i) => {
                             if (i === idx) return acc;
-                            const { rate: rr } = datosCaja(q.journal_id);
+                            const { rate: rr } = datosCaja(q.journal_id, q.currency_id);
                             const n = parseFloat(String(q.amount).replace(",", "."));
                             return acc + (Number.isFinite(n) ? n / rr : 0);
                           }, 0);
                           const falta = Math.max(0, sobrante - yaAsignado);
-                          partes[idx] = { journal_id: id, payment_method: j.payment_method || null, amount: round2(falta * r).toFixed(2) };
+                          partes[idx] = { journal_id: id, payment_method: j.payment_method || null, currency_id: curVuelto?.id || null, amount: round2(falta * r).toFixed(2) };
                           return { ...p, change_parts: partes };
                         })}
                       />

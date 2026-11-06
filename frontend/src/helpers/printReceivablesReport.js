@@ -1,5 +1,6 @@
 import { fmtMoney, fmtDate } from ".";
 import { REPORT_CSS, esc, reportHeader, openPrintFrame } from "./printReportBase";
+import { monedaLocal } from "./currency";
 
 // Estado de cuentas por cobrar, en tamaño carta, para salir a cobrar con el papel en la mano.
 //
@@ -30,7 +31,7 @@ export function printReceivablesReport(data, companyInfo, baseCurrency, activeCu
     const fmtP = n => fmtMoney(parseFloat(n || 0), sym);
 
     // Tasa del día, no la que tenía cada factura: lo que se cobra hoy se cobra a la de hoy.
-    const secondary = (activeCurrencies || []).find(c => !c.is_base);
+    const secondary = monedaLocal(activeCurrencies);
     const rate = parseFloat(secondary?.exchange_rate || 0);
     const conBs = rate > 1;
     const symBs = secondary?.symbol || "Bs.";

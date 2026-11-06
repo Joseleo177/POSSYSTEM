@@ -1,5 +1,6 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
 import { printHtml } from "./printDocument";
+import { monedaLocal } from "./currency";
 
 // Cotización en tamaño carta, hermana de printInvoiceLetter. La maqueta térmica
 // (printQuotationDoc) está hecha para rollo de 58/80mm: guardada como PDF sale una tira
@@ -29,7 +30,7 @@ export function printQuotationLetter(quot, companyInfo, baseCurrency, activeCurr
 
     // Equivalencia con la tasa VIGENTE al imprimir, no con la guardada el día que se creó:
     // es la única cifra que le sirve a quien tiene el papel delante.
-    const secondary = activeCurrencies?.find(c => !c.is_base);
+    const secondary = monedaLocal(activeCurrencies);
     const rateHoy = parseFloat(secondary?.exchange_rate || 0);
     const equivale = rateHoy > 1;
 

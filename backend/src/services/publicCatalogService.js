@@ -224,8 +224,10 @@ async function getStore(token, { warehouse_id } = {}) {
     const s = Object.fromEntries(rows.map((r) => [r.key, r.value]));
 
     const currencies = await Currency.findAll({
-      where: { active: true },
-      attributes: ["code", "symbol", "exchange_rate", "is_base"],
+      // Sin tasas alternas (Bs a la tasa USDT): la vitrina muestra el precio en la base y en la
+      // moneda local; la tasa con que se cobra la decide la caja.
+      where: { active: true, rate_of_id: null },
+      attributes: ["code", "symbol", "exchange_rate", "is_base", "is_local"],
       order: [["is_base", "DESC"]],
     });
 

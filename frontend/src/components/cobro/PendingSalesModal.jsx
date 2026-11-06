@@ -9,6 +9,7 @@ import Money from "../ui/Money";
 import Segmented from "../ui/Segmented";
 import StatusMark from "../ui/StatusMark";
 import { LedgerSkeleton } from "../ui/Ledger";
+import { monedaLocal } from "../../helpers/currency";
 
 const STATUS_TABS = [
     { key: "all",      label: "Todas" },
@@ -39,7 +40,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
     const [showBulk, setShowBulk]     = useState(false);
     const sym = baseCurrency?.symbol || "Ref.";
     const { activeCurrencies = [] } = useApp();
-    const bsCur  = activeCurrencies.find(c => !c.is_base);
+    const bsCur  = monedaLocal(activeCurrencies);
     const bsRate = parseFloat(bsCur?.exchange_rate) || 0;
 
     const load = useCallback(async () => {

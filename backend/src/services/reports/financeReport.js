@@ -111,6 +111,8 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
     SELECT ${diaPago} AS day,
            (MODE() WITHIN GROUP (ORDER BY p.exchange_rate))::float AS rate
       FROM payments p
+      -- Solo la moneda local a su tasa oficial: la tasa USDT y los pesos son otras tasas.
+      JOIN currencies cu ON cu.id = p.currency_id AND cu.is_local
      WHERE p.exchange_rate > 1
        ${scoped ? "AND p.company_id = :cid" : ""}
        ${payWh}
@@ -242,8 +244,8 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
   // ── Catálogos: monedas y nombres de los métodos ────────────────────────────────────────
   const currencyIds = [...new Set([...cobros, ...vueltos, ...avances, ...egresos].map(r => r.currency_id).filter(Boolean))];
   const monedas = await q(`
-    SELECT id, symbol, code, is_base FROM currencies
-     WHERE (${currencyIds.length ? `id IN (${currencyIds.map(Number).filter(Number.isInteger).join(",")}) OR ` : ""} is_base = true)
+    SELECT id, symbol, code, is_base, is_local FROM currencies
+     WHERE (${currencyIds.length ? `id IN (${currencyIds.map(Number).filter(Number.isInteger).join(",")}) OR ` : ""} is_base = true OR is_local = true)
        ${scoped ? "AND (company_id = :cid OR company_id IS NULL)" : ""}`);
   const monedaDe = (id) => monedas.find(c => c.id === id) || monedas.find(c => c.is_base) || { symbol: "Ref.", is_base: true };
   const base = monedas.find(c => c.is_base) || { symbol: "Ref.", is_base: true };
@@ -395,7 +397,7 @@ async function financeReport({ date_from, date_to, company_id, allowedWarehouses
 
   return {
     base_symbol: base.symbol,
-    local_symbol: (monedas.find(c => !c.is_base) || {}).symbol || "Bs.",
+    local_symbol: (monedas.find(c => c.is_local) || {}).symbol || "Bs.",
     summary: {
       income_base: totals.total_base,
       income_local: totals.total_local,

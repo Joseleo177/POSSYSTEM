@@ -5,6 +5,7 @@ import Modal from "./ui/Modal";
 import ConfirmModal from "./ui/ConfirmModal";
 import { Button } from "./ui/Button";
 import { Spinner } from "./ui/Spinner";
+import Check from "./ui/Check";
 import { useApp } from "../context/AppContext";
 import { fmtTime } from "../helpers/dates";
 import RateHistoryModal from "./RateHistoryModal";
@@ -40,7 +41,10 @@ export default function MonedasTab({ notify }) {
     const [currencies, setCurrencies] = useState([]);
     const [refreshing, setRefreshing] = useState(false);
     const [lastRefresh, setLastRefresh] = useState(null);
-    const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "" });
+    const [newCurrency, setNewCurrency] = useState({ code: "", name: "", symbol: "", exchange_rate: "", auto_sync: true });
+    // Otra tasa de una divisa (Bs a la tasa USDT): la moneda madre y lo que se escribe.
+    const [altDe, setAltDe] = useState(null);
+    const [altForm, setAltForm] = useState({ name: "", exchange_rate: "" });
     const [showNewCurrency, setShowNewCurrency] = useState(false);
     const [deleteCurrencyDialog, setDeleteCurrencyDialog] = useState(null);
     const [historial, setHistorial] = useState(null);
@@ -94,13 +98,41 @@ export default function MonedasTab({ notify }) {
         try {
             await api.currencies.create({ ...newCurrency, exchange_rate: parseFloat(String(newCurrency.exchange_rate).replace(",", ".")) });
             notify("Moneda agregada correctamente");
-            setNewCurrency({ code: "", name: "", symbol: "", exchange_rate: "" });
+            setNewCurrency({ code: "", name: "", symbol: "", exchange_rate: "", auto_sync: true });
             setShowNewCurrency(false);
             await load();
             loadCurrencies();
         } catch (e) { notify(e.message, "err"); }
         finally { addingRef.current = false; setAddingCurrency(false); }
     };
+
+    const [addingAlt, setAddingAlt] = useState(false);
+    const addAlt = async () => {
+        if (addingRef.current) return;
+        addingRef.current = true;
+        setAddingAlt(true);
+        try {
+            await api.currencies.create({
+                rate_of_id: altDe.id,
+                name: altForm.name.trim(),
+                exchange_rate: parseFloat(String(altForm.exchange_rate).replace(/\./g, "").replace(",", ".")),
+            });
+            notify(`Tasa ${altForm.name.trim()} agregada`);
+            setAltDe(null);
+            setAltForm({ name: "", exchange_rate: "" });
+            await load();
+            loadCurrencies();
+        } catch (e) { notify(e.message, "err"); }
+        finally { addingRef.current = false; setAddingAlt(false); }
+    };
+
+    const setLocal = (c) => api.currencies.setLocal(c.id)
+        .then(() => { notify(`${c.name} es ahora la moneda local`); load(); loadCurrencies(); })
+        .catch(e => notify(e.message, "err"));
+
+    const toggleAutoSync = (c) => api.currencies.toggleAutoSync(c.id)
+        .then(() => { load(); loadCurrencies(); })
+        .catch(e => notify(e.message, "err"));
 
     const removeCurrency = async () => {
         try {
@@ -116,7 +148,10 @@ export default function MonedasTab({ notify }) {
     };
 
     const base = currencies.find(c => c.is_base);
-    const divisas = currencies.filter(c => !c.is_base);
+    // Cada divisa seguida de sus tasas alternas (Bs BCV y debajo Bs USDT).
+    const principales = currencies.filter(c => !c.is_base && !c.rate_of_id);
+    const divisas = principales.flatMap(c => [c, ...currencies.filter(a => a.rate_of_id === c.id)]);
+    const madreDe = (c) => currencies.find(x => x.id === c.rate_of_id);
 
     const actions = puedeEditar ? (
         <>
@@ -152,9 +187,11 @@ export default function MonedasTab({ notify }) {
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {divisas.map(c => (
-                                <RateCard key={c.id} c={c} base={base} puedeEditar={puedeEditar}
+                                <RateCard key={c.id} c={c} base={base} madre={madreDe(c)} puedeEditar={puedeEditar}
                                     onSave={updateRate} onToggle={() => toggle(c)} onDelete={() => setDeleteCurrencyDialog(c)}
-                                    onHistory={() => setHistorial(c)} />
+                                    onHistory={() => setHistorial(c)} onLocal={() => setLocal(c)}
+                                    onAutoSync={() => toggleAutoSync(c)}
+                                    onAddAlt={() => { setAltForm({ name: "", exchange_rate: "" }); setAltDe(c); }} />
                             ))}
                         </div>
                     )}
@@ -185,6 +222,14 @@ export default function MonedasTab({ notify }) {
                             />
                         </div>
                     ))}
+                    <label className="flex items-start gap-2.5 pt-1 cursor-pointer">
+                        <Check checked={newCurrency.auto_sync} onChange={v => setNewCurrency(p => ({ ...p, auto_sync: v }))}
+                            title='Actualizar con "Sincronizar tasas"' className="mt-0.5" />
+                        <span className="text-[13px] text-content dark:text-white leading-snug">
+                            Actualizar con "Sincronizar tasas"
+                            <span className="block text-[12px] text-content-subtle">Apágalo si la tasa la pones tú, como los pesos en la frontera.</span>
+                        </span>
+                    </label>
                     <button
                         onClick={addCurrency}
                         disabled={addingCurrency}
@@ -192,6 +237,33 @@ export default function MonedasTab({ notify }) {
                     >
                         {addingCurrency && <Spinner />}
                         {addingCurrency ? "Agregando…" : "Agregar divisa"}
+                    </button>
+                </div>
+            </Modal>
+
+            {/* Modal: otra tasa de una divisa (Bs a la tasa USDT) */}
+            <Modal open={!!altDe} onClose={() => setAltDe(null)} title={`Otra tasa para el ${altDe?.name || ""}`} width={420}>
+                <div className="space-y-3">
+                    <p className="text-[13px] text-content-subtle leading-snug">
+                        Para cobrar en {altDe?.symbol} a una tasa distinta, como la del USDT. En cada caja eliges con qué tasa cobra cada método, y el cajero la puede cambiar en el cobro.
+                    </p>
+                    <div>
+                        <label className="label">Nombre de la tasa</label>
+                        <input autoFocus value={altForm.name} onChange={e => setAltForm(p => ({ ...p, name: e.target.value }))}
+                            onKeyDown={e => { if (e.key === "Enter") addAlt(); }}
+                            placeholder="USDT" maxLength={40} className="input h-10 w-full" autoComplete="off" />
+                    </div>
+                    <div>
+                        <label className="label">{`Tasa (1 ${base?.code || "USD"} = ? ${altDe?.symbol || ""})`}</label>
+                        <input value={altForm.exchange_rate}
+                            onChange={e => setAltForm(p => ({ ...p, exchange_rate: e.target.value.replace(/[^\d.,]/g, "") }))}
+                            onKeyDown={e => { if (e.key === "Enter") addAlt(); }}
+                            inputMode="decimal" placeholder="1100" className="input h-10 w-full" autoComplete="off" />
+                    </div>
+                    <button onClick={addAlt} disabled={addingAlt}
+                        className="btn-accent w-full h-10 font-semibold text-[13px] rounded-lg transition-all active:scale-[0.99] disabled:opacity-60 flex items-center justify-center gap-2">
+                        {addingAlt && <Spinner />}
+                        {addingAlt ? "Agregando…" : "Agregar tasa"}
                     </button>
                 </div>
             </Modal>
@@ -211,7 +283,7 @@ export default function MonedasTab({ notify }) {
     );
 }
 
-function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete, onHistory }) {
+function RateCard({ c, base, madre, puedeEditar, onSave, onToggle, onDelete, onHistory, onLocal, onAutoSync, onAddAlt }) {
     const [editing, setEditing] = useState(false);
     const [val, setVal] = useState("");
     const [saving, setSaving] = useState(false);
@@ -240,8 +312,12 @@ function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete, onHistory 
                         {c.code}
                     </span>
                     <div className="min-w-0 flex-1">
-                        <div className="text-[14px] font-semibold text-content dark:text-white truncate">{c.name}</div>
-                        <div className="text-[12px] text-content-subtle">Símbolo {c.symbol}</div>
+                        <div className="text-[14px] font-semibold text-content dark:text-white truncate">
+                            {madre ? `${madre.symbol} a tasa ${c.name}` : c.name}
+                        </div>
+                        <div className="text-[12px] text-content-subtle truncate">
+                            {madre ? `Otra tasa del ${madre.name}` : c.is_local ? `Moneda local · símbolo ${c.symbol}` : `Símbolo ${c.symbol}`}
+                        </div>
                     </div>
                     <span className={`inline-flex items-center gap-1.5 text-[12px] font-medium shrink-0 ${c.active ? "text-emerald-700 dark:text-emerald-400" : "text-content-subtle"}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${c.active ? "bg-emerald-500" : "bg-content-subtle/50"}`} />
@@ -284,6 +360,26 @@ function RateCard({ c, base, puedeEditar, onSave, onToggle, onDelete, onHistory 
                             : <>Actualizada {cuando(c.updated_at)}</>}
                     </div>
                 </div>
+
+                {/* Ajustes de la divisa: si se sincroniza sola, cuál es la local y sus otras tasas. */}
+                {puedeEditar && !madre && (
+                    <div className="mt-4 pt-4 border-t border-border/60 dark:border-white/[0.06] space-y-2.5">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                            <Check checked={c.auto_sync !== false} onChange={onAutoSync} title='Actualizar con "Sincronizar tasas"' />
+                            <span className="text-[13px] text-content dark:text-white">Actualizar con "Sincronizar tasas"</span>
+                        </label>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+                            {!c.is_local && (
+                                <button onClick={onLocal} className="text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:underline">
+                                    Usar como moneda local
+                                </button>
+                            )}
+                            <button onClick={onAddAlt} className="text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:underline">
+                                {c.is_local ? "+ Otra tasa (USDT)" : "+ Otra tasa"}
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Acciones, siempre visibles (tablets). */}

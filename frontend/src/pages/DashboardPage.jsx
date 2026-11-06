@@ -6,6 +6,7 @@ import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilt
 
 import Page from "../components/ui/Page";
 import { BarChart } from "./reportes/reportes.utils";
+import { monedaLocal } from "../helpers/currency";
 
 const fmt = (n, d = 2) => fmtNumber(n, d);
 const fmtN = (n) => fmtInt(n);
@@ -61,7 +62,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    const localCur  = activeCurrencies?.find(c => !c.is_base);
+    const localCur  = monedaLocal(activeCurrencies);
     const baseSym   = baseCurrency?.symbol || "Ref.";
     const localSym  = localCur?.symbol     || baseSym;
     const localRate = parseFloat(localCur?.exchange_rate || 1);

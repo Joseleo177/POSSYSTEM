@@ -9,11 +9,28 @@ const rates = require("../services/currencyRates");
 const companyOf = (req) => req.company_id ?? req.employee?.company_id ?? null;
 const RATE_SOURCES = new Set(["manual", "bcv"]);
 
+// Base, luego la local (los Bs) y cada tasa alterna justo debajo de su moneda (mismo código).
+const ORDEN = [['is_base', 'DESC'], ['is_local', 'DESC'], ['code', 'ASC'], ['rate_of_id', 'ASC NULLS FIRST'], ['name', 'ASC']];
+
+const avisarCambio = async (req) => {
+  const all = await Currency.findAll({ order: ORDEN });
+  broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: all.map(c => c.toJSON()) });
+  return all;
+};
+
+// Si la empresa se queda sin moneda local (se borró), la toma la divisa más vieja que quede.
+const asegurarLocal = async (transaction) => {
+  const hay = await Currency.count({ where: { is_local: true }, transaction });
+  if (hay) return;
+  const siguiente = await Currency.findOne({ where: { is_base: false, rate_of_id: null }, order: [['id', 'ASC']], transaction });
+  if (siguiente) await siguiente.update({ is_local: true }, { transaction });
+};
+
 // GET /api/currencies
 const getAll = async (req, res) => {
   try {
     const currencies = await Currency.findAll({
-      order: [['is_base', 'DESC'], ['code', 'ASC']]
+      order: ORDEN
     });
     res.json({ ok: true, data: currencies });
   } catch (err) {
@@ -39,8 +56,7 @@ const updateRate = async (req, res) => {
       source: RATE_SOURCES.has(req.body.source) ? req.body.source : "manual",
       employee_id: req.employee?.id ?? null,
     });
-    const all = await Currency.findAll({ order: [['is_base', 'DESC'], ['code', 'ASC']] });
-    broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: all.map(c => c.toJSON()) });
+    await avisarCambio(req);
     res.json({ ok: true, data: currency });
   } catch (err) {
     res.status(500).json({ ok: false, message: "Error al actualizar tipo de cambio" });
@@ -61,17 +77,70 @@ const toggle = async (req, res) => {
 };
 
 // POST /api/currencies
+// { code, name, symbol, exchange_rate, auto_sync? } — una divisa nueva.
+// { rate_of_id, name, exchange_rate }               — una tasa alterna de una divisa (Bs a la
+//   tasa USDT): mismo código y símbolo que su moneda, la tasa la pone la tienda.
 const create = async (req, res) => {
   try {
-    const { code, name, symbol, exchange_rate } = req.body;
-    if (!code || !name || !symbol || !exchange_rate) return res.status(400).json({ ok: false, message: "Todos los campos son requeridos" });
+    const rate = parseFloat(req.body.exchange_rate);
+    const name = String(req.body.name || "").trim();
+    if (!(rate > 0)) return res.status(400).json({ ok: false, message: "La tasa debe ser mayor que cero" });
 
-    const currency = await Currency.create({ code: code.toUpperCase(), name, symbol, exchange_rate });
+    let datos;
+    if (req.body.rate_of_id) {
+      const madre = await Currency.findOne({ where: { id: req.body.rate_of_id, is_base: false, rate_of_id: null } });
+      if (!madre) return res.status(404).json({ ok: false, message: "La moneda de esa tasa no existe" });
+      if (!name) return res.status(400).json({ ok: false, message: "Ponle nombre a la tasa (por ejemplo, USDT)" });
+      datos = { code: madre.code, symbol: madre.symbol, name, rate_of_id: madre.id, auto_sync: false, is_local: false };
+    } else {
+      const { code, symbol } = req.body;
+      if (!code || !name || !symbol) return res.status(400).json({ ok: false, message: "Todos los campos son requeridos" });
+      // La primera divisa de una empresa que solo tenía la base pasa a ser la local.
+      const hayLocal = await Currency.count({ where: { is_local: true } });
+      datos = { code: String(code).toUpperCase(), name, symbol, auto_sync: req.body.auto_sync !== false, is_local: !hayLocal };
+    }
+
+    const currency = await Currency.create({ ...datos, exchange_rate: rate });
     await rates.recordRate(currency, { employee_id: req.employee?.id ?? null });
+    await avisarCambio(req);
     res.status(201).json({ ok: true, data: currency });
   } catch (err) {
-    if (err.name === 'SequelizeUniqueConstraintError') return res.status(409).json({ ok: false, message: "Esa moneda ya existe" });
+    if (err.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({ ok: false, message: req.body.rate_of_id ? "Ya hay una tasa con ese nombre" : "Esa moneda ya existe" });
+    }
+    console.error("[currencies] create:", err);
     res.status(500).json({ ok: false, message: "Error al crear moneda" });
+  }
+};
+
+// PUT /api/currencies/:id/local — la moneda que la pantalla muestra junto a la base.
+const setLocal = async (req, res) => {
+  try {
+    const currency = await Currency.findOne({ where: { id: req.params.id, is_base: false, rate_of_id: null } });
+    if (!currency) return res.status(404).json({ ok: false, message: "Moneda no encontrada" });
+    await Currency.sequelize.transaction(async (transaction) => {
+      // Primero se apaga la anterior: el índice único no admite dos locales ni un instante.
+      await Currency.update({ is_local: false }, { where: { is_local: true, company_id: currency.company_id }, transaction });
+      await currency.update({ is_local: true }, { transaction });
+    });
+    res.json({ ok: true, data: await avisarCambio(req) });
+  } catch (err) {
+    console.error("[currencies] local:", err);
+    res.status(500).json({ ok: false, message: "Error al cambiar la moneda local" });
+  }
+};
+
+// PUT /api/currencies/:id/auto-sync — si "Sincronizar tasas" la actualiza o la pone la tienda.
+const toggleAutoSync = async (req, res) => {
+  try {
+    const currency = await Currency.findOne({ where: { id: req.params.id, is_base: false } });
+    if (!currency) return res.status(404).json({ ok: false, message: "Moneda no encontrada" });
+    await currency.update({ auto_sync: !currency.auto_sync });
+    await avisarCambio(req);
+    res.json({ ok: true, data: currency });
+  } catch (err) {
+    console.error("[currencies] auto-sync:", err);
+    res.status(500).json({ ok: false, message: "Error al actualizar la moneda" });
   }
 };
 
@@ -182,8 +251,13 @@ const refreshRates = async (req, res) => {
     log("baseCur:", baseCur?.code);
     if (!baseCur) return res.status(400).json({ ok: false, message: "No hay moneda base definida" });
 
-    const currencies = await Currency.findAll({ where: { is_base: false } });
+    // Solo las que se actualizan solas: la tasa USDT y los pesos de frontera los pone la tienda,
+    // y la internacional del peso pisaría la de Cúcuta.
+    const currencies = await Currency.findAll({ where: { is_base: false, rate_of_id: null, auto_sync: true } });
     log("currencies:", currencies.map(c => c.code));
+    if (!currencies.length) {
+      return res.json({ ok: true, updated: [], errors: [], data: await Currency.findAll({ order: ORDEN }) });
+    }
     const updated = [];
     const errors = [];
 
@@ -215,9 +289,11 @@ const refreshRates = async (req, res) => {
         const apiData = await apiRes.json();
         if (apiData.result !== "success") throw new Error("La API de tasas devolvió un error");
 
-        const rates = apiData.rates || {};
+        // No llamarla "rates": tapaba el servicio de historial y rates.recordRate reventaba con
+        // la primera divisa que no fuera el bolívar.
+        const apiRates = apiData.rates || {};
         for (const cur of others) {
-          const rate = rates[cur.code];
+          const rate = apiRates[cur.code];
           if (rate && rate > 0) {
             await cur.update({ exchange_rate: rate, updated_at: new Date() });
             await rates.recordRate(cur, { source: "er-api", employee_id: req.employee?.id ?? null });
@@ -233,9 +309,7 @@ const refreshRates = async (req, res) => {
     log("done. updated:", updated.length, "errors:", errors.length);
     if (!updated.length) throw new Error(errors.map(e => e.error).join(" | ") || "No se actualizó ninguna tasa");
 
-    const result = await Currency.findAll({ order: [['is_base', 'DESC'], ['code', 'ASC']] });
-    broadcast(req.company_id ?? 0, 'currencies:updated', { currencies: result.map(c => c.toJSON()) });
-    res.json({ ok: true, updated, errors, data: result });
+    res.json({ ok: true, updated, errors, data: await avisarCambio(req) });
   } catch (err) {
     console.error("[refreshRates] FATAL:", err);
     res.status(500).json({ ok: false, message: err.message || "Error al actualizar tasas" });
@@ -256,8 +330,17 @@ const remove = async (req, res) => {
     if (paymentCount > 0 || saleCount > 0) {
       return res.status(400).json({ ok: false, message: "No se puede eliminar: tiene movimientos asociados. Puedes suspenderla en su lugar." });
     }
+    // Sus tasas alternas se irían con ella (ON DELETE CASCADE) junto con la referencia de sus
+    // cobros: que se borren antes, a mano, y ahí se ve si tienen movimientos.
+    if (await Currency.count({ where: { rate_of_id: currency.id } })) {
+      return res.status(400).json({ ok: false, message: "Tiene tasas alternas (como USDT): elimínalas o suspéndelas primero." });
+    }
 
-    await currency.destroy();
+    await Currency.sequelize.transaction(async (transaction) => {
+      await currency.destroy({ transaction });
+      if (currency.is_local) await asegurarLocal(transaction);
+    });
+    await avisarCambio(req);
     res.json({ ok: true, message: "Moneda eliminada" });
   } catch (err) {
     console.error(err);
@@ -303,4 +386,4 @@ const putDayRate = async (req, res) => {
   }
 };
 
-module.exports = { getAll, updateRate, toggle, create, refreshRates, getBcvPreview, remove, getRatesOn, getHistory, putDayRate };
+module.exports = { getAll, updateRate, toggle, create, setLocal, toggleAutoSync, refreshRates, getBcvPreview, remove, getRatesOn, getHistory, putDayRate };

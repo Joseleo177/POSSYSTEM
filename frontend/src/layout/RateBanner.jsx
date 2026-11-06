@@ -38,7 +38,7 @@ export default function RateBanner() {
     const [dismissed, setDismissed] = React.useState(null);
 
     // El BCV da bolívares por dólar: solo tiene sentido con base USD y el bolívar activo.
-    const ves = currencies.find(c => c.code === "VES" && c.active && !c.is_base);
+    const ves = currencies.find(c => c.code === "VES" && c.active && !c.is_base && !c.rate_of_id);
     const enabled = can("currencies.manage") && !!ves && baseCurrency?.code === "USD";
 
     React.useEffect(() => {

@@ -111,9 +111,9 @@ async function armar(token) {
       attributes: ["id", "status", "summary", "estimate", "reason", "created_at"],
       order: [["created_at", "ASC"]],
     });
-    const monedas = await Currency.findAll({ where: { company_id: cid, active: true }, attributes: ["code", "symbol", "exchange_rate", "is_base"] });
+    const monedas = await Currency.findAll({ where: { company_id: cid, active: true }, attributes: ["code", "symbol", "exchange_rate", "is_base", "is_local"] });
     const base = monedas.find(m => m.is_base);
-    const bs = monedas.find(m => !m.is_base && /^(VES|VED|BS)/i.test(m.code || ""));
+    const bs = monedas.find(m => m.is_local);
 
     const ventas = await Sale.findAll({
       where: { company_id: cid, table_id: mesa.id, status: { [Op.in]: ABIERTAS } },

@@ -189,6 +189,87 @@ export const factorDevolucion = (sale) => {
 };
 
 /**
+ * Moneda local: la que la pantalla muestra junto a la base (los bolívares). Es la marcada con
+ * `is_local` en Monedas. Antes era "la primera divisa que no es la base", y como salen ordenadas
+ * por código, agregar pesos (COP) ponía los pesos en lugar de los Bs en el carrito, el cobro y
+ * los tickets.
+ *
+ * Si la lista trae la marca y ninguna la tiene (la local está suspendida), no hay moneda local:
+ * no se cae a otra divisa. Sin la marca (respuesta vieja guardada sin conexión, o un backend aún
+ * sin la migración) se comporta como antes, sin las tasas alternas.
+ * @param {Array} currencies - Lista de monedas (activas o todas)
+ */
+export const monedaLocal = (currencies) => {
+  const lista = currencies || [];
+  if (lista.some(c => c && "is_local" in c)) {
+    return lista.find(c => c.is_local && !c.is_base && c.active !== false) || null;
+  }
+  return lista.find(c => !c.is_base && !c.rate_of_id && c.active !== false) || null;
+};
+
+/**
+ * Tasas con que se puede cobrar en una moneda: ella misma y sus tasas alternas. Para el
+ * bolívar, [Bs a BCV, Bs a USDT]. Vacío si no hay moneda.
+ * @param {object} cur - Moneda (la madre o una alterna)
+ * @param {Array} lista - Monedas activas, con las alternas (monedasCobro)
+ */
+export const tasasDeMoneda = (cur, lista) => {
+  if (!cur || cur.is_base) return [];
+  const raiz = parseInt(cur.rate_of_id || cur.id);
+  return (lista || []).filter(c => c.active !== false && (c.id === raiz || parseInt(c.rate_of_id) === raiz));
+};
+
+/**
+ * Nombre corto de una tasa en el selector del cobro: la alterna por su nombre ("USDT") y la
+ * moneda madre como "BCV" si es el bolívar (la tasa oficial), si no por su código.
+ */
+export const nombreTasa = (cur) => cur?.rate_of_id ? cur.name : (cur?.code === "VES" ? "BCV" : (cur?.code || ""));
+
+/**
+ * Moneda (o tasa) con que cobra un método de una caja: la tasa por defecto del método si la
+ * tiene (pago móvil a la tasa USDT) y sigue activa; si no, la moneda de la caja. Sin método se
+ * toma el primero que recibe.
+ * @param {object} journal - Caja, con `methods` [{ method_code, allows_inflow, rate_currency_id }]
+ * @param {string|null} method - Código del método elegido
+ * @param {Array} lista - Monedas activas, con las alternas (monedasCobro)
+ */
+export const monedaDeMetodo = (journal, method, lista) => {
+  if (!journal) return null;
+  const propia = (lista || []).find(c => c.id === parseInt(journal.currency_id)) || null;
+  const metodos = journal.methods || [];
+  const m = (method && metodos.find(x => x.method_code === method)) || metodos.find(x => x.allows_inflow !== false);
+  const alterna = m?.rate_currency_id
+    ? (lista || []).find(c => c.id === parseInt(m.rate_currency_id) && c.active !== false && parseInt(c.rate_of_id) === parseInt(journal.currency_id))
+    : null;
+  return alterna || propia;
+};
+
+/**
+ * La moneda local con los ids de todas sus tasas (`familia_ids`): el ticket la usa para saber
+ * qué cobros son bolívares (a BCV o a USDT) y cuáles otra moneda con tasa > 1 (pesos).
+ * @param {object} local - Moneda local (monedaLocal)
+ * @param {Array} lista - Monedas con las alternas (monedasCobro)
+ */
+export const conFamilia = (local, lista) => (local && !local.is_base)
+  ? { ...local, familia_ids: tasasDeMoneda(local, lista).map(c => c.id) }
+  : local;
+
+/**
+ * ¿El cobro entró en la moneda local (a cualquiera de sus tasas)? Es lo que el ticket expresa
+ * en bolívares. Un cobro en pesos tiene tasa > 1 pero no es bolívares. Sin datos de la moneda
+ * (cobro sin currency_id, lista vacía) se cae a la regla de antes: tasa > 1.
+ * @param {object} pago - Cobro con { currency_id, exchange_rate }
+ * @param {Array} lista - Monedas con las alternas (monedasCobro o currencies)
+ */
+export const esCobroLocal = (pago, lista) => {
+  if (!(parseFloat(pago?.exchange_rate) > 1)) return false;
+  const local = monedaLocal(lista);
+  const cur = pago?.currency_id ? (lista || []).find(c => c.id === parseInt(pago.currency_id)) : null;
+  if (!local || !cur) return true;
+  return cur.id === local.id || parseInt(cur.rate_of_id) === local.id;
+};
+
+/**
  * Tasa a la que se pasan a bolívares los montos de una venta: la de divisas si la factura la
  * tiene, y si no la que se pida (la del día). Solo vale para la pista en Bs (tasa > 1): en
  * divisas no hay conversión.

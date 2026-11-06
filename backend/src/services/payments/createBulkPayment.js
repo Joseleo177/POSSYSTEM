@@ -99,7 +99,7 @@ module.exports = async function createBulkPayment(body, req) {
   // Un vuelto de una sola caja se expresa igual que uno repartido: una parte.
   const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
     ? change_parts
-        .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null }))
+        .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null, currency_id: p?.currency_id || null }))
         .filter(p => p.amount > 0)
     : (parseFloat(change_given || 0) > 0
         ? [{ journal_id: change_journal_id, amount: parseFloat(change_given), payment_method: change_payment_method || null }]
@@ -518,12 +518,17 @@ module.exports = async function createBulkPayment(body, req) {
           transaction: t,
         });
         if (!diarioCambio) throw err("La caja del vuelto no existe", 404);
+        // Otra tasa de la moneda de esa caja (Bs a la tasa USDT), igual que en createPayment.
+        const tasaPedida = parte.currency_id && diarioCambio.currency_id
+          ? await Currency.findOne({ where: { id: parte.currency_id }, attributes: ['id', 'exchange_rate', 'rate_of_id'], transaction: t })
+          : null;
+        const tasaDeLaCaja = tasaPedida && [tasaPedida.id, tasaPedida.rate_of_id].includes(diarioCambio.currency_id) ? tasaPedida : null;
         await Expense.create({
           description: varias
             ? `Cambio entregado (parte) — cobro conjunto de ${conSaldo.length} facturas`
             : `Cambio entregado — cobro conjunto de ${conSaldo.length} facturas`,
           amount: parte.amount,
-          rate: parseFloat(diarioCambio?.Currency?.exchange_rate || 1),
+          rate: parseFloat(tasaDeLaCaja?.exchange_rate || diarioCambio?.Currency?.exchange_rate || 1),
           // La fecha del vuelto es la del cobro, no la del instante en que se grabó: sin esto
           // el egreso caía a su created_at con hora, mientras que los cobros van a medianoche
           // por su reference_date, y el estado de cuenta separaba un cobro de su propio vuelto.
@@ -535,7 +540,7 @@ module.exports = async function createBulkPayment(body, req) {
           payment_journal_id: parte.journal_id,
           payment_method: parte.payment_method,
           employee_id: employee_id || null,
-          currency_id: diarioCambio?.currency_id || null,
+          currency_id: tasaDeLaCaja?.id || diarioCambio?.currency_id || null,
           warehouse_id: conSaldo[0].venta.warehouse_id || null,
           notes: varias ? `Vuelto repartido en ${partesVuelto.length} cajas` : null,
           status: "activo",

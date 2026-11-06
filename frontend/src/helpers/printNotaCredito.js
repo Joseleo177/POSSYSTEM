@@ -1,12 +1,13 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
 import { printHtml } from "./printDocument";
 import { desgloseIva, renglonesIva } from "./iva";
+import { monedaLocal } from "./currency";
 
 // printerWidth (58 u 80 mm) sale de la configuración de la tienda. Sin él el documento se
 // maquetaba siempre a 80mm y en una impresora de 58 salía cortado por el lado derecho.
 export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency, activeCurrencies, printerWidth = 80) {
     const w58 = printerWidth === 58;
-    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const displayCurrency = monedaLocal(activeCurrencies) || baseCurrency;
     const isBase = !displayCurrency || displayCurrency.is_base;
     const exchangeRate = parseFloat(sale?.exchange_rate || 1);
     const rate = isBase ? 1 : parseFloat(exchangeRate > 1 ? exchangeRate : (displayCurrency?.exchange_rate || 1));

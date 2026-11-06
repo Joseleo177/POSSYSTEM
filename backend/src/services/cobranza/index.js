@@ -417,7 +417,7 @@ async function dejarBolsa(req, customerId, { items, idempotency_key } = {}) {
   if (!serie) throw fail("La sucursal del sector no tiene una serie de facturas activa");
 
   // Moneda de la factura: la local si está activa, con la tasa de hoy (igual que la caja).
-  const local = await Currency.findOne({ where: { is_base: false, active: true }, order: [["id", "ASC"]] });
+  const local = await Currency.findOne({ where: { is_local: true, active: true } });
 
   const createSale = require("../sales/createSale");
   const confirmCreditSale = require("../sales/confirmCreditSale");

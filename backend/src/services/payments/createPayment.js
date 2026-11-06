@@ -133,7 +133,7 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // El vuelto puede repartirse entre varias cajas; una sola es el caso de una parte.
     const partesVuelto = (Array.isArray(change_parts) && change_parts.length)
       ? change_parts
-          .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null }))
+          .map(p => ({ journal_id: p?.journal_id, amount: parseFloat(p?.amount || 0), payment_method: p?.payment_method || null, currency_id: p?.currency_id || null }))
           .filter(p => p.amount > 0)
       : (parseFloat(change_given || 0) > 0
           ? [{ journal_id: change_journal_id, amount: parseFloat(change_given), payment_method: change_payment_method || null }]
@@ -304,9 +304,16 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
       });
       // El vuelto en bolívares de una factura con tasa de divisas sale a esa misma tasa: es la
       // que usó la caja para calcularlo.
+      // Puede salir a otra tasa de la misma moneda de la caja: quien cobró en Bs a la tasa USDT
+      // devuelve el vuelto en Bs a esa misma tasa. Solo se acepta una tasa de la moneda de ESA
+      // caja (ella misma o una alterna suya); cualquier otra cosa se ignora.
+      const tasaPedida = parte.currency_id && changeJournal?.currency_id
+        ? await Currency.findOne({ where: { id: parte.currency_id }, attributes: ['id', 'exchange_rate', 'rate_of_id'], transaction: t })
+        : null;
+      const tasaDeLaCaja = tasaPedida && [tasaPedida.id, tasaPedida.rate_of_id].includes(changeJournal.currency_id) ? tasaPedida : null;
       const changeRate = await tasaDivisasDeCaja(sale, parte.journal_id, t)
-        || parseFloat(changeJournal?.Currency?.exchange_rate || 1);
-      const changeCurrencyId = changeJournal?.currency_id || null;
+        || parseFloat(tasaDeLaCaja?.exchange_rate || changeJournal?.Currency?.exchange_rate || 1);
+      const changeCurrencyId = tasaDeLaCaja?.id || changeJournal?.currency_id || null;
 
       await Expense.create(
         {

@@ -6,6 +6,7 @@ import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import { toNameCase, fmtBase, fmtMoney } from "../../helpers";
 import { INPUT, CARD, Field, Prefijo, SHEET_ICON, parseNum, errMsg } from "./shared";
+import { monedaLocal } from "../../helpers/currency";
 
 /**
  * Revisión de la factura de una orden, con el mismo esquema que "Revisar pedido" de la caja:
@@ -67,7 +68,7 @@ export default function InvoiceModal({ open, order, onClose, onDone, onEdit }) {
 
     // El total en la moneda elegida, y debajo en la otra (Ref. ↔ Bs.), como en la caja.
     const moneda = activeCurrencies.find(c => String(c.id) === String(currencyId)) || baseCurrency;
-    const monedaBs = activeCurrencies.find(c => !c.is_base) || null;
+    const monedaBs = monedaLocal(activeCurrencies) || null;
     const enBs = (n) => monedaBs ? fmtMoney(Math.round(n * (parseFloat(monedaBs.exchange_rate) || 0) * 100) / 100, monedaBs.symbol) : null;
     const principal = (n) => (moneda && !moneda.is_base ? enBs(n) : money(n));
     const secundario = (n) => (moneda && !moneda.is_base ? money(n) : enBs(n));

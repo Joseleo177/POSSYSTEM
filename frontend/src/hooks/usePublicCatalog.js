@@ -6,6 +6,7 @@ import { applyBrandColor } from "../helpers/brandColor";
 import { useTheme } from "./useTheme";
 import { PAGE_SIZE, round3 } from "../components/PublicCatalog/shared";
 import { lineTotalFor } from "../helpers/promo";
+import { monedaLocal } from "../helpers/currency";
 
 /**
  * Estado y lógica del catálogo público.
@@ -247,7 +248,7 @@ export function usePublicCatalog(token, initialProductId = null) {
     }, [cart, cartKey]);
 
     const baseCur = currencies.find(c => c.is_base) || null;
-    const altCur = currencies.find(c => !c.is_base) || null;
+    const altCur = monedaLocal(currencies) || null;
 
     const fmt = (amount, cur) => {
         if (!cur) return "";

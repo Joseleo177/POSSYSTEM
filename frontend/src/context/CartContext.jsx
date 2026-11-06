@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, useEffect } from "react";
-import { netoLineaEnTasa, descuentoDivisas, totalBsEnTasa } from "../helpers/currency";
+import { netoLineaEnTasa, descuentoDivisas, totalBsEnTasa, monedaLocal } from "../helpers/currency";
 import { api } from "../services/api";
 import { onSSE } from "../services/sse";
 import { useApp } from "./AppContext";
@@ -297,7 +297,7 @@ export function CartProvider({ children }) {
   // Si la actual es base (USD), la secundaria es la primera activa no-base (VES)
   // Si la actual no es base, la secundaria es la base (USD)
   const secondaryCurrency = currentCurrency?.is_base
-    ? activeCurrencies.find(c => !c.is_base)
+    ? monedaLocal(activeCurrencies)
     : baseCurrency;
 
   const secondaryExchangeRate = secondaryCurrency?.exchange_rate
@@ -593,7 +593,7 @@ export function CartProvider({ children }) {
   // Con round-per-line (antes): sum(round2(4.06569) × 3) = 4.07×3 = 12.21 ≠ 12.20.
   // Bs (VES): precio por línea convertido y redondeado EN Bs antes de sumar, sin cambios.
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
-  const vesCurrency = activeCurrencies.find(c => !c.is_base) || null;
+  const vesCurrency = monedaLocal(activeCurrencies) || null;
   const vesRate = vesCurrency?.exchange_rate ? parseFloat(vesCurrency.exchange_rate) : null;
   const isVesPrimary = !!currentCurrency && !currentCurrency.is_base;
 

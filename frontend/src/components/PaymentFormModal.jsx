@@ -14,6 +14,8 @@ import { useRatesOn } from "../hooks/useRatesOn";
 import AvisoTasaFecha from "./cobro/AvisoTasaFecha";
 import { fmtDateShort } from "../helpers/dates";
 import JournalPickerButton from "./cobro/JournalPickerButton";
+import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa } from "../helpers/currency";
+import TasaSelector from "./cobro/TasaSelector";
 
 const getEmpty = () => ({
   amount: "",
@@ -38,7 +40,7 @@ const getEmpty = () => ({
 });
 
 export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, onSaleChange, lockedJournalId = null, lockedMethod = null, avanceInicial = null }) {
-  const { notify, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, can, settings } = useApp();
+  const { notify, baseCurrency, activeCurrencies, monedasCobro = activeCurrencies, activeJournals: allActiveJournals, can, settings } = useApp();
   // La venta puede cambiar sin salir del modal: al quitarle la tasa de divisas vuelve del
   // servidor con su precio normal (ver quitarTasa). Se conserva lo que la pantalla le agregó.
   const [ventaActual, setVentaActual] = useState(null);
@@ -89,7 +91,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   // se exonera en el mismo cobro (createPayment, `fx_cobro`). Hoy debe Bs.8100 a 810; en
   // divisas, a 1000, paga $8,10 y se perdona el resto. Desde ahí el modal trabaja con la
   // factura como si ya tuviera la tasa: sus bolívares van a esa tasa y pide algo en divisas.
-  const monedaBs = activeCurrencies.find(c => !c.is_base) || null;
+  const monedaBs = monedaLocal(activeCurrencies) || null;
   const tasaSistemaBs = parseFloat(monedaBs?.exchange_rate) || 0;
   // Opción de la empresa (Configuración → Punto de venta) más el permiso. Las facturas que ya
   // traen tasa se siguen cobrando con ella aunque la opción se apague.
@@ -133,14 +135,15 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   // fecha (o sin conexión) sigue con la de hoy y lo avisa junto a la fecha.
   const tasasFecha = useRatesOn(form.reference_date);
   const tasaSistema = (cur) => tasasFecha.rateOf(cur?.id) || parseFloat(cur?.exchange_rate || 1);
-  const displayCur = activeCurrencies.find(c => !c.is_base) || baseCurrency;
+  const displayCur = monedaLocal(activeCurrencies) || baseCurrency;
   // Factura con tasa de divisas (ver services/sales/fxRate.js en el backend): todo lo que se
   // cobre en bolívares va a esa tasa, ahora o en un abono posterior, y no se escribe a mano.
   const tasaFx = parseFloat(sale?.fx_rate) > 0 ? parseFloat(sale.fx_rate) : null;
   const defaultRate = (!displayCur || displayCur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(displayCur));
   const defaultSym = displayCur?.symbol || baseCurrency?.symbol || "Ref.";
 
-  const payCur = activeCurrencies.find(c => c.id === parseInt(form.pay_currency_id));
+  // Puede ser una tasa alterna (Bs a la tasa USDT): se busca entre todas las del cobro.
+  const payCur = monedasCobro.find(c => c.id === parseInt(form.pay_currency_id));
   const payCurRate = (!payCur || payCur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(payCur));
   // Tasa de ESTE cobro. Arranca en la del sistema y se puede escribir a mano: la deuda se pacta
   // en divisas y el cliente paga con la tasa del día en que paga, que no siempre es la que está
@@ -177,7 +180,9 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   // vuelto se calcula sobre la suma; solo el ÚLTIMO tramo puede exceder el saldo.
   const partesComb = (form.pay_parts || []).map(p => {
     const j = activeJournals.find(x => x.id === p.journal_id);
-    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+    // La tasa de este tramo (Bs a BCV o a USDT) si se eligió; si no, la moneda de su caja.
+    const cur = (p.currency_id && monedasCobro.find(c => c.id === parseInt(p.currency_id)))
+      || (j?.currency_id ? monedasCobro.find(c => c.id === parseInt(j.currency_id)) : baseCurrency);
     const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
     const n = parseFloat(String(p.amount).replace(",", "."));
     return {
@@ -210,11 +215,14 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const curCajaAvance = cajaAvance?.currency_id ? activeCurrencies.find(c => c.id === parseInt(cajaAvance.currency_id)) : baseCurrency;
   const avanceEfectivo = parseFloat(String(avance.monto).replace(",", ".")) || 0;
   const avancePct = parseFloat(String(avance.pct).replace(",", ".")) || 0;
+  // La cuenta del avance va en la moneda de SU caja, no a la tasa elegida para el cobro (Bs a
+  // USDT): es lo que hace registrarAvance en el servidor con las monedas de las dos cajas.
+  const curCuentaAvance = selectedJournal?.currency_id ? activeCurrencies.find(c => c.id === parseInt(selectedJournal.currency_id)) : baseCurrency;
   const avanceCalc = calcularAvance({
     efectivo: avanceEfectivo, pct: avancePct,
     rateCaja: (!curCajaAvance || curCajaAvance.is_base) ? 1 : tasaSistema(curCajaAvance),
-    rateCuenta: (!payCur || payCur.is_base) ? 1 : tasaSistema(payCur),
-    mismaMoneda: String(curCajaAvance?.id ?? "") === String(payCur?.id ?? baseCurrency?.id ?? ""),
+    rateCuenta: (!curCuentaAvance || curCuentaAvance.is_base) ? 1 : tasaSistema(curCuentaAvance),
+    mismaMoneda: String(curCajaAvance?.id ?? "") === String(curCuentaAvance?.id ?? baseCurrency?.id ?? ""),
   });
   const avanceActivo = puedeAvance && avance.on && avanceEfectivo > 0 && !!cajaAvance;
   const avanceInvalido = puedeAvance && avance.on && avanceEfectivo > 0 && (!cajaAvance || avancePct < 0 || avancePct > 100);
@@ -350,11 +358,33 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
     : 0;
   // Tasa y símbolo de una caja: cada tramo (del cobro o del vuelto) se escribe en la moneda de
   // SU caja, que es la que el cajero cuenta.
-  const datosCaja = (journalId) => {
+  // `currencyId` es la tasa elegida para ese tramo (Bs a la tasa USDT); sin ella, la moneda de
+  // la caja.
+  const datosCaja = (journalId, currencyId = null) => {
     const j = journalId ? activeJournals.find(x => x.id === journalId) : null;
-    const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : null;
+    const cur = (currencyId && monedasCobro.find(c => c.id === parseInt(currencyId)))
+      || (j?.currency_id ? monedasCobro.find(c => c.id === parseInt(j.currency_id)) : null);
     const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
-    return { journal: j, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
+    return { journal: j, cur, rate: r, sym: cur?.symbol || baseCurrency?.symbol || "Ref." };
+  };
+
+  // Tasa con que se cobra en una caja: la del método (Diarios) o, en una factura con tasa de
+  // divisas, siempre la moneda de la caja (el servidor impone esa tasa, y la factura la ata al
+  // bolívar oficial).
+  const monedaCobroDe = (j, method) => {
+    if (!j) return null;
+    if (tasaFx) return j.currency_id ? monedasCobro.find(c => c.id === parseInt(j.currency_id)) || null : null;
+    return monedaDeMetodo(j, method, monedasCobro);
+  };
+
+  // Tasa del vuelto en una caja: si es la misma moneda con que se cobró (Bs y Bs), sale a la
+  // misma tasa del cobro —quien pagó a la tasa USDT recibe el vuelto en Bs a esa tasa—; si no,
+  // la tasa por defecto del método de esa caja.
+  const monedaVueltoDe = (j, method) => {
+    if (!j) return null;
+    const pagoCur = combinado ? partesComb[partesComb.length - 1]?.cur : payCur;
+    if (pagoCur && !pagoCur.is_base && tasasDeMoneda(pagoCur, monedasCobro).some(c => c.id === parseInt(j.currency_id))) return pagoCur;
+    return monedaCobroDe(j, method);
   };
 
   // Lo que falta por cubrir en el pago combinado, en la moneda de una caja de tasa `r` y sin
@@ -369,7 +399,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
       if (i === idx) return a;
       const n = parseFloat(String(q.amount).replace(",", "."));
       if (isNaN(n) || n <= 0) return a;
-      const rr = datosCaja(q.journal_id).rate;
+      const rr = datosCaja(q.journal_id, q.currency_id).rate;
       if (r > 1) return a + (rr === r ? roundBs2(n) : roundBs2((n / rr) * r));
       return a + (rr === 1 ? round2(n) : n / rr);
     }, 0);
@@ -392,7 +422,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   // El vuelto puede salir de VARIAS cajas: sin sencillo en divisas se devuelven 2$ en efectivo
   // y los 0,66 restantes en bolívares. Cada tramo sale de la gaveta por la que salió de verdad.
   const salidasCambio = (form.change_parts || []).map(p => {
-    const { rate: r, sym: s } = datosCaja(p.journal_id);
+    const { rate: r, sym: s } = datosCaja(p.journal_id, p.currency_id);
     const tecleado = parseFloat(String(p.amount).replace(",", "."));
     const montoPago = !isNaN(tecleado) && tecleado >= 0 ? roundBs2(tecleado) : 0;
     return { ...p, rate: r, sym: s, montoPago, montoBase: parseFloat((montoPago / r).toFixed(6)) };
@@ -414,15 +444,16 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   // en los siguientes solo el resto.
   const asignarCajaCambio = (idx, id, method = null) => setForm(p => {
     const partes = [...p.change_parts];
-    const { rate: r } = datosCaja(id);
+    const curVuelto = monedaVueltoDe(activeJournals.find(x => x.id === id), method);
+    const { rate: r } = datosCaja(id, curVuelto?.id);
     const yaAsignado = partes.reduce((acc, q, i) => {
       if (i === idx) return acc;
-      const { rate: rr } = datosCaja(q.journal_id);
+      const { rate: rr } = datosCaja(q.journal_id, q.currency_id);
       const n = parseFloat(String(q.amount).replace(",", "."));
       return acc + (isNaN(n) ? 0 : n / rr);
     }, 0);
     const falta = Math.max(0, changeBase - yaAsignado);
-    partes[idx] = { journal_id: id, payment_method: method, amount: (Math.round(falta * r * 100) / 100).toFixed(2) };
+    partes[idx] = { journal_id: id, payment_method: method, currency_id: curVuelto?.id || null, amount: (Math.round(falta * r * 100) / 100).toFixed(2) };
     return { ...p, change_parts: partes };
   });
 
@@ -438,8 +469,9 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const selectJournal = (id, method = null) => {
     const j = activeJournals.find(x => x.id === id);
     if (!j) return;
-    const newCurId = j.currency_id || baseCurrency?.id;
-    const newCur = activeCurrencies.find(c => c.id === parseInt(newCurId));
+    // La tasa por defecto del método (pago móvil a USDT) o la moneda de la caja.
+    const newCur = monedaCobroDe(j, method) || monedasCobro.find(c => c.id === parseInt(baseCurrency?.id));
+    const newCurId = newCur?.id || j.currency_id || baseCurrency?.id;
     const isNonBase = newCur && !newCur.is_base;
     const newRate = isNonBase ? tasaDeVenta(sale, tasaSistema(newCur)) : 1;
     const newAmt = isNonBase ? pendingBsAt(newRate).toFixed(2) : pendingAfterCredit.toFixed(2);
@@ -453,6 +485,29 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
       amount: newAmt,
       received_amount: newAmt,
       rate: "",
+      change_parts: [{ journal_id: "", amount: "" }],
+    }));
+  };
+
+  // Tasas entre las que puede elegir el cajero para una moneda (Bs a BCV y Bs a USDT), cada una
+  // con lo que se cobraría a ella. `falta` da el monto en la moneda a una tasa dada.
+  const opcionesTasa = (cur, falta) => tasasDeMoneda(cur, monedasCobro).map(c => {
+    const r = tasaDeVenta(sale, tasaSistema(c));
+    return { id: c.id, label: nombreTasa(c), monto: `${c.symbol} ${falta(r).toFixed(2)}` };
+  });
+
+  // Cambiar la tasa del cobro simple (BCV ↔ USDT): el monto pasa a lo que se debe a la nueva
+  // tasa, con el avance encima si lo hay, y el vuelto se vuelve a elegir.
+  const cambiarTasa = (curId) => {
+    const cur = monedasCobro.find(c => c.id === parseInt(curId));
+    if (!cur) return;
+    const nuevo = pendingBsAt(tasaDeVenta(sale, tasaSistema(cur))).toFixed(2);
+    setForm(p => ({
+      ...p,
+      pay_currency_id: cur.id,
+      rate: "",
+      amount: nuevo,
+      received_amount: (parseFloat(nuevo) + avanceEnPago).toFixed(2),
       change_parts: [{ journal_id: "", amount: "" }],
     }));
   };
@@ -622,7 +677,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
         change_given:       (changeBase > 0 && !form.keep_change && !form.credit_change) ? actualChangeBase : undefined,
         // Cada tramo del vuelto con su caja: el servidor registra un egreso por cada una.
         change_parts:       (changeBase > 0 && !form.keep_change && !form.credit_change)
-          ? salidasCambio.filter(s => s.journal_id && s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, amount: s.montoBase }))
+          ? salidasCambio.filter(s => s.journal_id && s.montoBase > 0).map(s => ({ journal_id: s.journal_id, payment_method: s.payment_method || null, currency_id: s.currency_id || null, amount: s.montoBase }))
           : undefined,
         // En combinado los tramos ya suman TODO lo recibido (aplicado + sobrante). No se manda
         // `surplus_kept`: el backend lo reconstruye sumándolo al monto de un tramo, y acá lo
@@ -968,10 +1023,11 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                         methodPrompt={{ tag: "Cobro", title: "¿Cómo paga esta parte?" }}
                         onSelect={(j) => setForm(p => {
                           const parts = [...p.pay_parts];
-                          const cur = j?.currency_id ? activeCurrencies.find(c => c.id === parseInt(j.currency_id)) : baseCurrency;
+                          // La tasa por defecto del método (pago móvil a USDT) o la moneda de la caja.
+                          const cur = monedaCobroDe(j, j.payment_method || null) || baseCurrency;
                           const r = (!cur || cur.is_base) ? 1 : tasaDeVenta(sale, tasaSistema(cur));
                           // Se sugiere lo que falta por cubrir, en la moneda de esta caja.
-                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
+                          parts[idx] = { ...parts[idx], journal_id: j.id, payment_method: j.payment_method || null, currency_id: cur?.id || null, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
                           return { ...p, pay_parts: parts };
                         })}
                       />
@@ -1004,7 +1060,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                             pay_parts: [],
                             payment_journal_id: only.journal_id || "",
                             payment_method: only.payment_method || null,
-                            pay_currency_id: jj?.currency_id ? String(jj.currency_id) : "",
+                            pay_currency_id: only.currency_id ? String(only.currency_id) : (jj?.currency_id ? String(jj.currency_id) : ""),
                             amount: only.amount || "",
                             received_amount: only.amount || "",
                             reference_number: only.reference || "",
@@ -1019,6 +1075,20 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                       </button>
                     )}
                   </div>
+                  {/* BCV | USDT para esta parte: al cambiar, el monto pasa a lo que falta a esa tasa. */}
+                  {s.journal_id && !tasaFx && (
+                    <TasaSelector
+                      opciones={opcionesTasa(s.cur, (r) => faltaEnMoneda(form.pay_parts, idx, r))}
+                      value={s.cur?.id}
+                      onChange={(curId) => setForm(p => {
+                        const parts = [...p.pay_parts];
+                        const c = monedasCobro.find(x => x.id === parseInt(curId));
+                        const r = tasaDeVenta(sale, tasaSistema(c));
+                        parts[idx] = { ...parts[idx], currency_id: c.id, amount: faltaEnMoneda(parts, idx, r).toFixed(2) };
+                        return { ...p, pay_parts: parts, change_parts: [{ journal_id: "", amount: "" }] };
+                      })}
+                    />
+                  )}
                   {s.cur && !s.cur.is_base && s.base > 0 && (
                     <p className="text-[11px] font-semibold text-success">≈ {baseSym}{s.base.toFixed(2)} {baseCurrency?.code} · tasa {s.rate}</p>
                   )}
@@ -1070,6 +1140,13 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
         </Field>
         )}
 
+        {/* BCV | USDT: la misma caja cobra a las dos tasas. Arranca en la del método (Diarios). */}
+        {!combinado && payCur && !payCur.is_base && !tasaFx && tasasDeMoneda(payCur, monedasCobro).length > 1 && (
+          <Field label="Tasa del cobro">
+            <TasaSelector opciones={opcionesTasa(payCur, pendingBsAt)} value={payCur.id} onChange={cambiarTasa} />
+          </Field>
+        )}
+
         {/* Arranca en la del sistema y se puede escribir a mano para este cobro: la deuda se
             pacta en divisas y el cliente paga a la tasa del día en que paga —una factura vieja
             se cobra semanas después—. Mismo campo que ya usan ingresos y egresos, así que se
@@ -1083,7 +1160,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
           </Field>
         )}
         {isNonBasePay && !tasaFx && (
-          <Field label={`Tasa de cambio (${payCur.code})`}>
+          <Field label={`Tasa de cambio (${payCur.rate_of_id ? `${payCur.code} ${payCur.name}` : payCur.code})`}>
             <RateField
               value={form.rate}
               onChange={v => setForm(p => {
@@ -1151,7 +1228,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                 ...p,
                 payment_journal_id: "", pay_currency_id: "", amount: "", received_amount: "", rate: "",
                 pay_parts: [
-                  { journal_id: p.payment_journal_id, payment_method: p.payment_method || null, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
+                  { journal_id: p.payment_journal_id, payment_method: p.payment_method || null, currency_id: p.pay_currency_id || null, amount: p.amount || "", reference: isCashJ ? "" : (p.reference_number || "") },
                   { journal_id: "", amount: "", reference: "" },
                 ],
               };

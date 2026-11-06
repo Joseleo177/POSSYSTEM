@@ -47,7 +47,7 @@ function Campo({ label, hint, ayuda, children }) {
   );
 }
 
-export default function DiariosTab({ notify, can, journals, loadJournals, activeMethods, methodByCode, activeBanks, currencies, warehouses = [] }) {
+export default function DiariosTab({ notify, can, journals, loadJournals, activeMethods, methodByCode, activeBanks, currencies, tasasAlternas = [], warehouses = [] }) {
   const [newJournal, setNewJournal] = useState(EMPTY_JOURNAL);
   const [editJournal, setEditJournal] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -257,6 +257,8 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
         };
         const esEfectivo = !form.bank_id && (form.methods || []).every(m => m.method_code === "efectivo");
         const moneda = currencies.find(c => String(c.id) === String(form.currency_id));
+        // Otras tasas de la moneda de esta caja (Bs a la tasa USDT): cada método elige con cuál cobra.
+        const alternasDeCaja = moneda ? tasasAlternas.filter(a => parseInt(a.rate_of_id) === moneda.id) : [];
         const sucursalTxt = marcadas.length === 0
           ? "Todas las sucursales"
           : marcadas.length === 1
@@ -341,6 +343,23 @@ export default function DiariosTab({ notify, can, journals, loadJournals, active
                         options={SENTIDOS.map(x => ({ key: x.key, label: x.label }))}
                         className="mt-1.5 mr-1.5 w-[calc(100%-0.375rem)] [&>button]:flex-1 [&>button]:justify-center [&>button]:px-2"
                       />
+                      {/* Con qué tasa cobra por defecto este método (pago móvil a USDT, punto a
+                          BCV). El cajero la puede cambiar en el cobro. Solo si la moneda de la
+                          caja tiene otras tasas (Monedas → "+ Otra tasa"). */}
+                      {m.allows_inflow !== false && alternasDeCaja.length > 0 && (
+                        <div className="mt-2 mr-1.5 flex items-center gap-2">
+                          <span className="text-[12px] text-content-subtle shrink-0">Cobra a</span>
+                          <Segmented
+                            value={alternasDeCaja.some(a => a.id === parseInt(m.rate_currency_id)) ? String(m.rate_currency_id) : "0"}
+                            onChange={k => setMetodo(idx, { rate_currency_id: k === "0" ? null : parseInt(k) })}
+                            options={[
+                              { key: "0", label: moneda?.code === "VES" ? "BCV" : (moneda?.code || "Oficial") },
+                              ...alternasDeCaja.map(a => ({ key: String(a.id), label: a.name })),
+                            ]}
+                            className="flex-1 [&>button]:flex-1 [&>button]:justify-center [&>button]:px-2"
+                          />
+                        </div>
+                      )}
                     </div>
                   ))}
                   {disponibles.length > 0 && (

@@ -20,6 +20,7 @@ import PriceLabelsView from "../components/Catalog/PriceLabelsView";
 import ImportProductsModal from "../components/Catalog/ImportProductsModal";
 import FilterPopover from "../components/ui/FilterPopover";
 import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
+import { monedaLocal } from "../helpers/currency";
 
 const TABS = [
     { id: "products",   label: "Productos" },
@@ -61,7 +62,7 @@ export default function CatalogPage() {
     const [triggerNewAddon, setTriggerNewAddon] = useState(0);
     // Adicionales (término, extras) solo en empresas con restaurante.
     const tabs = company?.cocina_enabled ? [...TABS, { id: "addons", label: "Adicionales" }] : TABS;
-    const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
+    const localCurrency = monedaLocal(activeCurrencies) ?? null;
 
     const availableWarehouses = employee?.warehouses || [];
     // El catálogo muestra precios y existencias de UNA sucursal: arranca en la actual y, con

@@ -12,6 +12,7 @@ import Check from "../components/ui/Check";
 import PaymentReportList from "../components/PaymentReports/PaymentReportList";
 import MiniMapa from "../components/MiniMapa";
 import { toNameCase, printKitchenOrder, resolveImageUrl } from "../helpers";
+import { monedaLocal } from "../helpers/currency";
 
 // Pedidos: la bandeja de los pedidos que llegan del catálogo (extra pedidos web). Antes se
 // atendían desde "Ventas en espera" del POS, con piezas pensadas para cuentas pausadas. Aquí se
@@ -293,7 +294,7 @@ function Detalle({ id, onChanged, onClose }) {
     }
 
     const nuevo = o.status === "pedido";
-    const bs = activeCurrencies.find(c => !c.is_base);
+    const bs = monedaLocal(activeCurrencies);
     const enBs = (n) => bs ? `${bs.symbol} ${(r2(n) * parseFloat(bs.exchange_rate)).toFixed(2)}` : null;
     const delivery = o.fulfillment === "delivery";
     const fee = delivery ? r2(String(cargo.fee).replace(",", ".")) : 0;

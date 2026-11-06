@@ -473,6 +473,10 @@ export const api = {
     updateRate:   (id, body) => request(`/currencies/${id}/rate`,   { method: "PUT",  body: JSON.stringify(body) }),
     toggle:       (id)       => request(`/currencies/${id}/toggle`, { method: "PUT" }),
     remove:       (id)       => request(`/currencies/${id}`,        { method: "DELETE" }),
+    // La moneda que la pantalla muestra junto a la base (los Bs).
+    setLocal:     (id)       => request(`/currencies/${id}/local`,  { method: "PUT" }),
+    // Si "Sincronizar tasas" la actualiza o la pone la tienda (pesos de frontera, USDT).
+    toggleAutoSync: (id)     => request(`/currencies/${id}/auto-sync`, { method: "PUT" }),
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
     // Tasa publicada por el BCV con su fecha valor, sin aplicarla.
     bcv:          (fresh)    => request(`/currencies/bcv${fresh ? "?fresh=1" : ""}`),

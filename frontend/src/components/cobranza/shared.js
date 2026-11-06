@@ -1,4 +1,5 @@
 import { fmtDateShort } from "../../helpers";
+import { monedaLocal } from "../../helpers/currency";
 
 // Piezas comunes de la app Cobranza (ruta del cobrador y sectores).
 
@@ -9,7 +10,7 @@ export const fmtBaseCon = (baseCurrency) => (n) => `${baseCurrency?.symbol || "R
 
 // Bolívares a la tasa de HOY: lo pendiente se muestra a la tasa vigente.
 export const fmtLocalCon = (activeCurrencies) => {
-    const local = (activeCurrencies || []).find(c => !c.is_base);
+    const local = monedaLocal(activeCurrencies);
     const rate = parseFloat(local?.exchange_rate) || 0;
     return rate > 1 ? (n) => `${local.symbol} ${r2(r2(n) * rate).toFixed(2)}` : null;
 };

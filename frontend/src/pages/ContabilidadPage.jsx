@@ -240,7 +240,8 @@ export default function ContabilidadPage() {
  can={can}
  journals={journals}
  loadJournals={loadJournals}
- currencies={currencies}
+ currencies={currencies.filter(c => !c.rate_of_id)}
+ tasasAlternas={currencies.filter(c => c.rate_of_id && c.active)}
  activeMethods={activeMethods}
  activeBanks={activeBanks}
  methodByCode={methodByCode}

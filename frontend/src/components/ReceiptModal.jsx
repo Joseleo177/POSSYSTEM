@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { netoLineaEnTasa } from "../helpers/currency";
+import { netoLineaEnTasa, monedaLocal, conFamilia } from "../helpers/currency";
 import { desgloseIva, renglonesIva } from "../helpers/iva";
 import Modal from "./ui/Modal";
 import { api } from "../services/api";
@@ -86,6 +86,9 @@ function normalizeSale(sale) {
                 : null),
             amount: parseFloat(p.amount || 0),
             exchange_rate: parseFloat(p.exchange_rate || 1),
+            // Moneda (o tasa) en que entró: separa los bolívares de los pesos, que también
+            // tienen tasa > 1 (ver enBolivares).
+            currency_id: p.currency_id ?? null,
             // El vuelto entregado en ese cobro. `amount` es el dinero que ENTRÓ —incluye lo
             // que se devolvió—, así que sin esto el papel no puede decir cuánto entregó el
             // cliente ni cuánto se le regresó: las dos cifras que mira al recibir el ticket.
@@ -98,9 +101,19 @@ function normalizeSale(sale) {
 // Tasas distintas con que entraron bolívares a esta venta. Con más de una, ninguna tasa sola
 // convierte la factura en lo que el cliente pagó: abonó una parte a la tasa de un día y el
 // resto a la de otro.
-const tasasEnBs = (payments) => new Set(
+// ¿El cobro entró en bolívares? Tasa > 1 y, si se sabe, en la moneda local o en una de sus tasas
+// (Bs a la tasa USDT): un cobro en pesos también tiene tasa > 1 y no son bolívares. `local` es la
+// moneda local con `familia_ids` (ver conFamilia en helpers/currency); sin eso, la regla de antes.
+const enBolivares = (p, local) => {
+    if (!(parseFloat(p?.exchange_rate) > 1)) return false;
+    const fam = local?.familia_ids;
+    if (!fam?.length || !p.currency_id) return true;
+    return fam.includes(parseInt(p.currency_id));
+};
+
+const tasasEnBs = (payments, local) => new Set(
     (payments || [])
-        .filter(p => parseFloat(p.amount) > 0 && parseFloat(p.exchange_rate) > 1)
+        .filter(p => parseFloat(p.amount) > 0 && enBolivares(p, local))
         .map(p => parseFloat(p.exchange_rate).toFixed(4))
 );
 
@@ -112,7 +125,7 @@ const fmtTasa = (r) => parseFloat(r).toFixed(4).replace(/\.?0+$/, "");
 // Cómo quedó la venta al emitir el ticket. Se imprime siempre —incluso pagada— porque el
 // papel es el comprobante que se llevan cliente y tienda: si no dice cómo se pagó, una venta
 // a crédito y una cobrada en efectivo son indistinguibles después.
-function paymentSummary(s) {
+function paymentSummary(s, local = null) {
     const status = (s.status || "").toLowerCase();
     const pendiente = ["pendiente", "parcial", "borrador", "espera"].includes(status);
 
@@ -150,13 +163,13 @@ function paymentSummary(s) {
     // Abonos a tasas distintas: cada cobro se detalla por separado y en SU moneda, con su tasa
     // y su fecha. Agruparlos por caja sumaría bolívares de días distintos como si valieran lo
     // mismo; es la única forma de que el papel diga exactamente lo que el cliente entregó.
-    const multiTasa = tasasEnBs(s.payments).size > 1;
+    const multiTasa = tasasEnBs(s.payments, local).size > 1;
     const cobros = multiTasa
         ? (s.payments || []).filter(p => p.amount > 0).map(p => ({
             nombre: p.method_name || p.journal_name || "Cobro",
             fecha: fechaCorta(p.created_at),
-            enBs: p.exchange_rate > 1,
-            monto: Math.round(p.amount * (p.exchange_rate > 1 ? p.exchange_rate : 1) * 100) / 100,
+            enBs: enBolivares(p, local),
+            monto: Math.round(p.amount * (enBolivares(p, local) ? p.exchange_rate : 1) * 100) / 100,
             tasa: p.exchange_rate,
         }))
         : [];
@@ -308,12 +321,12 @@ function calcReceiptTotals(s, rate, sym, { sinRebajaFx = false } = {}) {
 // ese mismo cálculo da lo cobrado; el total es creciente con la tasa, así que converge.
 //
 // Si además entró algo en divisas, esa parte se lleva a bolívares con la misma tasa buscada.
-function tasaPromedio(s, enBs) {
+function tasaPromedio(s, enBs, local = null) {
     const round2 = n => Math.round(n * 100) / 100;
     const baseBs = enBs.reduce((a, p) => a + parseFloat(p.amount), 0);
     const cobradoBs = enBs.reduce((a, p) => a + round2(parseFloat(p.amount) * parseFloat(p.exchange_rate)), 0);
     const enRef = (s.payments || [])
-        .filter(p => parseFloat(p.amount) > 0 && !(parseFloat(p.exchange_rate) > 1))
+        .filter(p => parseFloat(p.amount) > 0 && !enBolivares(p, local))
         .reduce((a, p) => a + parseFloat(p.amount), 0);
     const promedio = cobradoBs / baseBs;
     const conObjetivo = (rate) => ({ rate, objetivoBs: round2(cobradoBs + round2(enRef * rate)) });
@@ -395,7 +408,7 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     // Basta con que ALGO haya entrado en bolívares: en un cobro mixto el papel se imprime en
     // la moneda de la gaveta que hay que cuadrar. Sin bolívares de por medio —cobrada en
     // divisas, exonerada, o todavía sin cobrar— no hay nada que expresar en esa moneda.
-    const huboBolivares = pagos.some(p => parseFloat(p.exchange_rate) > 1);
+    const huboBolivares = pagos.some(p => enBolivares(p, displayCurrency));
     const saldada = ["pagado", "exonerado"].includes(String(s.status || "").toLowerCase());
 
     if (!huboBolivares || !saldada) return enDivisas;
@@ -410,7 +423,7 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     if (s.fxRate > 0 && s.fxBaseRate > 1) {
         const round2 = n => Math.round(n * 100) / 100;
         const objetivoBs = round2(pagos.reduce((acc, p) => {
-            const r = parseFloat(p.exchange_rate) > 1 ? parseFloat(p.exchange_rate) : s.fxRate;
+            const r = enBolivares(p, displayCurrency) ? parseFloat(p.exchange_rate) : s.fxRate;
             return acc + (parseFloat(p.amount) - parseFloat(p.change_given || 0)) * r;
         }, 0));
         return {
@@ -423,9 +436,9 @@ export function receiptCurrency(s, displayCurrency, baseCurrency) {
     // bolívares, a la tasa PROMEDIO de lo cobrado en bolívares —los Bs que entraron entre los
     // Ref. que cubrieron—. Es la única tasa con la que el total impreso da lo que el cliente
     // pagó en total; cada abono se detalla además con su propia tasa (paymentSummary → cobros).
-    const enBs = pagos.filter(p => parseFloat(p.exchange_rate) > 1);
-    if (tasasEnBs(pagos).size > 1) {
-        return { ...tasaPromedio(s, enBs), sym: displayCurrency?.symbol || "Ref.", promedio: true };
+    const enBs = pagos.filter(p => enBolivares(p, displayCurrency));
+    if (tasasEnBs(pagos, displayCurrency).size > 1) {
+        return { ...tasaPromedio(s, enBs, displayCurrency), sym: displayCurrency?.symbol || "Ref.", promedio: true };
     }
 
     // Saldada con bolívares: se imprime a la tasa del pago que cerró la deuda, que es la que
@@ -474,7 +487,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     // Lo recibido se pasa a Bs a la tasa a la que entró: la de divisas, en una factura con ella.
     const ratePagos = cur.ratePagos || rate;
     const totals = totalesDelPapel(s, cur);
-    const pago = paymentSummary(s);
+    const pago = paymentSummary(s, displayCurrency);
     const bsSym = displayCurrency?.symbol || "Bs.";
     const refSym = baseCurrency?.symbol || "Ref.";
     const dateStr = fmtDate(s.created_at);
@@ -633,7 +646,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
 }
 
 export default function ReceiptModal({ open, onClose, sale }) {
-    const { storeName, companyInfo, baseCurrency, activeCurrencies, printerWidth } = useApp();
+    const { storeName, companyInfo, baseCurrency, activeCurrencies, monedasCobro = activeCurrencies, printerWidth } = useApp();
 
     // El ticket se abre desde tres sitios y cada uno entrega algo distinto:
     //   · caja        → la venta recién cobrada, con sus pagos ya compuestos
@@ -699,7 +712,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     const s = normalizeSale(effectiveSale);
 
     // La moneda de pantalla es la no-base (VES); si no hay, se cae a la base.
-    const displayCurrency = activeCurrencies?.find(c => !c.is_base) || baseCurrency;
+    const displayCurrency = conFamilia(monedaLocal(activeCurrencies), monedasCobro) || baseCurrency;
     const isBase = !displayCurrency || displayCurrency.is_base;
     // La vista previa tiene que mostrar EXACTAMENTE el papel que va a salir, así que decide la
     // moneda con la misma regla que la impresión.
@@ -710,7 +723,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
     // Lo recibido se pasa a Bs a la tasa a la que entró: la de divisas, en una factura con ella.
     const ratePagos = cur.ratePagos || rate;
     const totals = totalesDelPapel(s, cur);
-    const pago = paymentSummary(s);
+    const pago = paymentSummary(s, displayCurrency);
 
     const dateStr = fmtDate(s.created_at);
     const invoiceLabel = s.invoice_number || s.offline_ref || `#${s.id}`;
