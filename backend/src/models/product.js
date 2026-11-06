@@ -47,6 +47,9 @@ module.exports = (sequelize, DataTypes) => {
     // Lo que solo se embolsa (empanadas del exhibidor, un refresco) no. Ver migración
     // 20261101160000-pedidos-etapas.
     kitchen_prep: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Alícuota de IVA: G general, R reducida, A con la adicional de lujo, E exento. Solo pesa
+    // en empresas con iva_enabled (ver services/fiscal/iva.js).
+    iva_tipo: { type: DataTypes.STRING(1), allowNull: false, defaultValue: 'G' },
     // Variantes (talla, color): la variante es un producto con parent_id hacia su modelo. El
     // modelo (is_variant_parent) es la plantilla: no se vende ni lleva existencias. variant_key
     // son los ids de sus valores ordenados, únicos por modelo. own_price = no sigue el precio

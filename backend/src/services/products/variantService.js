@@ -177,6 +177,7 @@ function heredado(modelo) {
     package_unit: modelo.package_unit,
     package_size: modelo.package_size,
     min_stock: modelo.min_stock,
+    iva_tipo: modelo.iva_tipo,
   };
 }
 

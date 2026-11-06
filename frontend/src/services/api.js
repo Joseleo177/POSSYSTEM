@@ -666,6 +666,7 @@ export const api = {
     expiry:             (params = {}) => request("/reports/expiry?"             + new URLSearchParams(params)),
     paymentJournals:    (params = {}) => request("/reports/payment-journals?"   + new URLSearchParams(params)),
     finance:            (params = {}) => request("/reports/finance?"            + new URLSearchParams(params)),
+    libroVentas:        (params = {}) => request("/reports/libro-ventas?"       + new URLSearchParams(params)),
   },
 
   cashSessions: {

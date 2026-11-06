@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { columnasLibro } from "./iva";
 
 // ── Descarga un workbook como .xlsx ──────────────────────────
 function download(wb, filename) {
@@ -620,4 +621,83 @@ export function buildFinanceExcel(data, range) {
       { key: "banco", label: "Banco / caja" },
     ] },
   ]), `IngresosEgresos_${range.from}_${range.to}${sufijoSucursal(range)}`);
+}
+
+// Libro de ventas: una fila por documento, en la moneda local y con las columnas que pide el
+// contador. Las N/C van en negativo y las anuladas en cero, como en el libro impreso.
+export function buildLibroVentasExcel(data, range) {
+  const local = data.local_symbol || "Bs.";
+  const cols = columnasLibro(data);
+  const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const fecha = (d) => String(d || "").split("-").reverse().join("/");
+
+  const fila = (d) => {
+    const out = {
+      fecha: fecha(d.fecha),
+      tipo: d.tipo === "nc" ? "N/C" : "FACTURA",
+      numero: d.numero,
+      control: d.control || "",
+      afectada: d.afectada || "",
+      rif: d.rif || "",
+      nombre: d.nombre || (d.rif ? "" : "Consumidor final"),
+      estado: d.anulada ? "ANULADA" : d.sin_iva ? "SIN IVA" : "",
+      tasa: r2(d.rate),
+      total: r2(d.total),
+      exento: r2(d.exento),
+      iva_total: r2(d.iva_total),
+    };
+    for (const t of cols) {
+      out[`base_${t}`] = r2(d.gravado?.[t]?.base);
+      out[`iva_${t}`] = r2(d.gravado?.[t]?.iva);
+    }
+    return out;
+  };
+  const rows = (data.docs || []).map(fila);
+  if (rows.length) {
+    const t = fila({ ...data.resumen, numero: "", fecha: "", rate: "", anulada: false, sin_iva: false });
+    rows.push({ ...t, fecha: "TOTAL", tipo: "", nombre: "", tasa: "" });
+  }
+
+  const headers = [
+    { key: "fecha", label: "Fecha" },
+    { key: "tipo", label: "Tipo" },
+    { key: "numero", label: "N° documento" },
+    { key: "control", label: "N° control" },
+    { key: "afectada", label: "Factura afectada" },
+    { key: "rif", label: "RIF / C.I." },
+    { key: "nombre", label: "Nombre o razón social" },
+    { key: "estado", label: "Estado" },
+    { key: "tasa", label: "Tasa" },
+    { key: "total", label: `Total con IVA (${local})` },
+    { key: "exento", label: `Exento (${local})` },
+    ...cols.flatMap(t => [
+      { key: `base_${t}`, label: `Base ${t} % (${local})` },
+      { key: `iva_${t}`, label: `IVA ${t} % (${local})` },
+    ]),
+    { key: "iva_total", label: `IVA total (${local})` },
+  ];
+
+  const s = data.resumen || {};
+  const resumen = [
+    { concepto: "Total ventas con IVA", monto: r2(s.total) },
+    { concepto: "Ventas exentas", monto: r2(s.exento) },
+    ...cols.flatMap(t => [
+      { concepto: `Base imponible ${t} %`, monto: r2(s.gravado?.[t]?.base) },
+      { concepto: `Débito fiscal ${t} %`, monto: r2(s.gravado?.[t]?.iva) },
+    ]),
+    { concepto: "Débito fiscal total", monto: r2(s.iva_total) },
+    { concepto: "", monto: "" },
+    { concepto: "Facturas", monto: s.facturas || 0 },
+    { concepto: "Notas de crédito", monto: s.notas || 0 },
+    { concepto: "Anuladas", monto: s.anuladas || 0 },
+    ...(s.sin_iva ? [{ concepto: "Emitidas antes de activar el IVA", monto: s.sin_iva }] : []),
+  ];
+
+  download(buildWb([
+    { name: "Libro de ventas", rows, headers },
+    { name: "Resumen", rows: resumen, headers: [
+      { key: "concepto", label: "Concepto" },
+      { key: "monto", label: `Monto (${local})` },
+    ] },
+  ]), `LibroVentas_${range.from}_${range.to}${sufijoSucursal(range)}`);
 }

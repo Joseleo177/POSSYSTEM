@@ -407,4 +407,7 @@ db.Sequelize = Sequelize;
 // Todo movimiento de dinero guarda su método (ver utils/journalMethod.js).
 require('../utils/journalMethod').installMethodHooks(db);
 
+// Toda línea de venta congela la alícuota de IVA de su producto (ver services/fiscal/iva.js).
+require('../services/fiscal/iva').installIvaHooks(db);
+
 module.exports = db;

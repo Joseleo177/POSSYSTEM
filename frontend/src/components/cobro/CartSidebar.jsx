@@ -6,6 +6,7 @@ import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { cartKey } from "../../helpers/cartLine";
+import { desgloseIva, tasaDeLinea } from "../../helpers/iva";
 
 export default function CartSidebar({
     mobileTab, setMobileTab,
@@ -40,7 +41,15 @@ export default function CartSidebar({
     // Si lo tecleado en el buscador es solo un documento (dígitos, con prefijo opcional
     // tipo V- o J-), lo llevamos al campo cédula/RIF del alta en vez de al nombre.
     // Edición del cliente ya elegido, sin abandonar la venta.
-    const { can, notify } = useApp();
+    const { can, notify, company } = useApp();
+    // IVA que ya va dentro del total (los precios lo incluyen), con el mismo reparto que la
+    // factura. En la barra va compacto: solo el impuesto de cada alícuota y el exento.
+    const iva = company?.iva_enabled && cart.length
+        ? desgloseIva(cart.map(i => ({
+            monto: round2(convertToDisplay(i.price)) * i.qty - (promoLineDiscountDisplay ? promoLineDiscountDisplay(i) : 0),
+            tasa: tasaDeLinea(i),
+        })), parseFloat(totalDisplay) || 0)
+        : null;
     const canPending = can("sales.pending");
     const canReturn  = can("sales.return");
     // Sin el permiso no se ofrece el descuento: el servidor lo rechazaría al facturar.
@@ -789,6 +798,22 @@ export default function CartSidebar({
                                 )}
                             </div>
                         </div>
+                        {iva && (
+                            <div className="mt-2 pt-2 border-t border-black/5 dark:border-white/10 space-y-0.5">
+                                {iva.grupos.filter(g => g.tasa > 0).map(g => (
+                                    <div key={g.tasa} className="flex justify-between items-center text-[12px] text-content-subtle dark:text-white/50">
+                                        <span>Incluye IVA {g.tasa} %</span>
+                                        <span className="tabular-nums">{fmt(g.iva, currSym)}</span>
+                                    </div>
+                                ))}
+                                {iva.exento > 0 && (
+                                    <div className="flex justify-between items-center text-[12px] text-content-subtle dark:text-white/50">
+                                        <span>Exento</span>
+                                        <span className="tabular-nums">{fmt(iva.exento, currSym)}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </div>
                     {!cashSession && cart.length > 0 && (
                         <button

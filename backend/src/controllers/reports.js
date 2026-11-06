@@ -11,6 +11,7 @@ const {
   expiryReport,
   paymentJournalsReport,
   financeReport,
+  libroVentasReport,
 } = require("../services/reports");
 
 const wrap = (fn, errMsg) => async (req, res) => {
@@ -78,8 +79,22 @@ const getFinanceReport = wrap(
   "Error al generar el reporte de ingresos y egresos"
 );
 
+// Sin `wrap`: el período que falta o la sucursal ajena se le dicen al usuario tal cual, no como
+// un error genérico.
+const getLibroVentasReport = async (req, res) => {
+  try {
+    const data = await libroVentasReport({ ...req.query, ...(await buildTenantContext(req)) });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (!err.isOperational) console.error(err);
+    res.status(err.isOperational ? err.status || 400 : 500)
+      .json({ ok: false, message: err.isOperational ? err.message : "Error al generar el libro de ventas" });
+  }
+};
+
 module.exports = {
   getFinanceReport,
+  getLibroVentasReport,
   getSalesReport,
   getProductsReport,
   getReceivablesReport,

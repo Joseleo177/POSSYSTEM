@@ -13,6 +13,7 @@ import ProductPhotos from "./ProductPhotos";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import Segmented from "./ui/Segmented";
+import { OPCIONES_IVA } from "../helpers/iva";
 import { MODES as PIECE_MODES, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm } from "./fabrica/shared";
 
 // Unidad que impone cada modo de control por piezas.
@@ -25,6 +26,8 @@ const EMPTY = {
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
     visible_in_catalog: false, sellable: true, has_variants: false, kitchen_prep: false,
+    // Alícuota de IVA (solo en empresas con IVA): G 16 %, R 8 %, A lujo, E exento.
+    iva_tipo: "G",
     // Control por piezas (módulo Fábrica). Las medidas van como se escriben; al guardar se
     // pasan a milímetros.
     piece_mode: "", piece_w: "", piece_l: "",
@@ -37,6 +40,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
+    const ivaEnabled = !!company?.iva_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
     const localCurrency = activeCurrencies.find(c => !c.is_base) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -123,6 +127,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     // campo: se asumen vendibles, que es como se comportaban.
                     sellable: editData.sellable !== false,
                     kitchen_prep: !!editData.kitchen_prep,
+                    iva_tipo: editData.iva_tipo || "G",
                     has_variants: !!editData.is_variant_parent,
                     piece_mode: editData.piece_mode || "",
                     piece_w: editData.piece_width_mm ? fromMm(editData.piece_width_mm, pieceUnit) : "",
@@ -410,6 +415,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         // Solo con cocina se manda: sin el campo, el servidor conserva lo que tenía.
         // Lo aprende Pedidos al aceptar (webOrders.recordarCocina): la ficha no lo pisa.
         delete submissionForm.kitchen_prep;
+        // Sin IVA en la empresa no se manda: el servidor conserva la que tuviera.
+        if (!ivaEnabled) delete submissionForm.iva_tipo;
         if (warehouseId) submissionForm.warehouse_id = warehouseId;
         // Producto nuevo sin foto principal pero con fotos adicionales: la primera hace de
         // principal, para que la grilla y la caja no queden sin imagen.
@@ -853,6 +860,26 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             tono="ambar"
                             onChange={e => setForm(p => ({ ...p, sellable: !e.target.checked, visible_in_catalog: e.target.checked ? false : p.visible_in_catalog }))}
                         />
+                        {/* El precio ya incluye el IVA: esto solo dice cómo se desglosa en la
+                            factura. Un insumo no se factura, así que no lo pide. */}
+                        {ivaEnabled && form.sellable && (
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 px-4 py-3">
+                                <span className="min-w-0">
+                                    <span className="block text-[13px] font-medium text-content dark:text-white">IVA</span>
+                                    <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">
+                                        {form.iva_tipo === "E"
+                                            ? "Exento: la factura lo suma aparte, sin impuesto."
+                                            : "El precio ya lo incluye: la factura lo separa de la base."}
+                                    </span>
+                                </span>
+                                <Segmented
+                                    className="w-full sm:w-auto shrink-0 [&>button]:flex-1 sm:[&>button]:flex-none [&>button]:justify-center"
+                                    value={form.iva_tipo}
+                                    onChange={v => set("iva_tipo", v)}
+                                    options={OPCIONES_IVA}
+                                />
+                            </div>
+                        )}
                         {catalogEnabled && (
                             <Interruptor
                                 titulo="Mostrar en catálogo público"

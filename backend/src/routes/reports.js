@@ -18,4 +18,7 @@ router.get("/payment-journals",   auth, permit("reports.view", "journals.view"),
 // Ingresos y egresos del período: dinero de caja, igual que Diarios de Pago.
 router.get("/finance",            auth, permit("reports.view", "journals.view"), ctrl.getFinanceReport);
 
+// Libro de ventas (IVA): facturas y notas de crédito del período, desglosadas por alícuota.
+router.get("/libro-ventas",       auth, permit("reports.view"), ctrl.getLibroVentasReport);
+
 module.exports = router;

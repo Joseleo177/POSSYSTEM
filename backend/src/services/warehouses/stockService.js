@@ -255,7 +255,7 @@ async function getProducts(req) {
         (SELECT pp.image_filename FROM products pp WHERE pp.id = p.parent_id),
         CASE WHEN p.is_variant_parent THEN (SELECT v.image_filename FROM products v
           WHERE v.parent_id = p.id AND v.image_filename IS NOT NULL ORDER BY v.id LIMIT 1) END) AS image_filename,
-      p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id, p.is_addon,
+      p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id, p.is_addon, p.iva_tipo,
       COALESCE(ps.cost_price, p.cost_price) AS cost_price,
       -- Precio y mínimo son los de esta sucursal si los definió. De acá come la caja, así que
       -- con esto el POS cobra el precio de la tienda sin saber que existe una herencia detrás.
@@ -403,6 +403,8 @@ async function getProducts(req) {
     short_description: p.short_description || null,
     has_addons:   !!p.has_addons,
     is_addon:     !!p.is_addon,
+    // Alícuota de IVA: la caja muestra cuánto IVA lleva la cuenta (la factura la congela aparte).
+    iva_tipo:     p.iva_tipo || 'G',
     image_url:    p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
   }));
 

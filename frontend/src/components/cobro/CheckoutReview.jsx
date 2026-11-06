@@ -6,6 +6,7 @@ import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { useApp } from "../../context/AppContext";
 import { cartKey } from "../../helpers/cartLine";
+import { desgloseIva, renglonesIva, tasaDeLinea } from "../../helpers/iva";
 
 // Mismo redondeo por línea que CartContext y CartSidebar: las líneas tienen que sumar el
 // total que se factura, al céntimo.
@@ -44,7 +45,7 @@ export default function CheckoutReview({
     cashSession, loading,
     setLineDiscount, convertToBase, lineManualDiscountDisplay = 0,
 }) {
-    const { can, settings } = useApp();
+    const { can, settings, company } = useApp();
     // Descuentos: con permiso propio y, salvo el administrador, con el tope de Configuración →
     // Punto de venta. El servidor vuelve a comprobar las dos cosas (sales/lineDiscount.js).
     const canDiscount = can("sales.discount");
@@ -172,6 +173,12 @@ export default function CheckoutReview({
     };
 
     const promoDe = (i) => activePromos.find(p => p.product_ids?.includes(i.id));
+
+    // IVA que ya va dentro del total (los precios lo incluyen). Mismo reparto que la factura:
+    // el total se divide entre las alícuotas en proporción a sus líneas.
+    const ivaRenglones = company?.iva_enabled && cart.length
+        ? renglonesIva(desgloseIva(cart.map(i => ({ monto: linea(i).total, tasa: tasaDeLinea(i) })), parseFloat(totalDisplay) || 0))
+        : [];
 
     const brutoDisplay = (i) => round2(convertToDisplay(i.price)) * (parseFloat(i.qty) || 0);
     const abrirDescuento = (i) => {
@@ -638,6 +645,11 @@ export default function CheckoutReview({
                                     ))}
                                 </dd>
                             </div>
+                            {ivaRenglones.map((r, idx) => (
+                                <div key={r.label} className={`flex justify-between gap-3 text-[12px] text-content-subtle ${idx === 0 ? "pt-2 mt-1 border-t border-border/60 dark:border-white/[0.06]" : ""}`}>
+                                    <dt>{r.label}</dt><dd className="shrink-0"><Money value={fmt(r.monto, currSym)} /></dd>
+                                </div>
+                            ))}
                             {/* El avance no entra en la factura, pero sí en lo que se pasa por el punto:
                                 se dice aquí para que el cajero sepa la cifra antes de facturar. */}
                             {puedeAvance && avanceOn && avanceEfectivo > 0 && (<>

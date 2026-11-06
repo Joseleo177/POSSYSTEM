@@ -11,10 +11,12 @@
  *   active   – clave de la opción activa
  *   onSelect – fn(clave)
  *   getLabel – fn(clave) → texto; por defecto la clave misma
+ *   align    – "right" para el último grupo de la barra: abierto hacia la derecha se salía
+ *              de la pantalla del teléfono
  */
-export default function NavDropdownMenu({ items, active, onSelect, getLabel = (k) => k }) {
+export default function NavDropdownMenu({ items, active, onSelect, getLabel = (k) => k, align = "left" }) {
   return (
-    <div className="absolute top-full left-0 mt-1.5 min-w-[200px] p-1.5 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 z-50">
+    <div className={`absolute top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 min-w-[200px] p-1.5 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 z-50`}>
       {items.map(key => {
         const isActive = key === active;
         return (

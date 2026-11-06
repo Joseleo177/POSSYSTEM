@@ -29,7 +29,11 @@ module.exports = (sequelize, DataTypes) => {
     // Lo que descontó la línea de un combo o plato con receta, por unidad vendida:
     // [{ product_id, quantity }]. Anular, devolver y el kardex leen esto y no la receta de
     // hoy. Null en las líneas de antes (ver services/products/recipeStock.js).
-    components: { type: DataTypes.JSONB, allowNull: true }
+    components: { type: DataTypes.JSONB, allowNull: true },
+    // Alícuota de IVA de la línea (16, 8, 31 o 0), congelada al crearla. Null = la empresa no
+    // facturaba con IVA. El precio ya la incluye: solo dice cómo se desglosa el total. La pone
+    // un hook (services/fiscal/iva.js), así que ningún camino que cree líneas la olvida.
+    iva_rate: { type: DataTypes.DECIMAL(5, 2), allowNull: true }
   }, {
     sequelize,
     tableName: 'sale_items',

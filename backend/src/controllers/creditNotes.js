@@ -1,4 +1,4 @@
-const { Return, ReturnItem, Sale, Customer, Employee } = require("../models");
+const { Return, ReturnItem, Sale, SaleItem, Customer, Employee } = require("../models");
 const { Op } = require("sequelize");
 const { scopeWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../utils/localDate");
@@ -38,7 +38,9 @@ exports.getAll = async (req, res) => {
           ...(Object.keys(saleWhere).length ? { where: saleWhere } : {}),
           include: [{ model: Customer, attributes: ["id", "name", "rif"], required: false }],
         },
-        { model: ReturnItem, attributes: ["name", "qty", "price", "subtotal"] },
+        // La alícuota de IVA vive en la línea vendida: la N/C la desglosa igual que la factura.
+        { model: ReturnItem, attributes: ["name", "qty", "price", "subtotal"],
+          include: [{ model: SaleItem, attributes: ["iva_rate"], required: false }] },
         { model: Employee, attributes: ["full_name"], required: false },
       ],
       order: [["created_at", "DESC"]],

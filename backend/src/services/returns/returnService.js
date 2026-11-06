@@ -63,7 +63,9 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
       // se redondea a dos, pero eso es presentación, no lo que se guarda.
       const subtotal = parseFloat(((si.price - si.discount) * parsedQty * factor).toFixed(6));
       returnTotal += subtotal;
-      returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
+      // iva_rate no se guarda en la N/C (vive en la línea vendida): viaja en la respuesta para
+      // que el papel de la N/C desglose el IVA igual que la factura.
+      returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal, iva_rate: si.iva_rate ?? null });
     }
 
     // La deuda se mide ANTES de crear la NC: una vez creada, ella misma ya la rebaja.

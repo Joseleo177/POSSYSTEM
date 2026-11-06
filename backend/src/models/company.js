@@ -45,6 +45,9 @@ module.exports = (sequelize, DataTypes) => {
     // La vitrina aparece en Google: entra al sitemap y su cabecera no lleva noindex. Encendido
     // por defecto (el catálogo ya es público); lo apaga el superusuario a quien no lo quiera.
     seo_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Factura con IVA (ver services/fiscal/iva.js): alícuota por producto, desglose en el papel
+    // y Libro de ventas. Lo enciende el superusuario a la empresa que lo necesita.
+    iva_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

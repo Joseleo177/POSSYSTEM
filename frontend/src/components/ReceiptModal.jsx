@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { netoLineaEnTasa } from "../helpers/currency";
+import { desgloseIva, renglonesIva } from "../helpers/iva";
 import Modal from "./ui/Modal";
 import { api } from "../services/api";
 import { useApp } from "../context/AppContext";
@@ -353,21 +354,26 @@ function ajusteRedondeo(totals, cur) {
 // Los céntimos van dentro del SUBTOTAL y del TOTAL, sin una línea propia: el usuario no quiere
 // un renglón "Redondeo" en el comprobante (01-10-2026). Así el total sigue siendo lo pagado y
 // subtotal − descuento + recargo sigue dando el total.
+//
+// Lleva también el desglose del IVA (null en una factura sin IVA): sale del total ya redondeado,
+// así que bases más IVA dan exactamente el TOTAL que dice el papel.
 function totalesDelPapel(s, cur) {
     const calc = calcReceiptTotals(s, cur.rate, cur.sym, { sinRebajaFx: !!cur.sinRebajaFx });
     const ajuste = ajusteRedondeo(calc, cur);
-    if (!ajuste) return calc;
     const r2 = n => Math.round(n * 100) / 100;
-    const subtotalBs = r2(calc.subtotalBs + ajuste);
-    const totalBs    = r2(calc.totalBs + ajuste);
-    return {
+    const out = !ajuste ? calc : {
         ...calc,
-        subtotalBs,
-        fmtSubtotal: fmt(subtotalBs, cur.sym),
-        totalBs,
-        fmtTotal: fmt(totalBs, cur.sym),
+        subtotalBs: r2(calc.subtotalBs + ajuste),
+        fmtSubtotal: fmt(r2(calc.subtotalBs + ajuste), cur.sym),
+        totalBs: r2(calc.totalBs + ajuste),
+        fmtTotal: fmt(r2(calc.totalBs + ajuste), cur.sym),
     };
+    const iva = desgloseIva(out.items.map(i => ({ monto: i.subtotalBs, tasa: i.iva_rate })), out.totalBs);
+    return { ...out, iva, ivaRenglones: renglonesIva(iva).map(r => ({ ...r, fmt: fmt(r.monto, cur.sym) })) };
 }
+
+// Marca de la línea exenta, como en las facturas fiscales: "(E)" junto al nombre.
+const marcaExento = (i, iva) => (iva && i.iva_rate != null && parseFloat(i.iva_rate) === 0 ? " (E)" : "");
 
 /**
  * En qué moneda se imprime el papel.
@@ -575,7 +581,7 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="items-head"><span>Producto</span><span>Total</span></div>
         ${totals.items.map(i => `
             <div class="item">
-                <div class="item-name">${i.name}</div>
+                <div class="item-name">${i.name}${marcaExento(i, totals.iva)}</div>
                 <div class="item-line">
                     <span class="qty">${fmtQty(i.quantity)} x ${i.fmtPrice}</span>
                     <span class="line-total">${i.fmtSubtotal}</span>
@@ -596,6 +602,11 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
         <div class="total-row big"><span>TOTAL</span><span>${totals.fmtTotal}</span></div>
         ${totals.returnedBs > 0 ? `<div class="total-row"><span>DEVUELTO (N/C)</span><span>-${totals.fmtReturned}</span></div>` : ""}
     </div>
+
+    ${totals.ivaRenglones.length ? `
+    <div class="totals">
+        ${totals.ivaRenglones.map(r => `<div class="total-row"><span>${r.label.toUpperCase()}</span><span>${r.fmt}</span></div>`).join("")}
+    </div>` : ""}
 
     <div class="totals">
         <div class="total-row"><span>FORMA DE PAGO</span><span>${pago.metodo}</span></div>
@@ -753,7 +764,7 @@ export default function ReceiptModal({ open, onClose, sale }) {
                 {totals.items.map((item, idx) => (
                     <div key={idx} className="py-2">
                         <div className="flex items-baseline justify-between gap-3 text-[13px]">
-                            <span className="font-medium text-content dark:text-white min-w-0">{item.name}</span>
+                            <span className="font-medium text-content dark:text-white min-w-0">{item.name}{marcaExento(item, totals.iva)}</span>
                             <Money value={item.fmtSubtotal} className="font-semibold text-content dark:text-white shrink-0" />
                         </div>
                         <div className="flex items-baseline justify-between gap-3 text-[12px] text-content-subtle tabular-nums mt-0.5">
@@ -792,6 +803,15 @@ export default function ReceiptModal({ open, onClose, sale }) {
                     <Linea label="Devuelto (N/C)"><Money value={`-${totals.fmtReturned}`} /></Linea>
                 )}
             </div>
+
+            {/* Desglose del IVA: el precio ya lo incluye, así que va después del total y suma lo mismo. */}
+            {totals.ivaRenglones.length > 0 && (
+                <div className="border-t border-border/60 dark:border-white/[0.06] pt-2 mb-3">
+                    {totals.ivaRenglones.map(r => (
+                        <Linea key={r.label} label={r.label}><Money value={r.fmt} /></Linea>
+                    ))}
+                </div>
+            )}
 
             {/* Forma de pago y estado — mismo bloque que se imprime en el papel. */}
             <div className="border-t border-border/60 dark:border-white/[0.06] pt-2 mb-4">

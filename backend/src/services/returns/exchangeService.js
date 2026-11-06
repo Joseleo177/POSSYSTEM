@@ -43,7 +43,8 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       }
       const subtotal = parseFloat(((si.price - (si.discount || 0)) * parsedQty * factor).toFixed(6));
       returnTotal += subtotal;
-      returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal });
+      // iva_rate solo viaja en la respuesta, para el papel de la N/C (ver returnService).
+      returnLines.push({ sale_item_id, product_id: si.product_id, name: si.name, price: si.price, qty: parsedQty, subtotal, iva_rate: si.iva_rate ?? null });
     }
     returnTotal = parseFloat(returnTotal.toFixed(6));
 

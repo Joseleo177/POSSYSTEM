@@ -14,6 +14,7 @@ import CashSessionsReport from "./reportes/CashSessionsReport";
 import PaymentJournalsReport from "./reportes/PaymentJournalsReport";
 import FinanceReport from "./reportes/FinanceReport";
 import ExpiryReport from "./reportes/ExpiryReport";
+import LibroVentasReport from "./reportes/LibroVentasReport";
 
 const TABS = [
   { key: "ventas",       label: "Ventas" },
@@ -27,6 +28,7 @@ const TABS = [
   { key: "diarios",      label: "Diarios de Pago" },
   { key: "finanzas",     label: "Ingresos y egresos" },
   { key: "vencimientos", label: "Vencimientos" },
+  { key: "libro_ventas", label: "Libro de ventas" },
 ];
 
 const NAV_GROUPS = [
@@ -35,13 +37,17 @@ const NAV_GROUPS = [
   { label: "Operaciones", items: ["finanzas", "sesiones", "diarios", "auditoria"] },
 ];
 
+// Los libros fiscales solo existen en la empresa que factura con IVA (companies.iva_enabled).
+const FISCAL_GROUP = { label: "Fiscal", items: ["libro_ventas"] };
+
 const tabLabel = (key) => TABS.find(t => t.key === key)?.label ?? key;
 
 export default function ReportesPage() {
   const [tab, setTab] = useState("ventas");
   const [openGroup, setOpenGroup] = useState(null);
   const navRef = useRef(null);
-  const { pendingAction, setPendingAction } = useApp();
+  const { pendingAction, setPendingAction, company } = useApp();
+  const grupos = company?.iva_enabled ? [...NAV_GROUPS, FISCAL_GROUP] : NAV_GROUPS;
 
   useEffect(() => {
     const handler = (e) => { if (navRef.current && !navRef.current.contains(e.target)) setOpenGroup(null); };
@@ -57,15 +63,17 @@ export default function ReportesPage() {
   }, [pendingAction]);
 
   const subheader = (
-    <div ref={navRef} className="flex items-stretch gap-0 px-4 border-b border-border/20 dark:border-white/5">
-      {NAV_GROUPS.map(group => {
+    // Relleno menor en el teléfono: con el grupo Fiscal son cuatro y a px-4 no cabían en 390 px
+    // (la fila empujaba la página entera hacia los lados).
+    <div ref={navRef} className="flex items-stretch gap-0 px-2 sm:px-4 border-b border-border/20 dark:border-white/5">
+      {grupos.map((group, i) => {
         const isActive = group.items.includes(tab);
         const isOpen   = openGroup === group.label;
         return (
           <div key={group.label} className="relative">
             <button
               onClick={() => setOpenGroup(isOpen ? null : group.label)}
-              className={`flex items-center gap-1 px-4 py-2 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
+              className={`flex items-center gap-1 px-2 sm:px-4 py-2 text-[13px] font-semibold border-b-2 whitespace-nowrap transition-all ${
                 isActive ? "border-brand-500 text-brand-700 dark:text-brand-300" : "border-transparent text-content-subtle dark:text-white/30 hover:text-content dark:hover:text-white"
               }`}
             >
@@ -80,6 +88,8 @@ export default function ReportesPage() {
                 active={tab}
                 onSelect={key => { setTab(key); setOpenGroup(null); }}
                 getLabel={tabLabel}
+                // Los de la mitad derecha abren hacia la izquierda: en el teléfono se salían.
+                align={i >= Math.ceil(grupos.length / 2) ? "right" : "left"}
               />
             )}
           </div>
@@ -102,6 +112,7 @@ export default function ReportesPage() {
         {tab === "diarios"      && <PaymentJournalsReport />}
         {tab === "finanzas"     && <FinanceReport />}
         {tab === "vencimientos" && <ExpiryReport />}
+        {tab === "libro_ventas" && company?.iva_enabled && <LibroVentasReport />}
       </div>
     </Page>
   );

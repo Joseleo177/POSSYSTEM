@@ -30,7 +30,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         const qty = parseFloat(i.quantity || 1);
         return `
         <tr>
-            <td class="item-name">${esc(i.name || i.product_name || "")}</td>
+            <td class="item-name">${esc(i.name || i.product_name || "")}${totals.iva && i.iva_rate != null && parseFloat(i.iva_rate) === 0 ? " (E)" : ""}</td>
             <td class="td-center">${qty % 1 === 0 ? Math.round(qty) : qty}</td>
             <td class="td-right">${i.fmtPrice}</td>
             <td class="td-right td-total">${i.fmtSubtotal}</td>
@@ -115,6 +115,9 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         .total-row.sub { border-bottom: 1px solid #ededed; }
         .total-row.discount { color: #a33; }
         .total-row.big { background: #e9e9e9; font-size: 12.5px; font-weight: 700; color: #1a1a1a; margin-top: 2px; padding: 10px 12px; }
+        /* Desglose del IVA: el precio ya lo incluye, así que va bajo el total, en gris. */
+        .total-row.iva { font-size: 9.5px; color: #666; padding: 3px 12px; }
+        .total-row.big + .total-row.iva { margin-top: 6px; }
 
         .footer { margin-top: 26px; padding-top: 12px; border-top: 1px solid #e5e5e5; text-align: center; font-size: 9.5px; color: #999; }
     </style>
@@ -172,6 +175,7 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         ${s.discount > 0 ? `<div class="total-row sub discount"><span>Descuento:</span><span>-${totals.fmtDiscount}</span></div>` : ""}
         ${s.charge > 0 ? `<div class="total-row sub"><span>${esc(s.chargeLabel || "Servicio")}:</span><span>+${totals.fmtCharge}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL:</span><span>${totals.fmtTotal}</span></div>
+        ${(totals.ivaRenglones || []).map(r => `<div class="total-row iva"><span>${esc(r.label)}:</span><span>${r.fmt}</span></div>`).join("")}
     </div>
 
 </div>

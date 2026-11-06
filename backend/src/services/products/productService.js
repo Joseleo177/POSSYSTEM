@@ -18,6 +18,9 @@ async function fabricaActiva(companyId, transaction) {
   return !!c?.fabrica_enabled;
 }
 
+// Alícuota de IVA que llega del formulario (G, R, A o E); cualquier otra cosa es "no vino".
+const ivaTipo = (v) => (/^[GRAE]$/.test(String(v || "")) ? String(v) : null);
+
 // Los arrays del formulario multipart llegan como texto JSON (ver buildProductForm).
 const parseJson = (v) => (typeof v === 'string' ? (v ? JSON.parse(v) : null) : v);
 const Op = Sequelize.Op;
@@ -659,6 +662,7 @@ async function createProduct({ body, file, company_id }) {
       visible_in_catalog: esVendible && (visible_in_catalog === 'true' || visible_in_catalog === true),
       // Se prepara en cocina (pedidos web): ver migración 20261101160000-pedidos-etapas.
       kitchen_prep: body.kitchen_prep === 'true' || body.kitchen_prep === true,
+      iva_tipo: ivaTipo(body.iva_tipo) || 'G',
       company_id,
     }, { transaction: t });
 
@@ -907,6 +911,8 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       kitchen_prep: body.kitchen_prep === undefined
         ? product.kitchen_prep
         : (body.kitchen_prep === 'true' || body.kitchen_prep === true),
+      // Solo lo manda el modal de una empresa con IVA; sin el campo se conserva.
+      iva_tipo: ivaTipo(body.iva_tipo) || product.iva_tipo,
     }, { transaction: t });
 
     // Control por piezas (Fábrica). Se valida después de escribir lo demás porque la unidad

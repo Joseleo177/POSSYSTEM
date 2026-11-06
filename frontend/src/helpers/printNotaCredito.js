@@ -1,5 +1,6 @@
 import { fmtMoney, fmtDate, resolveImageUrl } from ".";
 import { printHtml } from "./printDocument";
+import { desgloseIva, renglonesIva } from "./iva";
 
 // printerWidth (58 u 80 mm) sale de la configuración de la tienda. Sin él el documento se
 // maquetaba siempre a 80mm y en una impresora de 58 salía cortado por el lado derecho.
@@ -26,9 +27,18 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
 
     // El unitario es el acreditado (subtotal ÷ cantidad): con el descuento de la venta repartido
     // en lo devuelto (factorDevolucion), el precio de lista no cuadraba con su propia línea.
+    // IVA de lo devuelto, con la alícuota de cada línea vendida (null en una factura sin IVA). Se
+    // reparte sobre el total acreditado, igual que el desglose de la factura.
+    const tasaDe = (i) => i.iva_rate ?? i.SaleItem?.iva_rate ?? null;
+    const iva = desgloseIva(
+        (returnData.items || []).map(i => ({ monto: parseFloat(i.subtotal || 0) * rate, tasa: tasaDe(i) })),
+        Math.round(total * rate * 100) / 100
+    );
+    const exenta = (i) => (iva && tasaDe(i) != null && parseFloat(tasaDe(i)) === 0 ? " (E)" : "");
+
     const itemsRows = (returnData.items || []).map(i => `
         <tr>
-            <td><div class="item-name">${i.name}</div></td>
+            <td><div class="item-name">${i.name}${exenta(i)}</div></td>
             <td class="td-center">${fmtQty(i.qty)}</td>
             <td class="td-right">${fmtP(parseFloat(i.qty) > 0 ? parseFloat(i.subtotal) / parseFloat(i.qty) : i.price)}</td>
             <td class="td-right"><b>${fmtP(i.subtotal)}</b></td>
@@ -124,6 +134,7 @@ export function printNotaCreditoDoc(returnData, sale, companyInfo, baseCurrency,
 
     <div class="totals">
         <div class="total-row big"><span>TOTAL ACREDITADO</span><span>${fmtP(total)}</span></div>
+        ${renglonesIva(iva).map(r => `<div class="total-row"><span>${r.label.toUpperCase()}</span><span>${fmtMoney(r.monto, sym)}</span></div>`).join("")}
     </div>
 
     ${returnData.reason ? `<div class="reason-box"><b>Motivo:</b> ${returnData.reason}</div>` : ""}
