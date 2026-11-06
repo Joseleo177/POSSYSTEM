@@ -11,7 +11,7 @@ import RateField, { resolveRate } from "../ui/RateField";
 import { useRatesOn } from "../../hooks/useRatesOn";
 import AvisoTasaFecha from "../cobro/AvisoTasaFecha";
 import { Spinner } from "../ui/Spinner";
-import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa } from "../../helpers/currency";
+import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa, conTasa } from "../../helpers/currency";
 import TasaSelector from "../cobro/TasaSelector";
 
 /**
@@ -161,7 +161,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   // cubrieron `cubierto` (en base): en bolívares, su deuda línea por línea menos lo cubierto
   // convertido a su tasa —igual que el servidor y que el cobro de una factura suelta—.
   const deudaRestante = (s, r, cubierto) => {
-    if (!(r > 1)) return Math.max(0, round6(parseFloat(s.balance || 0) - cubierto));
+    if (!conTasa(r)) return Math.max(0, round6(parseFloat(s.balance || 0) - cubierto));
     return Math.max(0, round2(saldoEnMonedaDePagoAt(s, r) - round2(cubierto * tasaDeVenta(s, r))));
   };
   const simularReparto = (formas) => {
@@ -171,7 +171,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
       let u = f.base * f.rate;
       ordenadas.forEach((s, i) => {
         if (u <= 0.000001 || rest[i] <= 0.000001) return;
-        const ri = f.rate > 1 ? tasaDeVenta(s, f.rate) : 1;
+        const ri = conTasa(f.rate) ? tasaDeVenta(s, f.rate) : 1;
         const deuda = deudaRestante(s, f.rate, parseFloat(s.balance || 0) - rest[i]);
         if (deuda <= 0.000001) { rest[i] = 0; return; }
         const ap = Math.min(u, deuda);
@@ -211,7 +211,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   // facturas (A-0100, abono de 2,04 a 877,90: Bs.19,17 de diferencia).
   const saldoEnMonedaDePagoAt = (s, rPago) => {
     const saldoBase = parseFloat(s.balance || 0);
-    if (!(rPago > 1)) return round2(saldoBase);
+    if (!conTasa(rPago)) return round2(saldoBase);
 
     const r = tasaDeVenta(s, rPago);
     const totalBs = saleTotalAtRate(s, r);
@@ -235,7 +235,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
   useEffect(() => {
     const previa = tasaPreviaRef.current;
     tasaPreviaRef.current = rate;
-    if (!(previa > 1) || !(rate > 1) || Math.abs(previa - rate) < 1e-9) return;
+    if (!conTasa(previa) || !conTasa(rate) || Math.abs(previa - rate) < 1e-9) return;
     setForm(p => {
       if (String(p.rate || "").trim() || p.amount === "") return p;
       if (parseFloat(String(p.amount).replace(",", ".")) !== round2(deudaEnPagoAt(previa))) return p;
@@ -504,7 +504,7 @@ export default function BulkPaymentModal({ customer, sales, onClose, onSuccess, 
               <Money value={fmtP(deudaTotal)} className="block text-[13px] font-semibold text-content-subtle" />
             </>
           ) : (
-            <Money value={rate > 1 ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
+            <Money value={conTasa(rate) ? fmtPago(deudaEnPago) : fmtP(deudaTotal)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
           )}
           {totalPerdon > 0 && (
             <p className="text-[12px] text-brand-700 dark:text-brand-300 tabular-nums">Pago en divisas: −{fmtP(totalPerdon)}</p>

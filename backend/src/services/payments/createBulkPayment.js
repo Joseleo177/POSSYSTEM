@@ -273,7 +273,7 @@ module.exports = async function createBulkPayment(body, req) {
       for (const item of conSaldo) {
         const fx = await tasaDivisasDeCaja(item.venta, f.journal_id, t);
         const rate = fx || f.rate;
-        f.tasas.set(item.venta.id, { rate, fx: !!fx, deudaU: rate > 1 && item.lineas.length ? deudaEnTasa(item, rate) : null });
+        f.tasas.set(item.venta.id, { rate, fx: !!fx, deudaU: rate > 0 && Math.abs(rate - 1) > 1e-9 && item.lineas.length ? deudaEnTasa(item, rate) : null });
       }
     }
 

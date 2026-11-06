@@ -203,7 +203,9 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // Evaluación dinámica en la moneda del cobro (Bs):
     // Calcular el total exacto en Bs (suma por línea idéntica al carrito)
     const payRate = parseFloat(exchange_rate) || parseFloat(sale.exchange_rate) || 1;
-    const isBsPay = payRate > 1;
+    // Pista en la moneda del cobro para CUALQUIER tasa distinta de 1, no solo las mayores: el euro
+    // va a 0,89 por dólar y se cobraba en la pista en base, sin el redondeo por línea en euros.
+    const isBsPay = payRate > 0 && Math.abs(payRate - 1) > 1e-9;
     const saleItems = await SaleItem.findAll({ where: { sale_id }, transaction: t });
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
     // El recargo (propina/servicio) se convierte y redondea igual que el descuento: es un
@@ -234,7 +236,9 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     // la pantalla (cinco céntimos de bolívar). Era Bs.1: el cajero podía cobrar Bs.0,99 de
     // menos y la factura se cerraba igual mientras la pantalla anunciaba un saldo restante.
     const noSettle = body._noSettle === true;
-    const isBsFullPay = isBsPay && !noSettle && (payAmtInCur >= pendingBalanceBs - 0.05);
+    // Cinco céntimos de la moneda del cobro, sin pasar de medio céntimo de dólar: Bs.0,05 en
+    // bolívares como siempre, pero en euros 0,0045 € y no 0,05 €.
+    const isBsFullPay = isBsPay && !noSettle && (payAmtInCur >= pendingBalanceBs - Math.min(0.05, 0.005 * payRate));
 
     // Ya no existe la tasa de efectivo: una factura se valora siempre a la tasa del sistema,
     // que es el dato con validez legal. Cobrar divisas por encima de la tasa oficial hacía que

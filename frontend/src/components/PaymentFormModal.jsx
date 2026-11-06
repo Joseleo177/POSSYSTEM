@@ -14,7 +14,7 @@ import { useRatesOn } from "../hooks/useRatesOn";
 import AvisoTasaFecha from "./cobro/AvisoTasaFecha";
 import { fmtDateShort } from "../helpers/dates";
 import JournalPickerButton from "./cobro/JournalPickerButton";
-import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa } from "../helpers/currency";
+import { monedaLocal, monedaDeMetodo, tasasDeMoneda, nombreTasa, conTasa } from "../helpers/currency";
 import TasaSelector from "./cobro/TasaSelector";
 
 const getEmpty = () => ({
@@ -244,15 +244,18 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   const bsRate = (payCur && !payCur.is_base)
     ? payRate
     : ((displayCur && !displayCur.is_base) ? defaultRate : 0);
-  const hasBsRate = bsRate > 1;
+  const hasBsRate = conTasa(bsRate);
+  // Símbolo de esa pista: la moneda del cobro si se cobra en una divisa (pesos, euros, Bs a USDT) y la
+  // local si no. Con defaultSym a secas, un cobro en pesos decía "Total Bs. 40000.00".
+  const vistaSym = (payCur && !payCur.is_base) ? (payCur.symbol || defaultSym) : defaultSym;
 
   // Misma regla —y mismo helper— que usa SaleConfirmModal para pintar el total de la
   // venta: si cada modal la reimplementa, vuelven a divergir en un céntimo.
-  const totalBsAt = (rate) => (sale?.items?.length && rate > 1)
+  const totalBsAt = (rate) => (sale?.items?.length && conTasa(rate))
     // El respaldo también respeta la tasa pedida: ignorarla y usar la de la factura hacía que
     // una venta sin líneas cargadas contradijera al resto de la pantalla.
     ? saleTotalAtRate(sale, rate)
-    : roundBs2(parseFloat(sale?.total || 0) * (rate > 1 ? rate : historicalRate));
+    : roundBs2(parseFloat(sale?.total || 0) * (conTasa(rate) ? rate : historicalRate));
   // Lo exonerado se descuenta igual que lo cobrado y lo devuelto: es saldo que ya no se debe.
   // Sin esta línea, una factura con parte del saldo perdonado pedía en bolívares el importe
   // completo —el saldo en Ref sí lo descontaba— y la pantalla se contradecía consigo misma.
@@ -400,10 +403,10 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
       const n = parseFloat(String(q.amount).replace(",", "."));
       if (isNaN(n) || n <= 0) return a;
       const rr = datosCaja(q.journal_id, q.currency_id).rate;
-      if (r > 1) return a + (rr === r ? roundBs2(n) : roundBs2((n / rr) * r));
+      if (conTasa(r)) return a + (rr === r ? roundBs2(n) : roundBs2((n / rr) * r));
       return a + (rr === 1 ? round2(n) : n / rr);
     }, 0);
-    return r > 1
+    return conTasa(r)
       ? Math.max(0, roundBs2(pendingBsAt(r) - ya))
       : Math.max(0, round2(pendingAfterCredit - ya));
   };
@@ -535,7 +538,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
   useEffect(() => {
     const previa = tasaPreviaRef.current;
     tasaPreviaRef.current = payCurRate;
-    if (!(previa > 1) || !(payCurRate > 1) || Math.abs(previa - payCurRate) < 1e-9) return;
+    if (!conTasa(previa) || !conTasa(payCurRate) || Math.abs(previa - payCurRate) < 1e-9) return;
     setForm(p => {
       if (String(p.rate || "").trim() || (p.pay_parts?.length || 0) >= 2) return p;
       const tecleado = parseFloat(String(p.amount).replace(",", "."));
@@ -874,16 +877,16 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
         {parseFloat(venta.amount_paid || 0) > 0 && <Row label="Ya pagado" value={fmtBase(venta.amount_paid)} />}
         <Row label="Pago en divisas" value={`−${fmtBase(fxPerdon)}`} valueClass="text-brand-700 dark:text-brand-300" />
       </>) : (
-      <Row label="Total" value={hasBsRate ? `${defaultSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
+      <Row label="Total" value={hasBsRate ? `${vistaSym}${totalPreciseBs.toFixed(2)}` : fmt(sale.total)} />
       )}
       {/* Lo pagado y el crédito van a la MISMA tasa que el total y el saldo (ver pendingBsAt).
           Con fmt salían a la tasa de la factura y la resta no cuadraba: A-0007150 mostraba
           Total Bs.61685,25 (a 887,302), Ya pagado Bs.61500,00 (a 884,75) y Saldo Bs.7,86. */}
       {sale === venta && sale.amount_paid > 0 && (
-        <Row label="Ya pagado" value={hasBsRate ? `${defaultSym}${roundBs2(sale.amount_paid * bsRate).toFixed(2)}` : fmt(sale.amount_paid)} />
+        <Row label="Ya pagado" value={hasBsRate ? `${vistaSym}${roundBs2(sale.amount_paid * bsRate).toFixed(2)}` : fmt(sale.amount_paid)} />
       )}
       {creditApplied > 0 && (
-        <Row label="Crédito aplicado" value={`−${hasBsRate ? `${defaultSym}${roundBs2(creditApplied * bsRate).toFixed(2)}` : fmt(creditApplied)}`} valueClass="text-brand-700 dark:text-brand-300" />
+        <Row label="Crédito aplicado" value={`−${hasBsRate ? `${vistaSym}${roundBs2(creditApplied * bsRate).toFixed(2)}` : fmt(creditApplied)}`} valueClass="text-brand-700 dark:text-brand-300" />
       )}
       <div className="border-t border-border/70 dark:border-white/[0.08] pt-2 mt-2">
         <Row label="Saldo pendiente"
@@ -1171,7 +1174,7 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                 const nextRate = resolveRate(v, payCurRate);
                 const tecleado = parseFloat(String(p.amount).replace(",", "."));
                 const seguiaAlSaldo = !isNaN(tecleado) && Math.abs(tecleado - prevPend) < 0.01;
-                if (!seguiaAlSaldo || !(nextRate > 1)) return { ...p, rate: v };
+                if (!seguiaAlSaldo || !conTasa(nextRate)) return { ...p, rate: v };
                 const nuevo = pendingBsAt(nextRate).toFixed(2);
                 return { ...p, rate: v, amount: nuevo, received_amount: (parseFloat(nuevo) + avanceEnPago).toFixed(2) };
               })}
@@ -1529,13 +1532,13 @@ export default function PaymentFormModal({ sale: ventaProp, onClose, onSuccess, 
                     cobró de más. En divisas el número es el que él tiene en la mano. */}
                 <Row
                   label="Total pagado"
-                  value={isNonBasePay ? `${defaultSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
+                  value={isNonBasePay ? `${vistaSym}${paidTotalBs.toFixed(2)}` : fmtBase(paidTotalBase)}
                   valueClass="text-content dark:text-white"
                 />
                 <div className="border-t border-border/70 dark:border-white/[0.08] pt-2">
                   <Row
                     label={settlesInvoice ? "Factura saldada" : "Saldo restante"}
-                    value={isNonBasePay ? `${defaultSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
+                    value={isNonBasePay ? `${vistaSym}${remainingShown.toFixed(2)}` : fmtBase(settlesInvoice ? 0 : remainingBase)}
                     valueClass={`!text-[15px] !font-bold ${settlesInvoice ? "text-emerald-700 dark:text-emerald-400" : "text-content dark:text-white"}`}
                   />
                 </div>

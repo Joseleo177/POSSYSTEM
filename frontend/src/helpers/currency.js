@@ -121,11 +121,20 @@ export const netoLineaEnTasa = (i, rate) => {
   return round2((price - parseFloat(i.discount || 0)) * r) * qty;
 };
 
+/**
+ * ¿Hay conversión a esta tasa? Cualquier tasa distinta de 1, no solo las mayores: el euro va a
+ * 0,89 por dólar, y con "tasa > 1" el cobro en euros se calculaba a la tasa del bolívar.
+ */
+export const conTasa = (rate) => {
+  const r = parseFloat(rate);
+  return r > 0 && Math.abs(r - 1) > 1e-9;
+};
+
 export const saleTotalAtRate = (sale, rate) => {
   const round2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
   const r = parseFloat(rate) || 1;
   const items = sale?.items || [];
-  if (!(r > 1) || !items.length) return round2(parseFloat(sale?.total || 0) * r);
+  if (!conTasa(r) || !items.length) return round2(parseFloat(sale?.total || 0) * r);
 
   const lines = items.reduce((acc, i) => acc + netoLineaEnTasa(i, r), 0);
   return round2(
