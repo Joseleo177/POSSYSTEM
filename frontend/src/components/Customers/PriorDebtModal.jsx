@@ -5,11 +5,10 @@ import Segmented from "../ui/Segmented";
 import CustomSelect from "../ui/CustomSelect";
 import Money from "../ui/Money";
 import { Spinner } from "../ui/Spinner";
-import AvisoTasaFecha from "../cobro/AvisoTasaFecha";
 import { useApp } from "../../context/AppContext";
 import { useRatesOn } from "../../hooks/useRatesOn";
 import { api } from "../../services/api";
-import { fmtBase, todayISO } from "../../helpers";
+import { fmtBase, todayISO, fmtDateShort } from "../../helpers";
 import { monedaLocal } from "../../helpers/currency";
 
 /**
@@ -45,7 +44,14 @@ export default function PriorDebtModal({ customer, open, onClose, onSuccess }) {
 
     // Tasa del día de la deuda; si es hoy o no hay dato, la cargada en Monedas.
     const tasas    = useRatesOn(form.date);
-    const tasaDia  = (moneda && tasas.rateOf(moneda.id)) || num(moneda?.exchange_rate);
+    const tasaGuardada = moneda ? tasas.rateOf(moneda.id) : null;
+    const tasaDia  = tasaGuardada || num(moneda?.exchange_rate);
+    // El aviso mira solo la moneda local: useRatesOn da "sin dato" si CUALQUIER moneda (USDT,
+    // pesos) no tiene tasa ese día, y aquí solo importa la del bolívar.
+    const avisoTasa = tasas.status === "hoy" ? null
+        : tasas.status === "cargando" ? { tono: "sutil", texto: "Buscando la tasa de ese día…" }
+        : tasaGuardada ? { tono: "sutil", texto: `Se convierte a la tasa del ${fmtDateShort(form.date)}.` }
+        : { tono: "aviso", texto: `No hay tasa guardada para el ${fmtDateShort(form.date)}: se usa la de hoy. Puedes corregirla abajo.` };
     const enLocal  = form.en === "local" && !!moneda;
     const tasa     = num(form.rate) || tasaDia;
     const monto    = num(form.amount);
@@ -126,7 +132,9 @@ export default function PriorDebtModal({ customer, open, onClose, onSuccess }) {
                     </Field>
                     <Field label="Fecha de la deuda">
                         <DatePicker value={form.date} onChange={v => set("date", v > todayISO() ? todayISO() : v)} clearable={false} className="w-full" />
-                        {enLocal && <AvisoTasaFecha estado={tasas} fecha={form.date} />}
+                        {enLocal && avisoTasa && (
+                            <p className={`mt-1 text-[12px] ${avisoTasa.tono === "aviso" ? "text-warning" : "text-content-subtle"}`}>{avisoTasa.texto}</p>
+                        )}
                     </Field>
                 </div>
 

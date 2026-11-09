@@ -187,7 +187,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                         <input
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            placeholder="Buscar por número o cliente"
+                            placeholder="Buscar por número, cliente o cédula"
                             autoComplete="off"
                             className="input h-9 pl-9 w-full"
                         />
@@ -284,9 +284,9 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                             />
                                         </td>
                                         <td>
-                                            <div className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums truncate">{docLabel(sale)}{sale.is_prior_debt && <span className="ml-1.5 text-[12px] font-normal text-content-subtle">Deuda anterior</span>}</div>
+                                            <div className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums truncate">{docLabel(sale)}</div>
                                             <div className="text-[12px] text-content-subtle tabular-nums truncate">
-                                                {fmtDate(sale.created_at)}{sale.serie_name ? ` · ${sale.serie_name}` : ""}
+                                                {fmtDate(sale.created_at)}{sale.is_prior_debt ? " · Deuda anterior" : sale.serie_name ? ` · ${sale.serie_name}` : ""}
                                             </div>
                                         </td>
                                         <td className="max-w-0">
