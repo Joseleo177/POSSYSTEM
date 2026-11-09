@@ -61,6 +61,9 @@ const MODULES = [
       { key: 'edit',   label: 'Editar contactos' },
       { key: 'delete', label: 'Eliminar contactos' },
       { key: 'credit', label: 'Ajustar y devolver crédito' },
+      // Cargar lo que el cliente debía antes del sistema (services/customers/priorDebt.js): crea
+      // deuda sin mercancía detrás, así que no va en ningún LEGACY_MAP. Solo el admin de entrada.
+      { key: 'prior_debt', label: 'Cargar deudas anteriores' },
     ],
   },
   {

@@ -24,7 +24,7 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
   // en el top, y desaparecían del listado de estancados, que es el efecto inverso—, pero lo
   // vendido a crédito entra: la mercancía se despachó igual, y dejarla afuera hacía que este
   // listado no explicara la salida de stock (ver utils/saleBalance, DISPATCHED_STATUSES).
-  const stS = `AND s.status IN (${DISPATCHED_SQL})`;
+  const stS = `AND s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE`;
 
   // Valorizar existencias: cada una vale lo que costó donde está, no lo que dice el catálogo.
   // Se suma fila por fila porque el mismo producto pudo costar distinto en cada sucursal.

@@ -20,7 +20,7 @@ async function auditReport({ date_from, date_to, limit, company_id, tcS, rep, wh
   // intentos. Antes un cajero cargaba en su total las que se le anularon, y un descuento
   // sobre una venta anulada figuraba como descuento otorgado. Las devoluciones NO llevan
   // este filtro: se miden sobre la tabla returns, que ya es de por sí lo devuelto.
-  const stS = `AND s.status IN (${DISPATCHED_SQL})`;
+  const stS = `AND s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE`;
 
   const [returnsSummary, returnsList, byEmployee, discounts] = await Promise.all([
     sequelize.query(

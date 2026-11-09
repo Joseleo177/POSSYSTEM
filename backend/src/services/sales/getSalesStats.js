@@ -2,7 +2,8 @@ const { Sale, Sequelize, Op } = require("./shared");
 
 module.exports = async function getSalesStats(query) {
   const { date_from, date_to } = query;
-  const where = {};
+  // La deuda anterior (ver customers/priorDebt.js) se cobra como factura pero no es una venta.
+  const where = { is_prior_debt: false };
   if (date_from || date_to) {
     where.created_at = {};
     const sd = v => /^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null;

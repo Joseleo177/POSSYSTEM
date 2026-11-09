@@ -51,7 +51,8 @@ async function pendingOf(sale, transaction) {
 async function pendingBsOf(sale, { paid, returned }, rate, transaction) {
   const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
   const items = await SaleItem.findAll({ where: { sale_id: sale.id }, transaction });
-  const totalBs = round2(
+  // Sin líneas (deuda anterior): el total de la cabecera, como saleTotalAtRate.
+  const totalBs = !items.length ? round2(parseFloat(sale.total) * rate) : round2(
     items.reduce((acc, i) => acc + netoLineaEnTasa(i, rate), 0)
     - round2(parseFloat(sale.discount_amount || 0) * rate)
     + round2(parseFloat(sale.service_charge || 0) * rate)

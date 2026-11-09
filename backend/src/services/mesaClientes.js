@@ -102,7 +102,7 @@ async function sugerencias(cid, customerId) {
   const [v] = await sequelize.query(`
     SELECT COUNT(DISTINCT (s.created_at AT TIME ZONE :tz)::date) AS visitas
       FROM sales s
-     WHERE s.company_id = :cid AND s.customer_id = :cust AND s.status IN (${DISPATCHED_SQL})`,
+     WHERE s.company_id = :cid AND s.customer_id = :cust AND s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE`,
     { replacements: { cid, cust: customerId, tz: TZ }, type: Sequelize.QueryTypes.SELECT });
 
   const n = (x) => parseInt(x, 10) || 0;

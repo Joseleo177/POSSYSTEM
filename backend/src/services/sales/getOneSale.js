@@ -135,7 +135,7 @@ module.exports = async function getOneSale(id, req) {
   // que debe salvo el desfase de redondeo de sus propias líneas (utils/saleBalance): con los
   // diez céntimos fijos de antes, una factura 'parcial' debiendo Bs.80 se veía sin saldo.
   const tolerance = settleTolerance({
-    saleTotal: item.total, linesPrecise: item.total_precise,
+    saleTotal: item.total, linesPrecise: item.total_precise, isPriorDebt: item.is_prior_debt,
     discount: item.discount_amount, serviceCharge: item.service_charge,
   });
   if (item.status === 'pagado' || item.status === 'exonerado' || item.balance <= tolerance) item.balance = 0;

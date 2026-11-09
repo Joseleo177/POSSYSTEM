@@ -261,7 +261,8 @@ module.exports = async function createBulkPayment(body, req) {
     // `cobrado` (getSaleBalance) ya trae el crédito aplicado y lo exonerado.
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
     const deudaEnTasa = ({ venta, cobrado, devuelto, lineas }, r) => {
-      const totalBs = round2(
+      // Sin líneas (deuda anterior): el total de la cabecera, como saleTotalAtRate.
+      const totalBs = !lineas.length ? round2(parseFloat(venta.total) * r) : round2(
         lineas.reduce((acc, l) => acc + netoLineaEnTasa(l, r), 0)
         - round2(parseFloat(venta.discount_amount || 0) * r)
         + round2(parseFloat(venta.service_charge || 0) * r)

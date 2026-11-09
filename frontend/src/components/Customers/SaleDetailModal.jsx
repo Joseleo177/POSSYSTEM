@@ -102,9 +102,9 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                             </svg>
                         </div>
                         <div className="min-w-0">
-                            <div className="text-[12px] text-content-subtle">Detalle de venta</div>
+                            <div className="text-[12px] text-content-subtle">{sale?.is_prior_debt ? "Deuda anterior" : "Detalle de venta"}</div>
                             <div className="text-[16px] font-bold tracking-[-0.01em] text-content dark:text-white tabular-nums truncate">
-                                {loading ? "Cargando…" : (sale?.invoice_number ? `Factura ${sale.invoice_number}` : `Orden #${saleId}`)}
+                                {loading ? "Cargando…" : sale?.is_prior_debt ? sale.invoice_number : (sale?.invoice_number ? `Factura ${sale.invoice_number}` : `Orden #${saleId}`)}
                             </div>
                         </div>
                     </div>
@@ -173,9 +173,9 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                             <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3">
                                 {[
                                     ["Fecha",    fmtDateShort(sale.created_at)],
-                                    ["Vendedor", toNameCase(sale.employee_name) || "—"],
+                                    [sale.is_prior_debt ? "Cargada por" : "Vendedor", toNameCase(sale.employee_name) || "—"],
                                     ["Sucursal", toNameCase(sale.warehouse_name) || "—"],
-                                    ["Serie",    sale.serie_name || "—"],
+                                    ["Serie",    sale.is_prior_debt ? "Sin factura" : (sale.serie_name || "—")],
                                 ].map(([label, value]) => (
                                     <div key={label} className="min-w-0">
                                         <dt className="text-[12px] text-content-subtle">{label}</dt>
@@ -244,8 +244,20 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                 );
                             })()}
 
-                            {/* ── Productos: dos renglones por línea, sin tabla ── */}
+                            {/* ── Productos: dos renglones por línea, sin tabla. La deuda anterior no
+                                tiene productos: en su lugar, de dónde salió. ── */}
                             <div>
+                                {sale.is_prior_debt ? (
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-3.5 py-3">
+                                    <p className="text-[12px] text-content-subtle">Nota</p>
+                                    <p className="text-[13px] font-medium text-content dark:text-white mt-0.5 break-words">
+                                        {sale.prior_debt_note || "Sin nota"}
+                                    </p>
+                                    <p className="text-[12px] text-content-subtle mt-2">
+                                        Lo que debía antes del sistema. No es una venta: no tiene productos ni número de factura.
+                                    </p>
+                                </div>
+                                ) : (<>
                                 <p className="text-[13px] font-semibold text-content dark:text-white mb-2">
                                     Productos <span className="font-normal text-content-subtle">· {items.length}</span>
                                 </p>
@@ -269,6 +281,7 @@ export default function SaleDetailModal({ saleId, onClose, onChanged }) {
                                         </div>
                                     ))}
                                 </div>
+                                </>)}
 
                                 {/* Totales */}
                                 <div className="mt-3 space-y-1 text-[13px]">

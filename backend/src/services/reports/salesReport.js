@@ -82,9 +82,9 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
          -- Las anuladas no son ventas y por eso quedan fuera de todo lo anterior, pero el
          -- volumen bajó al dejar de contarlas: se publican aparte para que el cambio de
          -- cifra tenga dónde explicarse.
-         (SELECT COUNT(*) FROM sales WHERE status = 'anulado' ${tc} ${wh()} ${se()} ${dR})::int AS cancelled_count
+         (SELECT COUNT(*) FROM sales WHERE status = 'anulado' AND is_prior_debt IS NOT TRUE ${tc} ${wh()} ${se()} ${dR})::int AS cancelled_count
        FROM sales
-       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}`,
+       WHERE status IN (${DISPATCHED_SQL}) AND is_prior_debt IS NOT TRUE ${tc} ${wh()} ${se()} ${dR}`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
     ),
     // Canales de pago: cuánto entró por cada diario en el período.
@@ -148,7 +148,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
       `SELECT ${diaR} AS day, COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}
+       WHERE status IN (${DISPATCHED_SQL}) AND is_prior_debt IS NOT TRUE ${tc} ${wh()} ${se()} ${dR}
        GROUP BY ${diaR}
        ORDER BY day ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -160,7 +160,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               COALESCE(AVG(s.total), 0)::float AS avg_ticket
        FROM sales s
        LEFT JOIN employees e ON s.employee_id = e.id
-       WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
+       WHERE s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE ${tcS} ${wh('s')} ${se('s')} ${dS}
        GROUP BY e.id, e.full_name
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -170,7 +170,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               COUNT(*)::int AS count,
               COALESCE(SUM(total), 0)::float AS revenue
        FROM sales
-       WHERE status IN (${DISPATCHED_SQL}) ${tc} ${wh()} ${se()} ${dR}
+       WHERE status IN (${DISPATCHED_SQL}) AND is_prior_debt IS NOT TRUE ${tc} ${wh()} ${se()} ${dR}
        GROUP BY EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}')
        ORDER BY hour ASC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }
@@ -189,7 +189,7 @@ async function salesReport({ date_from, date_to, serie_ids, company_id, isSuperu
               MAX(s.invoice_number) AS last_invoice
        FROM sales s
        LEFT JOIN series se ON s.serie_id = se.id
-       WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${wh('s')} ${se('s')} ${dS}
+       WHERE s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE ${tcS} ${wh('s')} ${se('s')} ${dS}
        GROUP BY se.id, se.name, se.prefix
        ORDER BY revenue DESC`,
       { replacements: rep, type: Sequelize.QueryTypes.SELECT }

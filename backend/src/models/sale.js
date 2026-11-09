@@ -110,7 +110,11 @@ module.exports = (sequelize, DataTypes) => {
     // "Pidió la cuenta" (ver migración 20261031150000-pedir-cuenta): lo marca el mesonero y la
     // caja lo ve en el mapa.
     bill_requested_at:  { type: DataTypes.DATE,        allowNull: true },
-    created_at:         { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
+    // Deuda anterior cargada desde la ficha del cliente (migración 20261115100000-deuda-anterior):
+    // se cobra como una factura pero no es una venta. Ver services/customers/priorDebt.js.
+    is_prior_debt:      { type: DataTypes.BOOLEAN,     allowNull: false, defaultValue: false },
+    prior_debt_note:    { type: DataTypes.STRING(300), allowNull: true },
+    created_at:        { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,
     tableName: 'sales',

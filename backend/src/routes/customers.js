@@ -18,6 +18,8 @@ router.post("/",              auth, permit("customers.create"), customerValidati
 router.put("/:id",            auth, permit("customers.edit"), customerValidations, ctrl.update);
 router.patch("/:id/credit",          auth, permit("customers.credit"),              ctrl.adjustCredit);
 router.post("/:id/credit-refund",    auth, permit("customers.credit"),   ctrl.creditRefund);
+// Deuda anterior (el cuaderno del fiado): ver services/customers/priorDebt.js.
+router.post("/:id/prior-debts",      auth, permit("customers.prior_debt"), ctrl.priorDebt);
 router.delete("/:id",         auth, permit("customers.delete"),                        ctrl.remove);
 
 module.exports = router;

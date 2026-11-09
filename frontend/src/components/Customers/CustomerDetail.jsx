@@ -6,6 +6,7 @@ import Money from "../ui/Money";
 import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import BulkPaymentModal from "./BulkPaymentModal";
+import PriorDebtModal from "./PriorDebtModal";
 import PurchaseDetailModal from "../Contabilidad/PurchaseDetailModal";
 import PurchasePaymentModal from "../purchases/PurchasePaymentModal";
 import JournalPickerButton from "../cobro/JournalPickerButton";
@@ -70,6 +71,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     const [showRefund, setShowRefund] = useState(false);
     const [refundForm, setRefundForm] = useState({ amount: "", journal_id: "", reference_date: todayISO(), notes: "", warehouse_id: "" });
     const [refunding, setRefunding] = useState(false);
+    // Lo que debía antes del sistema (el cuaderno del fiado). Ver PriorDebtModal.
+    const [showPriorDebt, setShowPriorDebt] = useState(false);
 
     // La devolución genera un egreso, y un egreso es de una sucursal: de ella salen los
     // billetes y en su arqueo tienen que aparecer. Con una sola sucursal se preselecciona y
@@ -221,13 +224,20 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     Contactos
                 </button>
                 <div className="flex gap-2">
+                    {esCliente && can("customers.prior_debt") && (
+                        <button onClick={() => setShowPriorDebt(true)} title="Cargar lo que debía antes del sistema" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 whitespace-nowrap">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v14M5 12h14"/></svg>
+                            Deuda anterior
+                        </button>
+                    )}
                     <button onClick={handleExportStatement} title="Descargar estado de cuenta (CSV)" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
-                        CSV
+                        {/* En el teléfono, solo el icono: con "Deuda anterior" no cabían los tres. */}
+                        <span className="hidden sm:inline">CSV</span>
                     </button>
-                    <button onClick={() => window.print()} className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
+                    <button onClick={() => window.print()} title="Imprimir estado de cuenta" aria-label="Imprimir estado de cuenta" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONS.print}/></svg>
-                        Imprimir
+                        <span className="hidden sm:inline">Imprimir</span>
                     </button>
                 </div>
             </div>
@@ -408,6 +418,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                             <span aria-hidden="true" className="hidden sm:inline">·</span>
                                             <Vence dias={dias} />
                                             {sale.status === "borrador" && <><span aria-hidden="true">·</span><span>Sin factura</span></>}
+                                            {sale.is_prior_debt && <><span aria-hidden="true">·</span><span>Deuda anterior</span></>}
                                             {abonado && <><span aria-hidden="true">·</span><span>Abonado {fmtPrice(sale.amount_paid)} de {fmtPrice(sale.total)}</span></>}
                                         </div>
                                         {/* Factura hecha en bolívares: debajo, lo mismo en la moneda
@@ -494,6 +505,13 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                 </div>
             </div>
         </div>
+
+        <PriorDebtModal
+            customer={detail}
+            open={showPriorDebt}
+            onClose={() => setShowPriorDebt(false)}
+            onSuccess={() => onRefresh?.()}
+        />
 
         {selectedSaleId && (
             <SaleDetailModal saleId={selectedSaleId} onClose={() => setSelectedSaleId(null)} />

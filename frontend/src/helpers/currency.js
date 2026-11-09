@@ -14,6 +14,8 @@ export const PAYMENT_TOLERANCE = 0.01;
  * Antes era un $0,10 fijo: a la tasa del día, una factura se cerraba debiendo hasta Bs.85.
  */
 export const settleTolerance = (sale) => {
+  // Deuda anterior: sin líneas no hay redondeo que perdonar (ver backend/src/utils/saleBalance.js).
+  if (sale?.is_prior_debt) return 0.005;
   const total = parseFloat(sale?.total) || 0;
   const lineas = parseFloat(sale?.total_precise);
   if (!Number.isFinite(lineas)) return 0.005;

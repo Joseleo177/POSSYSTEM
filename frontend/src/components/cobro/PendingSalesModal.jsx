@@ -233,7 +233,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                     </div>
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-baseline justify-between gap-2">
-                                            <span className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">{docLabel(sale)}</span>
+                                            <span className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">{docLabel(sale)}</span>{sale.is_prior_debt && <span className="ml-1.5 text-[12px] font-normal text-content-subtle">Deuda anterior</span>}
                                             <Money value={saldosDe(sale).main} className="text-[14px] font-semibold text-content dark:text-white" />
                                         </div>
                                         <div className="flex items-baseline justify-between gap-2">
@@ -284,7 +284,7 @@ export default function PendingSalesModal({ open, onClose, onSelect, baseCurrenc
                                             />
                                         </td>
                                         <td>
-                                            <div className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums truncate">{docLabel(sale)}</div>
+                                            <div className="text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums truncate">{docLabel(sale)}{sale.is_prior_debt && <span className="ml-1.5 text-[12px] font-normal text-content-subtle">Deuda anterior</span>}</div>
                                             <div className="text-[12px] text-content-subtle tabular-nums truncate">
                                                 {fmtDate(sale.created_at)}{sale.serie_name ? ` · ${sale.serie_name}` : ""}
                                             </div>

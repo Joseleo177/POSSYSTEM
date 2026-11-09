@@ -77,7 +77,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
           CASE WHEN "Customer"."type" = 'proveedor' THEN (
             SELECT COUNT(p.id) FROM purchases p WHERE p.supplier_id = "Customer"."id" ${whP} 
           ) ELSE (
-            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id" ${whS} 
+            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.is_prior_debt IS NOT TRUE ${whS}
           ) END
         )`), "total_purchases"],
         [Sequelize.literal(`(
@@ -127,7 +127,7 @@ async function getOne(id, req, { warehouse_id } = {}) {
           CASE WHEN "Customer"."type" = 'proveedor' THEN (
             SELECT COUNT(p.id) FROM purchases p WHERE p.supplier_id = "Customer"."id" ${whP} 
           ) ELSE (
-            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id" ${whS} 
+            SELECT COUNT(s.id) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.is_prior_debt IS NOT TRUE ${whS}
           ) END
         )`), "total_purchases"],
         [Sequelize.literal(`(
@@ -141,7 +141,7 @@ async function getOne(id, req, { warehouse_id } = {}) {
           CASE WHEN "Customer"."type" = 'proveedor' THEN (
             SELECT MAX(p.created_at) FROM purchases p WHERE p.supplier_id = "Customer"."id" ${whP} 
           ) ELSE (
-            SELECT MAX(s.created_at) FROM sales s WHERE s.customer_id = "Customer"."id" ${whS} 
+            SELECT MAX(s.created_at) FROM sales s WHERE s.customer_id = "Customer"."id" AND s.is_prior_debt IS NOT TRUE ${whS}
           ) END
         )`), "last_purchase_at"],
         [Sequelize.literal(`(

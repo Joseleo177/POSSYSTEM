@@ -407,6 +407,7 @@ export const api = {
     update:       (id, body)   => request(`/customers/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
     adjustCredit: (id, amount) => request(`/customers/${id}/credit`, { method: "PATCH", body: JSON.stringify({ amount }) }),
     creditRefund: (id, body)   => request(`/customers/${id}/credit-refund`, { method: "POST", body: JSON.stringify(body) }),
+    priorDebt:    (id, body)   => request(`/customers/${id}/prior-debts`, { method: "POST", body: JSON.stringify(body) }),
     remove:       (id)         => request(`/customers/${id}`, { method: "DELETE" }),
   },
   sales: {

@@ -34,7 +34,7 @@ module.exports = async function getSessionSummary(id, req) {
       FROM sales
       WHERE warehouse_id = :wid AND employee_id = :eid
         AND created_at >= :openedAt AND created_at < :closedAt
-        AND status <> 'cancelada'
+        AND status <> 'cancelada' AND is_prior_debt IS NOT TRUE
     `,
     {
       type: Sequelize.QueryTypes.SELECT,
@@ -290,7 +290,7 @@ module.exports = async function getSessionSummary(id, req) {
       LEFT JOIN customers c ON s.customer_id = c.id
       WHERE s.warehouse_id = :wid AND s.employee_id = :eid
         AND s.created_at >= :openedAt AND s.created_at < :closedAt
-        AND s.status <> 'cancelada'
+        AND s.status <> 'cancelada' AND s.is_prior_debt IS NOT TRUE
       ORDER BY s.created_at DESC
     `,
     {

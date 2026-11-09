@@ -213,7 +213,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
   // fuera del período se calculan igual, porque el tope se va llenando en orden—.
   const ventas = porCobro
     ? `SELECT ${columnas} FROM sales s
-        WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${whS}
+        WHERE s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE ${tcS} ${whS}
           AND s.id IN (
             SELECT p.sale_id FROM payments p
              WHERE p.payment_journal_id IS NOT NULL AND p.amount > 0 ${tcP} ${dateClause(df, dt, 'p', hours)}
@@ -225,7 +225,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
              WHERE s2.forgiven_at IS NOT NULL ${tcS2} ${dateClauseOn(df, dt, 's2.forgiven_at', hours)}
           )`
     : `SELECT ${columnas} FROM sales s
-        WHERE s.status IN (${DISPATCHED_SQL}) ${tcS} ${whS} ${dateClause(df, dt, 's', hours)}`;
+        WHERE s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE ${tcS} ${whS} ${dateClause(df, dt, 's', hours)}`;
 
   // Mismo día que el filtro: con franja nocturna es la jornada, no la fecha del calendario.
   const dia = localDate('e.created_at', hours);
@@ -292,7 +292,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
   // de utilidad. No depende del período: es la foto de hoy. Lo cobrado de cada una se junta
   // con su factura agrupando, por la misma razón que arriba.
   const porCobrar = porCobro
-    ? q(`WITH ${base(`SELECT ${columnas} FROM sales s WHERE s.status IN ('pendiente', 'parcial') ${tcS} ${whS}`)},${mov}
+    ? q(`WITH ${base(`SELECT ${columnas} FROM sales s WHERE s.status IN ('pendiente', 'parcial') AND s.is_prior_debt IS NOT TRUE ${tcS} ${whS}`)},${mov}
          SELECT COUNT(*)::int AS count,
                 COALESCE(SUM(pend), 0)::float AS amount,
                 COALESCE(SUM(pend - pend * sin_sub / NULLIF(sub, 0) - pend / NULLIF(ref, 0) * costo), 0)::float AS profit

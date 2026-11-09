@@ -88,6 +88,8 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
       LEFT JOIN customers c ON c.id = s.customer_id
       ${tasaSql}
      WHERE s.invoice_number IS NOT NULL
+       -- La deuda anterior (DA-) no es una factura: no va al libro.
+       AND s.is_prior_debt IS NOT TRUE
        ${scoped ? "AND s.company_id = :cid" : ""}
        ${whSql}
        AND ${diaVenta} BETWEEN :dfrom AND :dto
@@ -99,6 +101,8 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
       FROM sale_items si
       JOIN sales s ON s.id = si.sale_id
      WHERE s.invoice_number IS NOT NULL
+       -- La deuda anterior (DA-) no es una factura: no va al libro.
+       AND s.is_prior_debt IS NOT TRUE
        ${scoped ? "AND s.company_id = :cid" : ""}
        ${whSql}
        AND ${diaVenta} BETWEEN :dfrom AND :dto`) : [];

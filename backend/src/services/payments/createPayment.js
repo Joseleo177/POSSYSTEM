@@ -210,7 +210,9 @@ async function applyOnePayment(body, req, t, { createdAt = null } = {}) {
     const round2 = n => Math.round((parseFloat(n) || 0) * 100) / 100;
     // El recargo (propina/servicio) se convierte y redondea igual que el descuento: es un
     // monto de cabecera, no una línea, así que entra una sola vez al final de la suma.
-    const totalBsAt = (rate) => round2(
+    // Sin líneas (deuda anterior) el total es el de la cabecera, igual que saleTotalAtRate: sumar
+    // líneas daba Bs 0 y cualquier abono en bolívares la saldaba.
+    const totalBsAt = (rate) => !saleItems.length ? round2(saleTotal * rate) : round2(
       // Por línea, con la misma regla que la pantalla (saleTotalAtRate): ver netoLineaEnTasa.
       saleItems.reduce((acc, i) => acc + netoLineaEnTasa(i, rate), 0)
       - round2(parseFloat(sale.discount_amount || 0) * rate)

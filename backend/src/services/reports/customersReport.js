@@ -32,10 +32,10 @@ async function customersReport({ date_from, date_to, inactive_days = 45, limit, 
   // alguno de los cuatro, así que no queda ninguna sin acotar.
   // La exonerada cuenta como compra cerrada: el cliente se llevó la mercancía, y dejarla
   // fuera lo haría figurar como inactivo o rebajaría su ticket promedio sin motivo.
-  const stPagado  = `AND status IN (${SETTLED_SQL}) ${wh()}`;
-  const stPagadoS = `AND s.status IN (${SETTLED_SQL}) ${wh('s')}`;
-  const stCompra  = `AND status NOT IN ('anulado','borrador','espera') ${wh()}`;
-  const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera') ${wh('s')}`;
+  const stPagado  = `AND status IN (${SETTLED_SQL}) AND is_prior_debt IS NOT TRUE ${wh()}`;
+  const stPagadoS = `AND s.status IN (${SETTLED_SQL}) AND s.is_prior_debt IS NOT TRUE ${wh('s')}`;
+  const stCompra  = `AND status NOT IN ('anulado','borrador','espera') AND is_prior_debt IS NOT TRUE ${wh()}`;
+  const stCompraS = `AND s.status NOT IN ('anulado','borrador','espera') AND s.is_prior_debt IS NOT TRUE ${wh('s')}`;
 
   const [topCustomers, inactiveCustomers, newCustomers, ticketStats, repeatRate, counts] = await Promise.all([
     sequelize.query(

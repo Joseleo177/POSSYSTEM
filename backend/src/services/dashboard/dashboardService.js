@@ -103,7 +103,7 @@ async function getDashboard({ company_id, isSuperuser, allowedWarehouses, wareho
            COALESCE(SUM(total), 0)::float AS revenue
     FROM sales
     WHERE ${sinceMonth('created_at')}
-      AND status NOT IN ('anulado', 'eliminado', 'devuelto') ${wh()}
+      AND status NOT IN ('anulado', 'eliminado', 'devuelto') AND is_prior_debt IS NOT TRUE ${wh()}
       ${!!company_id ? "AND company_id = :company_id" : ""}
     GROUP BY ${localDate('created_at')}
     ORDER BY day ASC

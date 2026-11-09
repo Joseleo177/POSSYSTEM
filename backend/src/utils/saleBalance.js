@@ -33,12 +33,18 @@ function roundingSlack({ saleTotal, linesPrecise, discount = 0, serviceCharge = 
 }
 
 // Margen con que se da por saldada una factura concreta, en moneda base.
-function settleTolerance(args) {
+//
+// `isPriorDebt`: la deuda anterior (services/customers/priorDebt.js) no tiene líneas, así que no
+// hay redondeo que perdonar. Sin esta salida, su "desfase" daba el total entero y cualquier
+// abono la cerraba como pagada (y Cuentas por cobrar y Cobranza la daban por saldada).
+function settleTolerance({ isPriorDebt = false, ...args }) {
+  if (isPriorDebt) return SETTLE_EPSILON;
   return SETTLE_EPSILON + roundingSlack(args);
 }
 
 // Lo mismo, leyendo las líneas de la venta. `sale` es la fila de `sales`.
 async function saleSettleTolerance(sale, transaction) {
+  if (sale?.is_prior_debt) return SETTLE_EPSILON;
   // Perezoso: los modelos cargan utilidades y esta no debe depender de ellos al importarse.
   const { SaleItem } = require("../models");
   const linesPrecise = await SaleItem.sum("subtotal", { where: { sale_id: sale.id }, transaction });
@@ -50,10 +56,10 @@ async function saleSettleTolerance(sale, transaction) {
   });
 }
 
-// La misma cuenta en SQL, para la venta con alias `a`.
-const settleToleranceSql = (a) => `(${SETTLE_EPSILON} + GREATEST(0, ${a}.total - GREATEST(0,
+// La misma cuenta en SQL, para la venta con alias `a` (siempre la tabla `sales`).
+const settleToleranceSql = (a) => `(CASE WHEN ${a}.is_prior_debt THEN ${SETTLE_EPSILON} ELSE ${SETTLE_EPSILON} + GREATEST(0, ${a}.total - GREATEST(0,
   (SELECT COALESCE(SUM(si.subtotal), 0) FROM sale_items si WHERE si.sale_id = ${a}.id)
-  - COALESCE(${a}.discount_amount, 0) + COALESCE(${a}.service_charge, 0))))`;
+  - COALESCE(${a}.discount_amount, 0) + COALESCE(${a}.service_charge, 0))) END)`;
 
 /**
  * Facturas cerradas: ya no se les cobra nada.

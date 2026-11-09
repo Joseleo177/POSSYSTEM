@@ -66,13 +66,27 @@ module.exports = async function getAllSales(query, tenant = {}) {
   if (search) {
     const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
     const esc  = safe.replace(/'/g, "''");
+    // La cédula se teclea sola ("12244561") y se guarda con letra, guiones o puntos
+    // ("V-12.244.561"): con cuatro dígitos o más también se compara solo la parte numérica.
+    const digitos = safe.replace(/\D/g, "");
+    const porCedula = digitos.length >= 4
+      ? ` OR regexp_replace(COALESCE(rif, ''), '\\D', '', 'g') LIKE '%${digitos}%'`
+      : "";
     andClauses.push({
       [Op.or]: [
         { invoice_number: { [Op.iLike]: `%${safe}%` } },
-        Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%')`),
+        Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%'${porCedula})`),
       ],
     });
   }
+
+  // Ventas con productos (una cuenta abierta vacía no es nada), más la deuda anterior
+  // (customers/priorDebt.js), que no tiene líneas y se cobra desde Facturas pendientes de la caja,
+  // también junto a las facturas del cliente. Los totales del pie siguen exigiendo líneas: la
+  // deuda anterior no es facturación.
+  andClauses.push(Sequelize.literal(
+    `(EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = "Sale"."id") OR "Sale"."is_prior_debt")`
+  ));
 
   const where = andClauses.length ? { [Op.and]: andClauses } : {};
 
@@ -110,7 +124,8 @@ module.exports = async function getAllSales(query, tenant = {}) {
       { model: DiningTable, as: "DiningTable", attributes: ["name"], required: false },
       { model: Employee, as: "Waiter", attributes: ["full_name"], required: false },
       { model: Seller, as: "Seller", attributes: ["name"], required: false },
-      { model: SaleItem, required: true },
+      // Opcional: el filtro del where ya exige líneas salvo en la deuda anterior.
+      { model: SaleItem, required: false },
     ],
     distinct: true,
   }).then(r => (conResumen ? r : { count: r.length, rows: r }));
