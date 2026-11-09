@@ -113,10 +113,10 @@ export default function IngresosTab({ notify, can, fmtPrice, journals }) {
         const anulado = m.status === "anulado";
         return (
             <div className="flex items-center justify-end gap-0.5">
-                {can("admin") && !anulado && (
+                {can("accounting.void") && !anulado && (
                     <RowIcon icon="ban" tone="danger" title="Anular" onClick={() => setVoidConfirm(m)} />
                 )}
-                {can("admin") && anulado && (
+                {can("accounting.delete") && anulado && (
                     <RowIcon icon="trash" tone="danger" title="Eliminar permanentemente" onClick={() => setDeleteConfirm(m)} />
                 )}
             </div>

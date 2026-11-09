@@ -110,18 +110,18 @@ function QuotDetailModal({ quot, onClose, onPrint, onLoadToCart, onCancel, onDel
                     que borran al final, lejos de ella. Antes, con cuatro en fila, las etiquetas
                     se partían letra a letra. */}
                 <div className="shrink-0 px-5 py-4 border-t border-border/60 dark:border-white/[0.06] flex flex-col sm:flex-row sm:items-center gap-2">
-                    {quot.status === "pendiente" && can("admin") && (
+                    {quot.status === "pendiente" && can("sales.edit") && (
                         <button onClick={() => onCancel(quot)} className={`${BTN_BORRAR} order-last sm:order-none sm:mr-auto`}>
                             Anular
                         </button>
                     )}
-                    {anulada && can("admin") && (
+                    {anulada && can("sales.void") && (
                         <button onClick={() => onDelete(quot)} className={`${BTN_BORRAR} order-last sm:order-none sm:mr-auto`}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                             Eliminar
                         </button>
                     )}
-                    <div className={`flex gap-2 ${(quot.status === "pendiente" || anulada) && can("admin") ? "" : "sm:ml-auto"}`}>
+                    <div className={`flex gap-2 ${(quot.status === "pendiente" && can("sales.edit")) || (anulada && can("sales.void")) ? "" : "sm:ml-auto"}`}>
                         <button onClick={() => onPrint(quot, true)} title="Cotización tamaño carta, para enviar al cliente" className={BTN_SECUNDARIO}>
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -267,10 +267,10 @@ export default function CotizacionesTab({ notify, can, fmtPrice }) {
     const acciones = (quot) => (
         <div className="flex items-center justify-end gap-0.5">
             <RowIcon icon="print" title="Imprimir cotización" onClick={() => handlePrint(quot)} />
-            {quot.status === "pendiente" && can("admin") && (
+            {quot.status === "pendiente" && can("sales.edit") && (
                 <RowIcon icon="ban" tone="danger" title="Anular cotización" onClick={() => handleCancel(quot)} />
             )}
-            {quot.status === "anulada" && can("admin") && (
+            {quot.status === "anulada" && can("sales.void") && (
                 <RowIcon icon="trash" tone="danger" title="Eliminar cotización" onClick={() => handleDelete(quot)} />
             )}
         </div>

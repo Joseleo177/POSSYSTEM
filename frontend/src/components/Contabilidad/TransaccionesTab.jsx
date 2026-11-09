@@ -123,7 +123,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     </button>
                 )}
                 {/* Con nota de crédito no se anula (el servidor lo rechaza): devuelta del todo, ni se ofrece. */}
-                {can("admin") && !anulada && sale.status !== "devuelto" && (
+                {can("sales.void") && !anulada && sale.status !== "devuelto" && (
                     <button onClick={() => setCancelConfirm(sale)} className="row-icon hover:!text-red-600 hover:!bg-red-500/10 dark:hover:!text-red-400" title="Anular" aria-label="Anular">
                         <Icon d={ICON_TRASH} />
                     </button>

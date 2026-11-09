@@ -98,10 +98,10 @@ const createBulk = async (req, res) => {
 // DELETE /api/payments/:id — eliminar pago y recalcular status de la factura
 const remove = async (req, res) => {
   try {
-    const result = await paymentsService.removePayment(req.params.id);
+    const result = await paymentsService.removePayment(req.params.id, req);
     res.json({ ok: true, message: "Pago eliminado", sale_status: result.sale_status });
   } catch (err) {
-    const status = /no encontrado|anulada/i.test(err.message) ? 400 : 500;
+    const status = err.status || (/no encontrado|anulada/i.test(err.message) ? 400 : 500);
     res.status(status).json({ ok: false, message: err.message });
   }
 };
@@ -109,7 +109,7 @@ const remove = async (req, res) => {
 // DELETE /api/payments/batch/:batchId — deshace un cobro conjunto completo
 const removeBatch = async (req, res) => {
   try {
-    const result = await paymentsService.removeBatchPayment(req.params.batchId);
+    const result = await paymentsService.removeBatchPayment(req.params.batchId, req);
     res.json({ ok: true, message: `Cobro eliminado (${result.removed} facturas)`, ...result });
   } catch (err) {
     res.status(err.status || 500).json({ ok: false, message: err.message });

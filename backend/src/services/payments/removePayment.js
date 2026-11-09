@@ -3,8 +3,9 @@ const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBala
 const { deshacerTasaDeCobro } = require("../sales/fxRate");
 const { anularAvance } = require("../cashAdvances");
 const { CashAdvance } = require("../../models");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
-module.exports = async function removePayment(id) {
+module.exports = async function removePayment(id, req) {
   const t = await sequelize.transaction();
   try {
     const payment = await Payment.findByPk(id, { transaction: t, lock: true });
@@ -16,6 +17,9 @@ module.exports = async function removePayment(id) {
 
     const sale = await Sale.findByPk(payment.sale_id, { transaction: t, lock: true });
     if (!sale) throw new Error("Factura no encontrada");
+    // El permiso de eliminar no alcanza para borrar cobros de otra sede: el gerente de una
+    // sucursal solo toca las facturas de la suya (el admin pasa directo).
+    await assertWarehouseAccess(req, sale.warehouse_id, { optional: true });
 
     await payment.destroy({ transaction: t });
     // El avance de efectivo que pasó por el punto con este cobro: fue el mismo pase, así que se

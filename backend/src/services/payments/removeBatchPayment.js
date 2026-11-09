@@ -1,6 +1,7 @@
 const { Payment, Sale, Return, Sequelize, sequelize, Op, getSaleBalance } = require("./shared");
 const { resolveSaleStatus, saleSettleTolerance } = require("../../utils/saleBalance");
 const { deshacerTasaDeCobro } = require("../sales/fxRate");
+const { assertWarehouseAccess } = require("../../middleware/auth");
 
 /**
  * Elimina de una vez todos los cobros de un mismo lote.
@@ -11,7 +12,7 @@ const { deshacerTasaDeCobro } = require("../sales/fxRate");
  *
  * Cada factura recupera el estado que le corresponda por lo que quede cobrado en ella.
  */
-module.exports = async function removeBatchPayment(batchId) {
+module.exports = async function removeBatchPayment(batchId, req) {
   const clave = String(batchId || "").trim();
   if (!clave) {
     throw Object.assign(new Error("Lote no indicado"), { status: 400, isOperational: true });
@@ -25,6 +26,10 @@ module.exports = async function removeBatchPayment(batchId) {
     }
 
     const saleIds = [...new Set(pagos.map(p => p.sale_id))];
+    // Todas las facturas del lote tienen que ser de una sede del empleado: el lote se borra
+    // entero o no se borra, así que una sola ajena lo frena completo.
+    const facturas = await Sale.findAll({ where: { id: saleIds }, attributes: ["id", "warehouse_id"], transaction: t });
+    for (const f of facturas) await assertWarehouseAccess(req, f.warehouse_id, { optional: true });
     await Payment.destroy({ where: { batch_id: clave }, transaction: t });
 
     const estados = [];

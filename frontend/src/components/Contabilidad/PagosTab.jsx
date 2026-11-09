@@ -334,7 +334,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                                             <RowIcon icon="doc" title="Ver factura" onClick={() => setReceiptSale(item)} />
                                                         )}
                                                     </>
-                                                ) : can("admin") && (
+                                                ) : can("accounting.delete") && (
                                                     <RowIcon icon="trash" tone="danger" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"} onClick={() => setDeleteDialog(item)} />
                                                 )}
                                             </div>
@@ -378,7 +378,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                 </div>
 
                 {/* Teléfono: tarjetas. Referencia y monto arriba; el cliente a todo el ancho; el
-                    diario con su marca de conciliado y la fecha debajo. El borrado (solo admin)
+                    diario con su marca de conciliado y la fecha debajo. El borrado (permiso de eliminar movimientos)
                     queda a la vista: en táctil no hay hover. */}
                 <div className="md:hidden flex-1 overflow-y-auto px-4 py-3 space-y-2">
                     {loading ? (
@@ -438,7 +438,7 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                     <div className="shrink-0 flex items-center gap-1" onClick={stopRow}>
                                         {isInvoice ? (
                                             <RowCta onClick={() => setPayModal(item)} className="ml-1.5 !mr-0">Cobrar</RowCta>
-                                        ) : can("admin") && (
+                                        ) : can("accounting.delete") && (
                                             <RowIcon icon="trash" tone="danger" title={item.group_count > 1 ? "Eliminar el cobro completo" : "Eliminar"} onClick={() => setDeleteDialog(item)} />
                                         )}
                                     </div>
