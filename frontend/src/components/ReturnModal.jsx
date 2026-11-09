@@ -177,18 +177,16 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
             setReplacementItems(prev => prev.map(i => i.product_id === product_id ? { ...i, qtyRaw: "" } : i));
             return;
         }
-        const qty = numDe(val);
-        if (qty <= 0) {
-            setReplacementItems(prev => prev.filter(i => i.product_id !== product_id));
-            return;
-        }
+        // Un "0" o "0," es el comienzo de 0,5 kg: se deja escribir. Antes quitaba la línea al
+        // primer tecleo y no había forma de poner gramos. Si queda en cero, se quita al salir.
+        const qty = Math.max(0, numDe(val));
         setReplacementItems(prev => prev.map(i => i.product_id === product_id ? { ...i, qty, qtyRaw: val } : i));
     };
 
     const blurReplacementQty = (product_id) => {
         setReplacementItems(prev => {
             const found = prev.find(i => i.product_id === product_id);
-            if (found && (found.qtyRaw === "" || found.qtyRaw === undefined)) {
+            if (found && (found.qtyRaw === "" || found.qtyRaw === undefined || !(numDe(found.qtyRaw) > 0))) {
                 return prev.filter(i => i.product_id !== product_id);
             }
             return prev;
@@ -298,6 +296,7 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const handleExchangeSubmit = () => {
         if (lineasDevueltas().length === 0) return notify("Selecciona al menos un producto a devolver", "err");
         if (replacementItems.length === 0) return notify("Agrega al menos un producto de reemplazo", "err");
+        if (replacementItems.some(i => !(parseFloat(i.qty) > 0))) return notify("Indica la cantidad de cada producto de reemplazo", "err");
         if (!validarSobrante()) return;
         setConfirmShow(true);
     };
