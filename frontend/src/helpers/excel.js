@@ -631,20 +631,27 @@ export function buildLibroVentasExcel(data, range) {
   const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
   const fecha = (d) => String(d || "").split("-").reverse().join("/");
 
+  // Mismas columnas y orden que el libro de Odoo 19 (gme_contabilidad_ve, libro_fiscal._columnas).
   const fila = (d) => {
     const out = {
+      n: d.n ?? "",
       fecha: fecha(d.fecha),
-      tipo: d.tipo === "nc" ? "N/C" : "FACTURA",
-      numero: d.numero,
-      control: d.control || "",
-      afectada: d.afectada || "",
+      tipo: d.tipo_documento || "",
+      transaccion: d.transaccion === "03-anu" ? "03-Anulación" : d.transaccion ? "01-Registro" : "",
       rif: d.rif || "",
       nombre: d.nombre || (d.rif ? "" : "Consumidor final"),
-      estado: d.anulada ? "ANULADA" : d.sin_iva ? "SIN IVA" : "",
-      tasa: r2(d.rate),
+      numero_factura: d.tipo_documento === "FAC" ? d.numero : "",
+      control: d.control || "",
+      numero_nd: d.tipo_documento === "ND" ? d.numero : "",
+      numero_nc: d.tipo_documento === "NC" ? d.numero : "",
+      afectada: d.afectada || "",
       total: r2(d.total),
       exento: r2(d.exento),
-      iva_total: r2(d.iva_total),
+      comprobante: d.comprobante || "",
+      fecha_comprobante: d.fecha_comprobante ? fecha(d.fecha_comprobante) : "",
+      retenido: r2(d.retenido),
+      tasa: d.rate ? r2(d.rate) : "",
+      nota: d.sin_iva ? "Emitida antes de activar el IVA" : d.ajuste ? `Redondeo del IVA: ${r2(d.cobrado)} cobrado` : "",
     };
     for (const t of cols) {
       out[`base_${t}`] = r2(d.gravado?.[t]?.base);
@@ -654,27 +661,33 @@ export function buildLibroVentasExcel(data, range) {
   };
   const rows = (data.docs || []).map(fila);
   if (rows.length) {
-    const t = fila({ ...data.resumen, numero: "", fecha: "", rate: "", anulada: false, sin_iva: false });
-    rows.push({ ...t, fecha: "TOTAL", tipo: "", nombre: "", tasa: "" });
+    const t = fila({ ...data.resumen, sin_iva: false, ajuste: 0, rate: "" });
+    rows.push({ ...t, n: "", fecha: "TOTAL", nombre: "" });
   }
 
   const headers = [
+    { key: "n", label: "N°" },
     { key: "fecha", label: "Fecha" },
     { key: "tipo", label: "Tipo" },
-    { key: "numero", label: "N° documento" },
-    { key: "control", label: "N° control" },
-    { key: "afectada", label: "Factura afectada" },
-    { key: "rif", label: "RIF / C.I." },
+    { key: "transaccion", label: "Transacción" },
+    { key: "rif", label: "RIF" },
     { key: "nombre", label: "Nombre o razón social" },
-    { key: "estado", label: "Estado" },
-    { key: "tasa", label: "Tasa" },
+    { key: "numero_factura", label: "N° factura" },
+    { key: "control", label: "N° control" },
+    { key: "numero_nd", label: "N° nota de débito" },
+    { key: "numero_nc", label: "N° nota de crédito" },
+    { key: "afectada", label: "Factura afectada" },
     { key: "total", label: `Total con IVA (${local})` },
-    { key: "exento", label: `Exento (${local})` },
+    { key: "exento", label: `Exento / no sujeto (${local})` },
     ...cols.flatMap(t => [
       { key: `base_${t}`, label: `Base ${t} % (${local})` },
       { key: `iva_${t}`, label: `IVA ${t} % (${local})` },
     ]),
-    { key: "iva_total", label: `IVA total (${local})` },
+    { key: "comprobante", label: "Comprobante de retención" },
+    { key: "fecha_comprobante", label: "Fecha comprobante" },
+    { key: "retenido", label: `IVA retenido (${local})` },
+    { key: "tasa", label: "Tasa" },
+    { key: "nota", label: "Observación" },
   ];
 
   const s = data.resumen || {};
@@ -686,6 +699,8 @@ export function buildLibroVentasExcel(data, range) {
       { concepto: `Débito fiscal ${t} %`, monto: r2(s.gravado?.[t]?.iva) },
     ]),
     { concepto: "Débito fiscal total", monto: r2(s.iva_total) },
+    { concepto: "IVA retenido por clientes", monto: r2(s.retenido) },
+    ...(s.ajuste ? [{ concepto: "Redondeo del IVA (fiscal menos cobrado)", monto: r2(s.ajuste) }] : []),
     { concepto: "", monto: "" },
     { concepto: "Facturas", monto: s.facturas || 0 },
     { concepto: "Notas de crédito", monto: s.notas || 0 },

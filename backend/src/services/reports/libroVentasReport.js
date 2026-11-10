@@ -2,6 +2,7 @@ const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, localDate } = require("./shared");
 const { netoLineaEnTasa } = require("../sales/lineDiscount");
 const { desglose } = require("../fiscal/iva");
+const { rifConGuiones } = require("../fiscal/rif");
 
 // Libro de ventas (IVA, fase 1): una fila por factura y por nota de crédito del período, en la
 // moneda local, con el total desglosado por alícuota. Es lo que el contador pide cada mes.
@@ -13,7 +14,13 @@ const { desglose } = require("../fiscal/iva");
 //  - si no, la del historial de tasas para ese día (currency_rates), y sin historial la actual.
 // El total en bolívares se arma igual que el papel (precio convertido y redondeado por línea,
 // menos el descuento de la caja, más el recargo; ver fxRate.totalEnTasa), y el desglose es el
-// mismo de services/fiscal/iva.js: bases más IVA dan ese total al céntimo.
+// mismo de services/fiscal/iva.js, línea por línea como la imprenta digital (HKA). El total del
+// libro es la suma de sus columnas, como en el libro de Odoo 19: igual a lo cobrado salvo el
+// céntimo de una factura de una sola línea gravada que el redondeo no deja cuadrar (`ajuste`).
+//
+// Columnas como gme_contabilidad_ve (libro_fiscal.py): tipo de documento (FAC / NC), transacción
+// (01-Registro / 03-Anulación), N° de control (lo pondrá la imprenta digital), IVA retenido (0 hasta
+// que existan las retenciones) y el RIF con su dígito verificador.
 //
 // Una factura anulada sigue en el libro con sus montos en cero: el correlativo no puede tener
 // huecos. Una emitida antes de encender el IVA sale con `sin_iva` y solo su total.
@@ -156,19 +163,25 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
     const montos = anulada ? null : desglose(netos, Math.max(0, total));
     docs.push({
       tipo: "factura",
+      tipo_documento: "FAC",
+      transaccion: anulada ? "03-anu" : "01-reg",
       id: v.id,
       fecha: v.day,
       created_at: v.created_at,
       numero: v.invoice_number,
       control: null,
       afectada: null,
-      rif: v.customer_rif || null,
+      rif: v.customer_rif ? rifConGuiones(v.customer_rif) : null,
       nombre: v.customer_name || null,
       rate,
       anulada,
       sin_iva: !anulada && !montos,
-      total: anulada ? 0 : Math.max(0, total),
+      // El fiscal (suma de columnas); `cobrado` es lo que dijo el papel.
+      total: anulada ? 0 : (montos ? montos.total : Math.max(0, total)),
+      cobrado: anulada ? 0 : Math.max(0, total),
+      ajuste: montos ? montos.ajuste : 0,
       total_base: anulada ? 0 : r2(v.total_base),
+      retenido: 0,
       ...fila(montos),
     });
   }
@@ -184,19 +197,24 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
     const neg = (x) => (x ? -x : 0);
     docs.push({
       tipo: "nc",
+      tipo_documento: "NC",
+      transaccion: anulada ? "03-anu" : "01-reg",
       id: n.id,
       fecha: n.day,
       created_at: n.created_at,
       numero: n.nc_number,
       control: null,
       afectada: n.invoice_number,
-      rif: n.customer_rif || null,
+      rif: n.customer_rif ? rifConGuiones(n.customer_rif) : null,
       nombre: n.customer_name || null,
       rate,
       anulada,
       sin_iva: !anulada && !montos,
-      total: anulada ? 0 : neg(total),
+      total: anulada ? 0 : neg(montos ? montos.total : total),
+      cobrado: anulada ? 0 : neg(total),
+      ajuste: montos ? neg(montos.ajuste) : 0,
       total_base: anulada ? 0 : neg(r2(n.total_base)),
+      retenido: 0,
       exento: neg(f.exento),
       iva_total: neg(f.iva_total),
       gravado: Object.fromEntries(Object.entries(f.gravado).map(([t, g]) => [t, { base: neg(g.base), iva: neg(g.iva) }])),
@@ -204,15 +222,20 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
   }
 
   docs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || (a.tipo === b.tipo ? a.id - b.id : a.tipo === "factura" ? -1 : 1));
+  // N° de operación del libro: la primera columna del libro impreso.
+  docs.forEach((d, i) => { d.n = i + 1; });
 
   // Resumen del período: lo que va a la declaración.
-  const resumen = { total: 0, exento: 0, iva_total: 0, gravado: {}, facturas: 0, anuladas: 0, notas: 0, sin_iva: 0 };
+  const resumen = { total: 0, cobrado: 0, ajuste: 0, retenido: 0, exento: 0, iva_total: 0, gravado: {}, facturas: 0, anuladas: 0, notas: 0, sin_iva: 0 };
   for (const t of COLUMNAS) resumen.gravado[t] = { base: 0, iva: 0 };
   for (const d of docs) {
     if (d.tipo === "factura") resumen.facturas++; else resumen.notas++;
     if (d.anulada) resumen.anuladas++;
     if (d.sin_iva) resumen.sin_iva++;
     resumen.total = r2(resumen.total + d.total);
+    resumen.cobrado = r2(resumen.cobrado + d.cobrado);
+    resumen.ajuste = r2(resumen.ajuste + d.ajuste);
+    resumen.retenido = r2(resumen.retenido + d.retenido);
     resumen.exento = r2(resumen.exento + d.exento);
     resumen.iva_total = r2(resumen.iva_total + d.iva_total);
     for (const [t, g] of Object.entries(d.gravado)) {

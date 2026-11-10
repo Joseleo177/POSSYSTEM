@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import SucursalFilter, { useSucursalFilter } from "../../components/ui/SucursalFilter";
+import Segmented from "../../components/ui/Segmented";
 import { fmtNumber, todayISO } from "../../helpers";
 import { buildLibroVentasExcel } from "../../helpers/excel";
 import { printLibroVentas } from "../../helpers/printLibroVentas";
@@ -18,11 +19,31 @@ function mesEnCurso() {
     return { from: `${hoy.slice(0, 8)}01`, to: hoy };
 }
 
+// El contribuyente especial declara por quincena; el resto, por mes. Se aplica al mes que esté
+// elegido en el rango.
+const PERIODOS = [
+    { key: "mes", label: "Mes" },
+    { key: "q1", label: "1ra quincena" },
+    { key: "q2", label: "2da quincena" },
+];
+function periodoDe(key, desde) {
+    const [y, m] = desde.slice(0, 7).split("-").map(Number);
+    const mes = `${y}-${String(m).padStart(2, "0")}`;
+    const fin = `${mes}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
+    if (key === "q1") return { from: `${mes}-01`, to: `${mes}-15` };
+    if (key === "q2") return { from: `${mes}-16`, to: fin };
+    return { from: `${mes}-01`, to: fin };
+}
+function periodoActual(r) {
+    return PERIODOS.find(p => { const x = periodoDe(p.key, r.from); return x.from === r.from && x.to === r.to; })?.key ?? null;
+}
+
 const fecha = (iso) => String(iso || "").split("-").reverse().join("/");
 const TH = ({ children, right }) => <th className={`px-4 whitespace-nowrap ${right ? "text-right" : ""}`}>{children}</th>;
 
-// Estado del documento en una palabra, en gris: nada aquí pide atención, solo se aclara.
-const nota = (d) => (d.anulada ? "Anulada" : d.sin_iva ? "Sin IVA" : null);
+// Estado del documento en pocas palabras, en gris: nada aquí pide atención, solo se aclara.
+const nota = (d) => (d.anulada ? "03-Anulación" : d.sin_iva ? "Sin IVA" : d.ajuste ? "Redondeo del IVA" : null);
+const tipoDoc = (d) => ({ FAC: "Factura", NC: "Nota de crédito", ND: "Nota de débito" }[d.tipo_documento] || "");
 
 export default function LibroVentasReport() {
     const { companyInfo } = useApp();
@@ -49,6 +70,9 @@ export default function LibroVentasReport() {
         <div className="lg:h-full flex flex-col space-y-4 lg:overflow-hidden">
             <div className="shrink-0 flex flex-wrap items-center gap-2">
                 <DateRangePicker from={range.from} to={range.to} onChange={(f, t) => setRange({ from: f, to: t })} />
+                <div className="overflow-x-auto scrollbar-hide">
+                    <Segmented value={periodoActual(range)} onChange={k => setRange(periodoDe(k, range.from))} options={PERIODOS} />
+                </div>
                 <SucursalFilter filter={suc} />
                 {data && docs.length > 0 && (
                     <div className="ml-auto flex items-center gap-2">
@@ -152,11 +176,9 @@ export default function LibroVentasReport() {
                                                     <td className="px-4 tabular-nums whitespace-nowrap">{fecha(d.fecha)}</td>
                                                     <td className="px-4 whitespace-nowrap">
                                                         <div className="font-semibold">{d.numero}</div>
-                                                        {(d.tipo === "nc" || nota(d)) && (
-                                                            <div className="text-[12px] text-content-subtle">
-                                                                {[d.tipo === "nc" ? `N/C de ${d.afectada}` : null, nota(d)].filter(Boolean).join(" · ")}
-                                                            </div>
-                                                        )}
+                                                        <div className="text-[12px] text-content-subtle">
+                                                            {[d.tipo === "nc" ? `${tipoDoc(d)} de ${d.afectada}` : tipoDoc(d), nota(d)].filter(Boolean).join(" · ")}
+                                                        </div>
                                                     </td>
                                                     <td className="px-4 max-w-[260px]">
                                                         <div className="truncate" title={cliente(d)}>{cliente(d)}</div>

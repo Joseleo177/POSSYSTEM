@@ -17,13 +17,16 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
 
     const filas = (data.docs || []).map(d => `
         <tr class="${d.anulada ? "anulada" : ""}">
+            <td class="num sub-num">${d.n ?? ""}</td>
             <td class="nowrap">${esc(fecha(d.fecha))}</td>
-            <td class="nowrap"><b>${esc(d.numero)}</b>${d.tipo === "nc" ? `<div class="sub">N/C de ${esc(d.afectada || "—")}</div>` : ""}</td>
+            <td class="nowrap">${esc(d.tipo_documento || "")}<div class="sub">${d.transaccion === "03-anu" ? "03-Anu." : "01-Reg."}</div></td>
+            <td class="nowrap"><b>${esc(d.numero)}</b>${d.afectada ? `<div class="sub">Afecta ${esc(d.afectada)}</div>` : ""}</td>
             <td class="nowrap">${esc(d.control || "")}</td>
-            <td>${esc(d.nombre || (d.rif ? "" : "Consumidor final"))}${d.rif ? `<div class="sub">${esc(d.rif)}</div>` : ""}${d.anulada ? `<div class="sub">Anulada</div>` : d.sin_iva ? `<div class="sub">Sin IVA</div>` : ""}</td>
+            <td>${esc(d.nombre || (d.rif ? "" : "Consumidor final"))}${d.rif ? `<div class="sub">${esc(d.rif)}</div>` : ""}${d.sin_iva ? `<div class="sub">Sin IVA</div>` : ""}</td>
             <td class="num strong">${n2(d.total)}</td>
             <td class="num">${n2(d.exento)}</td>
             ${cols.map(t => `<td class="num">${n2(d.gravado?.[t]?.base)}</td><td class="num">${n2(d.gravado?.[t]?.iva)}</td>`).join("")}
+            <td class="num">${n2(d.retenido)}</td>
         </tr>`).join("");
 
     const html = `<!DOCTYPE html>
@@ -41,6 +44,7 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
         .sub { font-size: 8px; color: #999; }
         .strong { font-weight: 700; color: #1a1a1a; }
         .anulada td { color: #aaa; }
+        .sub-num { color: #aaa; }
     </style>
 </head>
 <body>
@@ -60,22 +64,26 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
     <table>
         <thead>
             <tr>
+                <th class="num">N°</th>
                 <th>Fecha</th>
+                <th>Tipo</th>
                 <th>Documento</th>
-                <th>Control</th>
+                <th>N° control</th>
                 <th>Cliente</th>
                 <th class="num">Total</th>
                 <th class="num">Exento</th>
                 ${cols.map(t => `<th class="num">Base ${t} %</th><th class="num">IVA ${t} %</th>`).join("")}
+                <th class="num">IVA retenido</th>
             </tr>
         </thead>
-        <tbody>${filas || `<tr><td colspan="${6 + cols.length * 2}" class="empty">Sin documentos en el período</td></tr>`}</tbody>
+        <tbody>${filas || `<tr><td colspan="${9 + cols.length * 2}" class="empty">Sin documentos en el período</td></tr>`}</tbody>
         <tfoot>
             <tr>
-                <td colspan="4">Total del período</td>
+                <td colspan="6">Total del período</td>
                 <td class="num">${n2(s.total)}</td>
                 <td class="num">${n2(s.exento)}</td>
                 ${cols.map(t => `<td class="num">${n2(s.gravado?.[t]?.base)}</td><td class="num">${n2(s.gravado?.[t]?.iva)}</td>`).join("")}
+                <td class="num">${n2(s.retenido)}</td>
             </tr>
         </tfoot>
     </table>
