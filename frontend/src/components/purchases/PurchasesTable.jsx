@@ -16,6 +16,8 @@ const ORDER_STATUS = {
     pendiente: { label: "Por recibir", tone: "info" },
     borrador:  { label: "Borrador",  tone: "neutral" },
 };
+// Una factura de servicios no se recibe: nace registrada.
+const ORDER_STATUS_SERVICIOS = { ...ORDER_STATUS, recibido: { label: "Registrada", tone: "success", quiet: "check" } };
 // Pagada es lo normal: gris. Rojo solo para lo que se debe.
 const PAY_STATUS = {
     pagado:    { label: "Pagada",  tone: "success", quiet: "check" },
@@ -104,7 +106,7 @@ export default function PurchasesTable({ state }) {
 
                                 <td className="text-right"><Total p={p} /></td>
 
-                                <td><StatusMark status={p.status || "recibido"} map={ORDER_STATUS} /></td>
+                                <td><StatusMark status={p.status || "recibido"} map={p.kind === "servicios" ? ORDER_STATUS_SERVICIOS : ORDER_STATUS} /></td>
                                 <td><StatusMark status={p.payment_status || "pendiente"} map={PAY_STATUS} /></td>
 
                                 <td className="max-w-[140px]">
@@ -164,7 +166,7 @@ export default function PurchasesTable({ state }) {
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
-                                <StatusMark status={p.status || "recibido"} map={ORDER_STATUS} />
+                                <StatusMark status={p.status || "recibido"} map={p.kind === "servicios" ? ORDER_STATUS_SERVICIOS : ORDER_STATUS} />
                                 <StatusMark status={p.payment_status || "pendiente"} map={PAY_STATUS} />
                             </div>
                         </div>

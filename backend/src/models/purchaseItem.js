@@ -30,6 +30,9 @@ module.exports = (sequelize, DataTypes) => {
     // numerada en Fábrica (ver services/factory/numbering.js).
     piece_width_mm: { type: DataTypes.INTEGER, allowNull: true },
     piece_length_mm: { type: DataTypes.INTEGER, allowNull: true },
+    // Alícuota de IVA de la línea en la factura del proveedor (16, 8, 31 o 0). Null = la compra no
+    // trae factura fiscal. El costo (package_price) va SIN IVA: el IVA es crédito fiscal.
+    iva_rate: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
   }, {
     sequelize,
     tableName: 'purchase_items',

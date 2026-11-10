@@ -116,6 +116,7 @@ app.use("/api/banks",            require("./routes/banks"));            // auth+
 app.use("/api/payments",         require("./routes/payments"));         // auth dentro
 app.use("/api/series",           require("./routes/series"));           // auth+permit dentro
 app.use("/api/reports",          require("./routes/reports"));          // auth dentro
+app.use("/api/iva-declarations", require("./routes/ivaDeclarations"));  // auth dentro
 app.use("/api/cash-sessions",    require("./routes/cashSessions"));     // auth dentro
 app.use("/api/expenses",         require("./routes/expenses"));          // auth dentro
 app.use("/api/companies",        require("./routes/companies"));         // auth+superuser dentro

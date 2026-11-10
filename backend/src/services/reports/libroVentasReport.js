@@ -3,6 +3,7 @@ const { sanitizeDate, localDate } = require("./shared");
 const { netoLineaEnTasa } = require("../sales/lineDiscount");
 const { desglose } = require("../fiscal/iva");
 const { rifConGuiones } = require("../fiscal/rif");
+const { r2, COLUMNAS, fila, cerrarLibro, simbolos } = require("./libroFiscalShared");
 
 // Libro de ventas (IVA, fase 1): una fila por factura y por nota de crédito del período, en la
 // moneda local, con el total desglosado por alícuota. Es lo que el contador pide cada mes.
@@ -24,26 +25,6 @@ const { rifConGuiones } = require("../fiscal/rif");
 //
 // Una factura anulada sigue en el libro con sus montos en cero: el correlativo no puede tener
 // huecos. Una emitida antes de encender el IVA sale con `sin_iva` y solo su total.
-
-const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
-
-// Alícuotas con columna propia en el libro: general, reducida y general + lujo.
-const COLUMNAS = [16, 8, 31];
-
-function fila(montos) {
-  const out = { exento: 0, gravado: {}, iva_total: 0 };
-  for (const t of COLUMNAS) out.gravado[t] = { base: 0, iva: 0 };
-  if (!montos) return out;
-  out.exento = montos.exento;
-  out.iva_total = montos.iva;
-  for (const g of montos.grupos) {
-    if (g.tasa === 0) continue;
-    const col = out.gravado[g.tasa] || (out.gravado[g.tasa] = { base: 0, iva: 0 });
-    col.base = r2(col.base + g.base);
-    col.iva = r2(col.iva + g.iva);
-  }
-  return out;
-}
 
 async function libroVentasReport({ date_from, date_to, company_id, allowedWarehouses, warehouse_id }) {
   const from = sanitizeDate(date_from);
@@ -221,41 +202,11 @@ async function libroVentasReport({ date_from, date_to, company_id, allowedWareho
     });
   }
 
-  docs.sort((a, b) => new Date(a.created_at) - new Date(b.created_at) || (a.tipo === b.tipo ? a.id - b.id : a.tipo === "factura" ? -1 : 1));
-  // N° de operación del libro: la primera columna del libro impreso.
-  docs.forEach((d, i) => { d.n = i + 1; });
-
-  // Resumen del período: lo que va a la declaración.
-  const resumen = { total: 0, cobrado: 0, ajuste: 0, retenido: 0, exento: 0, iva_total: 0, gravado: {}, facturas: 0, anuladas: 0, notas: 0, sin_iva: 0 };
-  for (const t of COLUMNAS) resumen.gravado[t] = { base: 0, iva: 0 };
-  for (const d of docs) {
-    if (d.tipo === "factura") resumen.facturas++; else resumen.notas++;
-    if (d.anulada) resumen.anuladas++;
-    if (d.sin_iva) resumen.sin_iva++;
-    resumen.total = r2(resumen.total + d.total);
-    resumen.cobrado = r2(resumen.cobrado + d.cobrado);
-    resumen.ajuste = r2(resumen.ajuste + d.ajuste);
-    resumen.retenido = r2(resumen.retenido + d.retenido);
-    resumen.exento = r2(resumen.exento + d.exento);
-    resumen.iva_total = r2(resumen.iva_total + d.iva_total);
-    for (const [t, g] of Object.entries(d.gravado)) {
-      const col = resumen.gravado[t] || (resumen.gravado[t] = { base: 0, iva: 0 });
-      col.base = r2(col.base + g.base);
-      col.iva = r2(col.iva + g.iva);
-    }
-  }
-
-  const monedas = await q(`
-    SELECT symbol, is_base, is_local FROM currencies
-     WHERE ${scoped ? "company_id = :cid" : "TRUE"}
-     ORDER BY is_base DESC, id`);
-  const base = monedas.find(c => c.is_base);
-  const local = monedas.find(c => c.is_local);
+  // Orden, N° de operación y resumen del período: lo que va a la declaración.
+  const resumen = cerrarLibro(docs);
 
   return {
-    base_symbol: base?.symbol || "Ref.",
-    // Sin moneda local, el libro queda en la base (rate 1 en todos los documentos).
-    local_symbol: local?.symbol || base?.symbol || "Bs.",
+    ...(await simbolos(company_id)),
     columnas: COLUMNAS,
     docs,
     resumen,

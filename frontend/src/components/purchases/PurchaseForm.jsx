@@ -3,6 +3,8 @@ import ReceiptInfo from "./ReceiptInfo";
 import ProductSelectorModal from "./ProductSelectorModal";
 import PurchaseItemsTable from "./PurchaseItemsTable";
 import { useApp } from "../../context/AppContext";
+import Segmented from "../ui/Segmented";
+import ServiceInvoiceForm from "./ServiceInvoiceForm";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
@@ -15,6 +17,7 @@ export default function PurchaseForm({ state }) {
     const { baseCurrency } = useApp();
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState(null);
+    const [tipo, setTipo] = useState("mercancia");
 
     // Moneda y tasa con las que se CARGA la factura del proveedor. Viven en el hook porque se
     // guardan con la orden (columnas currency_id/exchange_rate) y se eligen en la cabecera,
@@ -51,8 +54,30 @@ export default function PurchaseForm({ state }) {
 
     const sinAlmacen = !selectedWarehouseId;
 
+    // Qué se está cargando: mercancía (entra al inventario) o una factura de servicios (solo líneas
+    // de gasto). Solo se elige en una orden nueva; un borrador ya es de mercancía.
+    const selector = !editingDraftId && (
+        <div className="overflow-x-auto scrollbar-hide">
+            <Segmented
+                value={tipo}
+                onChange={setTipo}
+                options={[{ key: "mercancia", label: "Mercancía" }, { key: "servicios", label: "Servicios o gastos" }]}
+            />
+        </div>
+    );
+
+    if (tipo === "servicios") {
+        return (
+            <div className="space-y-3">
+                {selector}
+                <ServiceInvoiceForm state={state} />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-3">
+            {selector}
             <ReceiptInfo state={state} />
 
             <div className="bg-surface dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none overflow-hidden">

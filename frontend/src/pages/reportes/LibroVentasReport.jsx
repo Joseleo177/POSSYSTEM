@@ -43,17 +43,38 @@ const TH = ({ children, right }) => <th className={`px-4 whitespace-nowrap ${rig
 
 // Estado del documento en pocas palabras, en gris: nada aquí pide atención, solo se aclara.
 const nota = (d) => (d.anulada ? "03-Anulación" : d.sin_iva ? "Sin IVA" : d.ajuste ? "Redondeo del IVA" : null);
-const tipoDoc = (d) => ({ FAC: "Factura", NC: "Nota de crédito", ND: "Nota de débito" }[d.tipo_documento] || "");
+const tipoDoc = (d) => [
+    { FAC: "Factura", NC: "Nota de crédito", ND: "Nota de débito" }[d.tipo_documento] || "",
+    // En el de compras: de dónde salió la factura.
+    d.tipo === "compra" ? `compra #${d.id}` : d.tipo === "gasto" ? "gasto" : null,
+].filter(Boolean).join(" · ");
 
-export default function LibroVentasReport() {
+// El mismo libro sirve para ventas y compras: cambian la fuente y los rótulos.
+const TEXTOS = {
+    ventas: {
+        api: () => api.reports.libroVentas, titulo: "Libro de ventas", total: "Ventas con IVA",
+        fiscal: "Débito fiscal", fiscalSub: "IVA de las ventas, menos el de las N/C",
+        seccion: "Facturas y notas de crédito", persona: "Cliente", sinPersona: "Consumidor final", exentoSub: "Productos sin IVA",
+        sub: (local) => `Montos en ${local} a la tasa de la fecha de cada factura; el total ya incluye el IVA`,
+    },
+    compras: {
+        api: () => api.reports.libroCompras, titulo: "Libro de compras", total: "Compras con IVA",
+        fiscal: "Crédito fiscal", fiscalSub: "IVA de las facturas de proveedores",
+        seccion: "Facturas de proveedores", persona: "Proveedor", sinPersona: "—", exentoSub: "Compras sin IVA",
+        sub: (local) => `Compras y gastos con factura fiscal, por la fecha de la factura, en ${local}`,
+    },
+};
+
+export default function LibroVentasReport({ tipo = "ventas" }) {
+    const T = TEXTOS[tipo] || TEXTOS.ventas;
     const { companyInfo } = useApp();
     const [range, setRange] = useState(mesEnCurso);
     const suc = useSucursalFilter({ soloVenden: true });
 
     const { data, loading, error } = useReport(
-        api.reports.libroVentas,
+        T.api(),
         { date_from: range.from, date_to: range.to, warehouse_id: suc.warehouseId },
-        [range.from, range.to, suc.warehouseId]
+        [tipo, range.from, range.to, suc.warehouseId]
     );
 
     const local = data?.local_symbol || "Bs.";
@@ -64,7 +85,7 @@ export default function LibroVentasReport() {
     const docs = data?.docs ?? [];
     const pag = usePagination(docs, 50);
     const baseTotal = s ? cols.reduce((a, t) => a + (s.gravado?.[t]?.base || 0), 0) : 0;
-    const cliente = (d) => d.nombre || (d.rif ? "—" : "Consumidor final");
+    const cliente = (d) => d.nombre || (d.rif ? "—" : T.sinPersona);
 
     return (
         <div className="lg:h-full flex flex-col space-y-4 lg:overflow-hidden">
@@ -76,13 +97,13 @@ export default function LibroVentasReport() {
                 <SucursalFilter filter={suc} />
                 {data && docs.length > 0 && (
                     <div className="ml-auto flex items-center gap-2">
-                        <button onClick={() => printLibroVentas(data, range, companyInfo, suc.nombre)} title="Libro de ventas en PDF, carta horizontal" className={REPORT_BTN}>
+                        <button onClick={() => printLibroVentas(data, range, companyInfo, suc.nombre, { titulo: T.titulo, compras: tipo === "compras" })} title={`${T.titulo} en PDF, carta horizontal`} className={REPORT_BTN}>
                             <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                             </svg>
                             PDF
                         </button>
-                        <ExportButton onClick={() => buildLibroVentasExcel(data, { ...range, warehouse_name: suc.nombre || undefined })} />
+                        <ExportButton onClick={() => buildLibroVentasExcel(data, { ...range, warehouse_name: suc.nombre || undefined }, { titulo: T.titulo, compras: tipo === "compras" })} />
                     </div>
                 )}
             </div>
@@ -95,10 +116,10 @@ export default function LibroVentasReport() {
             {data && (
                 <div className={`lg:flex-1 lg:min-h-0 flex flex-col space-y-3 ${loading ? "opacity-50 pointer-events-none" : ""}`}>
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
-                        <KpiCard label="Ventas con IVA" value={fmtL(s.total)} sub={`${s.facturas} facturas · ${s.notas} N/C`} />
+                        <KpiCard label={T.total} value={fmtL(s.total)} sub={tipo === "compras" ? `${s.facturas} facturas` : `${s.facturas} facturas · ${s.notas} N/C`} />
                         <KpiCard label="Base imponible" value={fmtL(baseTotal)} sub={cols.length > 1 ? `${cols.length} alícuotas` : "Alícuota general 16 %"} />
-                        <KpiCard label="Débito fiscal" value={fmtL(s.iva_total)} sub="IVA de las ventas, menos el de las N/C" />
-                        <KpiCard label="Exento" value={fmtL(s.exento)} sub={s.anuladas ? `${s.anuladas} anuladas, en cero` : "Productos sin IVA"} />
+                        <KpiCard label={T.fiscal} value={fmtL(s.iva_total)} sub={T.fiscalSub} />
+                        <KpiCard label="Exento" value={fmtL(s.exento)} sub={s.anuladas ? `${s.anuladas} anuladas, en cero` : T.exentoSub} />
                     </div>
 
                     {s.sin_iva > 0 && (
@@ -110,8 +131,8 @@ export default function LibroVentasReport() {
                     <div className="lg:flex-1 lg:min-h-0 flex flex-col bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none overflow-hidden">
                         <div className="px-4 pt-4 shrink-0">
                             <SectionHeader
-                                title="Facturas y notas de crédito"
-                                sub={`Montos en ${local} a la tasa de la fecha de cada factura; el total ya incluye el IVA`}
+                                title={T.seccion}
+                                sub={T.sub(local)}
                             />
                         </div>
 
@@ -161,7 +182,7 @@ export default function LibroVentasReport() {
                                             <tr>
                                                 <TH>Fecha</TH>
                                                 <TH>Documento</TH>
-                                                <TH>Cliente</TH>
+                                                <TH>{T.persona}</TH>
                                                 <TH right>Total</TH>
                                                 <TH right>Exento</TH>
                                                 {cols.map(t => [

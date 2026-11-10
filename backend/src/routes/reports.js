@@ -20,5 +20,7 @@ router.get("/finance",            auth, permit("reports.view", "journals.view"),
 
 // Libro de ventas (IVA): facturas y notas de crédito del período, desglosadas por alícuota.
 router.get("/libro-ventas",       auth, permit("reports.view"), ctrl.getLibroVentasReport);
+// Libro de compras: facturas de proveedor (compras y gastos con factura fiscal).
+router.get("/libro-compras",      auth, permit("reports.view"), ctrl.getLibroComprasReport);
 
 module.exports = router;

@@ -16,6 +16,7 @@ import { useApp } from "../../context/AppContext";
 import MovementDetailModal from "./MovementDetailModal";
 import MovementCard from "./MovementCard";
 import JournalPickerButton from "../cobro/JournalPickerButton";
+import { desgloseIva, OPCIONES_TASA } from "../../helpers/iva";
 
 // Registrado es lo normal: va en gris. Conciliado (casado con el extracto del banco) lleva el
 // visto en verde, como una factura pagada: es la confirmación de que el dinero se movió.
@@ -38,6 +39,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
         deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
+        factura, setFactura,
         warehouses,
         currentSymbol, currentRate, configuredRate, baseEquivalent, selectedJournal,
         toggleFilter, toggleCat, clearFilters,
@@ -47,7 +49,7 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
 
     const [detail, setDetail] = useState(null);
     const filtrosBtnRef = useRef(null);
-    const { baseCurrency } = useApp();
+    const { baseCurrency, company } = useApp();
     const baseSym = baseCurrency?.symbol || "Ref.";
 
     const subheader = (
@@ -304,6 +306,65 @@ export default function EgresosTab({ notify, can, fmtPrice, journals }) {
                             />
                         </div>
                     )}
+                    {/* Factura del gasto (luz, alquiler): con ella entra al Libro de compras. Solo en
+                        empresas con IVA. */}
+                    {company?.iva_enabled && (() => {
+                        const monto = parseFloat(form.amount) || 0;
+                        const tasa = parseFloat(factura.iva_rate) || 0;
+                        const calc = desgloseIva([{ monto, tasa }], monto);
+                        const setF = (k, v) => setFactura(p => ({ ...p, [k]: v }));
+                        return (
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden">
+                                <label className="flex items-center justify-between gap-4 px-4 py-3 cursor-pointer">
+                                    <span className="min-w-0">
+                                        <span className="block text-[13px] font-medium text-content dark:text-white">Factura fiscal</span>
+                                        <span className="block text-[12px] text-content-subtle mt-0.5">Con RIF, número y control: entra al Libro de compras.</span>
+                                    </span>
+                                    <span className="relative inline-flex items-center shrink-0">
+                                        <input type="checkbox" className="sr-only peer" checked={factura.fiscal} onChange={e => setF("fiscal", e.target.checked)} />
+                                        <span className="block w-10 h-6 rounded-full bg-border dark:bg-white/15 transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500/40 peer-checked:bg-brand-600 dark:peer-checked:bg-brand-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:w-5 after:h-5 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:after:translate-x-4" />
+                                    </span>
+                                </label>
+                                {factura.fiscal && (
+                                    <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border/60 dark:border-white/[0.06]">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="label">RIF</label>
+                                                <input className="input" placeholder="J-12345678-9" value={factura.supplier_rif} onChange={e => setF("supplier_rif", e.target.value.toUpperCase())} />
+                                            </div>
+                                            <div>
+                                                <label className="label">Razón social</label>
+                                                <input className="input" placeholder="Corpoelec" value={factura.supplier_name} onChange={e => setF("supplier_name", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label className="label">N° de factura</label>
+                                                <input className="input" value={factura.invoice_number} onChange={e => setF("invoice_number", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label className="label">N° de control</label>
+                                                <input className="input" value={factura.control_number} onChange={e => setF("control_number", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label className="label">Fecha de la factura</label>
+                                                <input type="date" className="input" value={factura.invoice_date || form.date} onChange={e => setF("invoice_date", e.target.value)} />
+                                            </div>
+                                            <div>
+                                                <label className="label">Alícuota</label>
+                                                <CustomSelect value={factura.iva_rate} onChange={v => setF("iva_rate", v)} options={OPCIONES_TASA} />
+                                            </div>
+                                        </div>
+                                        {monto > 0 && calc && (
+                                            <p className="text-[12px] text-content-subtle tabular-nums">
+                                                {tasa > 0
+                                                    ? `El monto incluye IVA: base ${currentSymbol} ${calc.base.toFixed(2)} + IVA ${currentSymbol} ${calc.iva.toFixed(2)}${calc.ajuste ? " (con redondeo)" : ""}`
+                                                    : `Exento: ${currentSymbol} ${calc.exento.toFixed(2)} sin IVA`}
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
                     <div>
                         <label className="label">Notas</label>
                         <textarea className="input resize-none" rows={1} placeholder="Observaciones..." value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />

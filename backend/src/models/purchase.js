@@ -28,6 +28,20 @@ module.exports = (sequelize, DataTypes) => {
     // Vencimiento pactado para esta compra. Nulo = fecha de la compra + días de crédito del
     // proveedor, calculado al leer (ver services/purchases/payablesService.js).
     due_date:        { type: DataTypes.DATEONLY, allowNull: true },
+    // 'mercancia' (productos que entran al inventario) o 'servicios' (factura sin mercancía, solo
+    // líneas de gasto en purchase_charges: no se recibe, queda registrada y por pagar).
+    kind:            { type: DataTypes.STRING(12), allowNull: false, defaultValue: 'mercancia' },
+    // Factura del proveedor (IVA, ver services/purchases/fiscalCompra.js). `fiscal` = trae factura
+    // fiscal: lleva IVA por línea y entra al Libro de compras. Sin ella (nota de entrega) nada cambia.
+    fiscal:                  { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    supplier_rif:            { type: DataTypes.STRING(20), allowNull: true },
+    supplier_invoice_number: { type: DataTypes.STRING(40), allowNull: true },
+    supplier_control_number: { type: DataTypes.STRING(40), allowNull: true },
+    supplier_invoice_date:   { type: DataTypes.DATEONLY, allowNull: true },
+    // IVA de la factura en moneda base: forma parte de `total` (lo que se le debe al proveedor).
+    iva_amount:              { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
+    // Corrección a mano del IVA, en la moneda de la factura, cuando el proveedor redondeó distinto.
+    iva_adjust:              { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     created_at:      { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

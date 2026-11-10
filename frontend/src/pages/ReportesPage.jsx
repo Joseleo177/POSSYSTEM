@@ -15,6 +15,7 @@ import PaymentJournalsReport from "./reportes/PaymentJournalsReport";
 import FinanceReport from "./reportes/FinanceReport";
 import ExpiryReport from "./reportes/ExpiryReport";
 import LibroVentasReport from "./reportes/LibroVentasReport";
+import DeclaracionIvaReport from "./reportes/DeclaracionIvaReport";
 
 const TABS = [
   { key: "ventas",       label: "Ventas" },
@@ -29,6 +30,8 @@ const TABS = [
   { key: "finanzas",     label: "Ingresos y egresos" },
   { key: "vencimientos", label: "Vencimientos" },
   { key: "libro_ventas", label: "Libro de ventas" },
+  { key: "libro_compras", label: "Libro de compras" },
+  { key: "declaracion_iva", label: "Declaración de IVA" },
 ];
 
 const NAV_GROUPS = [
@@ -38,7 +41,7 @@ const NAV_GROUPS = [
 ];
 
 // Los libros fiscales solo existen en la empresa que factura con IVA (companies.iva_enabled).
-const FISCAL_GROUP = { label: "Fiscal", items: ["libro_ventas"] };
+const FISCAL_GROUP = { label: "Fiscal", items: ["libro_ventas", "libro_compras", "declaracion_iva"] };
 
 const tabLabel = (key) => TABS.find(t => t.key === key)?.label ?? key;
 
@@ -112,7 +115,9 @@ export default function ReportesPage() {
         {tab === "diarios"      && <PaymentJournalsReport />}
         {tab === "finanzas"     && <FinanceReport />}
         {tab === "vencimientos" && <ExpiryReport />}
-        {tab === "libro_ventas" && company?.iva_enabled && <LibroVentasReport />}
+        {tab === "libro_ventas" && company?.iva_enabled && <LibroVentasReport key="ventas" tipo="ventas" />}
+        {tab === "libro_compras" && company?.iva_enabled && <LibroVentasReport key="compras" tipo="compras" />}
+        {tab === "declaracion_iva" && company?.iva_enabled && <DeclaracionIvaReport />}
       </div>
     </Page>
   );

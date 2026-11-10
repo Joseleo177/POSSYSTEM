@@ -9,7 +9,7 @@ import { columnasLibro } from "./iva";
 const fecha = (d) => String(d || "").split("-").reverse().join("/");
 const n2 = (n) => fmtNumber(n || 0, 2);
 
-export function printLibroVentas(data, range, companyInfo, warehouseName) {
+export function printLibroVentas(data, range, companyInfo, warehouseName, { titulo = "Libro de ventas", compras = false } = {}) {
     const local = data.local_symbol || "Bs.";
     const cols = columnasLibro(data);
     const s = data.resumen || {};
@@ -22,7 +22,7 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
             <td class="nowrap">${esc(d.tipo_documento || "")}<div class="sub">${d.transaccion === "03-anu" ? "03-Anu." : "01-Reg."}</div></td>
             <td class="nowrap"><b>${esc(d.numero)}</b>${d.afectada ? `<div class="sub">Afecta ${esc(d.afectada)}</div>` : ""}</td>
             <td class="nowrap">${esc(d.control || "")}</td>
-            <td>${esc(d.nombre || (d.rif ? "" : "Consumidor final"))}${d.rif ? `<div class="sub">${esc(d.rif)}</div>` : ""}${d.sin_iva ? `<div class="sub">Sin IVA</div>` : ""}</td>
+            <td>${esc(d.nombre || (d.rif || compras ? "" : "Consumidor final"))}${d.rif ? `<div class="sub">${esc(d.rif)}</div>` : ""}${d.sin_iva ? `<div class="sub">Sin IVA</div>` : ""}</td>
             <td class="num strong">${n2(d.total)}</td>
             <td class="num">${n2(d.exento)}</td>
             ${cols.map(t => `<td class="num">${n2(d.gravado?.[t]?.base)}</td><td class="num">${n2(d.gravado?.[t]?.iva)}</td>`).join("")}
@@ -33,7 +33,7 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
 <html>
 <head>
     <meta charset="utf-8" />
-    <title>Libro de ventas ${esc(range.from)} a ${esc(range.to)} - ${esc(storeName)}</title>
+    <title>${esc(titulo)} ${esc(range.from)} a ${esc(range.to)} - ${esc(storeName)}</title>
     <style>${REPORT_CSS}
         @page { size: letter landscape; margin: 0; }
         td, th { padding: 5px 6px; }
@@ -49,15 +49,15 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
 </head>
 <body>
     ${reportHeader({
-        title: "Libro de ventas",
+        title: titulo,
         subtitle: `Del ${fecha(range.from)} al ${fecha(range.to)}${warehouseName ? ` · ${warehouseName}` : ""} · montos en ${local}, IVA incluido en el total`,
         companyInfo,
     })}
 
     <div class="kpis">
-        <div class="kpi"><div class="kpi-label">Ventas con IVA</div><div class="kpi-value">${local} ${n2(s.total)}</div><div class="kpi-sub">${s.facturas || 0} facturas · ${s.notas || 0} N/C</div></div>
+        <div class="kpi"><div class="kpi-label">${compras ? "Compras" : "Ventas"} con IVA</div><div class="kpi-value">${local} ${n2(s.total)}</div><div class="kpi-sub">${s.facturas || 0} facturas · ${s.notas || 0} N/C</div></div>
         <div class="kpi"><div class="kpi-label">Base imponible</div><div class="kpi-value">${local} ${n2(cols.reduce((a, t) => a + (s.gravado?.[t]?.base || 0), 0))}</div></div>
-        <div class="kpi"><div class="kpi-label">Débito fiscal</div><div class="kpi-value">${local} ${n2(s.iva_total)}</div></div>
+        <div class="kpi"><div class="kpi-label">${compras ? "Crédito" : "Débito"} fiscal</div><div class="kpi-value">${local} ${n2(s.iva_total)}</div></div>
         <div class="kpi"><div class="kpi-label">Exento</div><div class="kpi-value">${local} ${n2(s.exento)}</div>${s.anuladas ? `<div class="kpi-sub">${s.anuladas} anuladas</div>` : ""}</div>
     </div>
 
@@ -69,7 +69,7 @@ export function printLibroVentas(data, range, companyInfo, warehouseName) {
                 <th>Tipo</th>
                 <th>Documento</th>
                 <th>N° control</th>
-                <th>Cliente</th>
+                <th>${compras ? "Proveedor" : "Cliente"}</th>
                 <th class="num">Total</th>
                 <th class="num">Exento</th>
                 ${cols.map(t => `<th class="num">Base ${t} %</th><th class="num">IVA ${t} %</th>`).join("")}

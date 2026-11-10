@@ -114,6 +114,48 @@ export function desgloseIva(lineas, total) {
     };
 }
 
+/**
+ * IVA de una factura de PROVEEDOR, en la moneda de esa factura: costo sin IVA, cada línea pasada a
+ * esa moneda y redondeada, y su IVA encima, por línea. Espejo de facturaProveedor del backend.
+ * `lineas`: [{ base (moneda base), tasa }]; `rate`: tasa de la factura; `ajuste`: corrección a mano.
+ */
+export function facturaProveedor(lineas, rate = 1, ajuste = 0) {
+    const r = parseFloat(rate) > 0 ? parseFloat(rate) : 1;
+    const porTasa = new Map();
+    for (const l of lineas || []) {
+        const tasa = l.tasa == null || l.tasa === "" ? ALICUOTAS.G : parseFloat(l.tasa);
+        const monto = R((parseFloat(l.base) || 0) * r);
+        const g = porTasa.get(tasa) || { tasa, base: 0, iva: 0 };
+        g.base = R(g.base + monto);
+        if (tasa > 0) g.iva = R(g.iva + R(monto * tasa / 100));
+        porTasa.set(tasa, g);
+    }
+    const grupos = [...porTasa.values()].sort((a, b) => b.tasa - a.tasa);
+    const aj = R(ajuste);
+    const mayor = grupos.filter(g => g.tasa > 0).sort((a, b) => b.iva - a.iva)[0];
+    if (aj && mayor) mayor.iva = R(mayor.iva + aj);
+    for (const g of grupos) g.total = R(g.base + g.iva);
+    const gravados = grupos.filter(g => g.tasa > 0);
+    const iva = R(gravados.reduce((a, g) => a + g.iva, 0));
+    return {
+        grupos,
+        exento: R(grupos.filter(g => g.tasa === 0).reduce((a, g) => a + g.base, 0)),
+        base: R(gravados.reduce((a, g) => a + g.base, 0)),
+        iva,
+        total: R(grupos.reduce((a, g) => a + g.total, 0)),
+        ivaBase: parseFloat((iva / r).toFixed(6)),
+        ajuste: mayor ? aj : 0,
+    };
+}
+
+// Opciones de alícuota para una línea de compra o un gasto (incluye el valor numérico).
+export const OPCIONES_TASA = [
+    { value: "16", label: "16 %" },
+    { value: "0", label: "Exento" },
+    { value: "8", label: "8 %" },
+    { value: "31", label: "31 %" },
+];
+
 // Alícuotas con columna en el Libro de ventas: la general siempre; la reducida y la de lujo solo
 // si el período las usó (casi ninguna tienda vende con ellas).
 export function columnasLibro(data) {

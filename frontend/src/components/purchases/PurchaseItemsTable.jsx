@@ -10,6 +10,9 @@ import EditablePriceInput from "../ui/EditablePriceInput";
 // línea a medio recibir o un lote por vencer.
 export default function PurchaseItemsTable({
     items = [],
+    // Con factura del proveedor la suma de las líneas ya no es el total de la compra (le falta el
+    // IVA y los otros cargos): el detalle la rotula "Productos".
+    totalLabel = "Total",
     orderStatus = "recibido",
     onUpdate,
     onDelete,
@@ -81,7 +84,7 @@ export default function PurchaseItemsTable({
                     );
                 })}
                 <div className="px-5 py-3 flex items-center justify-between bg-surface-2 dark:bg-white/[0.02]">
-                    <span className="text-[13px] text-content-subtle">Total</span>
+                    <span className="text-[13px] text-content-subtle">{totalLabel}</span>
                     <span className="text-[15px] font-bold text-content dark:text-white tabular-nums">
                         {enMoneda ? `${invoiceSym} ${fmt2(totalSubtotal * invoiceRate)}` : `Ref. ${fmt2(totalSubtotal)}`}
                     </span>
@@ -428,7 +431,7 @@ export default function PurchaseItemsTable({
                                 {unidadComun && totalUnidades > 0 && <> · {fmtQtyUnit(totalUnidades, unidadComun).toLowerCase()}</>}
                             </td>
                             <td colSpan={3 + (showRecibido ? 1 : 0)} />
-                            <td className="text-right text-[13px] text-content-subtle">Total</td>
+                            <td className="text-right text-[13px] text-content-subtle">{totalLabel}</td>
                             <td className="text-right pr-5">
                                 {enMoneda ? (
                                     <div className="flex flex-col items-end">

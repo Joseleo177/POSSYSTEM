@@ -6,6 +6,9 @@ import { useApp } from "../../context/AppContext";
 
 const LIMIT = 50;
 
+// Factura del gasto (empresas con IVA): entra al Libro de compras. Ver backend fiscal/gastoFiscal.js.
+const FACTURA_VACIA = { fiscal: false, supplier_rif: "", supplier_name: "", invoice_number: "", control_number: "", invoice_date: "", iva_rate: "16", iva_amount: "" };
+
 export function useEgresos({ notify, journals }) {
     const { sucursalActual } = useApp();
     const [expenses, setExpenses] = useState([]);
@@ -28,6 +31,7 @@ export function useEgresos({ notify, journals }) {
     const today = () => todayISO();
     const [form, setForm] = useState({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: "" });
     const [saving, setSaving] = useState(false);
+    const [factura, setFactura] = useState(FACTURA_VACIA);
 
     // Los egresos son de una sucursal. La API ya devuelve solo los almacenes del usuario,
     // así que si tiene uno solo se preselecciona y el campo queda de mero informativo.
@@ -136,9 +140,15 @@ export function useEgresos({ notify, journals }) {
                 rate: currentRate,
                 date: form.date || null,
                 warehouse_id: parseInt(form.warehouse_id),
+                // El total del papel es lo tecleado, en la moneda de la caja: así el libro dice
+                // exactamente lo que dice la factura.
+                factura: factura.fiscal
+                    ? { ...factura, invoice_total: inputAmount, invoice_date: factura.invoice_date || form.date || null }
+                    : { fiscal: false },
             });
             notify("Egreso registrado correctamente");
             setShowCreate(false);
+            setFactura(FACTURA_VACIA);
             setForm({ description: "", amount: "", category_id: "", payment_journal_id: "", payment_method: "", reference: "", notes: "", date: today(), rate: "", warehouse_id: (() => { const pre = warehouses.length === 1 ? warehouses[0] : warehouses.find(w => w.id === sucursalActual?.id); return pre ? String(pre.id) : ""; })() });
             loadExpenses();
         } catch (e) { notify(e.message, "err"); }
@@ -160,6 +170,7 @@ export function useEgresos({ notify, journals }) {
         deleteConfirm, setDeleteConfirm,
         showCreate, setShowCreate,
         form, setForm, saving,
+        factura, setFactura,
         warehouses,
         selectedJournal, currentRate, currentSymbol, configuredRate, baseEquivalent,
         toggleFilter, toggleCat, clearFilters,

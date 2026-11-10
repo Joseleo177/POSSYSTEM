@@ -21,6 +21,8 @@ router.patch("/:id/lots",    permit("purchases.edit"), ctrl.updateLots);
 router.patch("/:id/receive", permit("purchases.receive"), ctrl.receive);
 // El vencimiento lo ajusta quien edita la orden o quien le paga al proveedor.
 router.patch("/:id/due-date", permit("purchases.edit", "purchases.pay"), ctrl.setDueDate);
+// La factura del proveedor se carga en cualquier estado de la orden: el papel suele llegar después.
+router.patch("/:id/fiscal",   permit("purchases.edit"), ctrl.setFiscal);
 router.delete("/:id", permit("purchases.delete"),  ctrl.remove);
 
 // Pagos de compras

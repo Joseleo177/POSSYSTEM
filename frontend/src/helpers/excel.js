@@ -623,9 +623,9 @@ export function buildFinanceExcel(data, range) {
   ]), `IngresosEgresos_${range.from}_${range.to}${sufijoSucursal(range)}`);
 }
 
-// Libro de ventas: una fila por documento, en la moneda local y con las columnas que pide el
-// contador. Las N/C van en negativo y las anuladas en cero, como en el libro impreso.
-export function buildLibroVentasExcel(data, range) {
+// Libro de ventas o de compras: una fila por documento, en la moneda local y con las columnas que
+// pide el contador. Las N/C van en negativo y las anuladas en cero, como en el libro impreso.
+export function buildLibroVentasExcel(data, range, { titulo = "Libro de ventas", compras = false } = {}) {
   const local = data.local_symbol || "Bs.";
   const cols = columnasLibro(data);
   const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
@@ -639,7 +639,7 @@ export function buildLibroVentasExcel(data, range) {
       tipo: d.tipo_documento || "",
       transaccion: d.transaccion === "03-anu" ? "03-Anulación" : d.transaccion ? "01-Registro" : "",
       rif: d.rif || "",
-      nombre: d.nombre || (d.rif ? "" : "Consumidor final"),
+      nombre: d.nombre || (d.rif || compras ? "" : "Consumidor final"),
       numero_factura: d.tipo_documento === "FAC" ? d.numero : "",
       control: d.control || "",
       numero_nd: d.tipo_documento === "ND" ? d.numero : "",
@@ -692,14 +692,14 @@ export function buildLibroVentasExcel(data, range) {
 
   const s = data.resumen || {};
   const resumen = [
-    { concepto: "Total ventas con IVA", monto: r2(s.total) },
-    { concepto: "Ventas exentas", monto: r2(s.exento) },
+    { concepto: compras ? "Total compras con IVA" : "Total ventas con IVA", monto: r2(s.total) },
+    { concepto: compras ? "Compras exentas" : "Ventas exentas", monto: r2(s.exento) },
     ...cols.flatMap(t => [
       { concepto: `Base imponible ${t} %`, monto: r2(s.gravado?.[t]?.base) },
-      { concepto: `Débito fiscal ${t} %`, monto: r2(s.gravado?.[t]?.iva) },
+      { concepto: `${compras ? "Crédito" : "Débito"} fiscal ${t} %`, monto: r2(s.gravado?.[t]?.iva) },
     ]),
-    { concepto: "Débito fiscal total", monto: r2(s.iva_total) },
-    { concepto: "IVA retenido por clientes", monto: r2(s.retenido) },
+    { concepto: compras ? "Crédito fiscal total" : "Débito fiscal total", monto: r2(s.iva_total) },
+    { concepto: compras ? "IVA retenido a proveedores" : "IVA retenido por clientes", monto: r2(s.retenido) },
     ...(s.ajuste ? [{ concepto: "Redondeo del IVA (fiscal menos cobrado)", monto: r2(s.ajuste) }] : []),
     { concepto: "", monto: "" },
     { concepto: "Facturas", monto: s.facturas || 0 },
@@ -709,10 +709,10 @@ export function buildLibroVentasExcel(data, range) {
   ];
 
   download(buildWb([
-    { name: "Libro de ventas", rows, headers },
+    { name: titulo, rows, headers },
     { name: "Resumen", rows: resumen, headers: [
       { key: "concepto", label: "Concepto" },
       { key: "monto", label: `Monto (${local})` },
     ] },
-  ]), `LibroVentas_${range.from}_${range.to}${sufijoSucursal(range)}`);
+  ]), `${compras ? "LibroCompras" : "LibroVentas"}_${range.from}_${range.to}${sufijoSucursal(range)}`);
 }

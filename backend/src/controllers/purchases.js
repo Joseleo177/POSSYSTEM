@@ -2,6 +2,7 @@ const { getAll, getOne, createPurchase, updateDraft, confirmOrder, receivePurcha
 const { broadcast } = require("../services/sseService");
 const { assertLineasAccess } = require("../services/products/productAccess");
 const { PurchaseItem } = require("../models");
+const { guardarFactura, crearCompraServicios } = require("../services/purchases/fiscalCompra");
 
 const wrap = (fn, status = 200) => async (req, res) => {
   try {
@@ -27,6 +28,11 @@ module.exports = {
   getAll:       wrap(req => getAll(req.query, req)),
   getOne:       wrap(req => getOne(req.params.id, req)),
   create:       wrap(async req => {
+    // Factura de servicios: sin mercancía, solo líneas de gasto (fiscalCompra.js).
+    if (req.body?.kind === "servicios") {
+      const id = await crearCompraServicios(req.body, req);
+      return getOne(id, req);
+    }
     await assertLineasAccess(req, req.body?.items);
     return createPurchase({ body: req.body, employee_id: req.employee?.id ?? null });
   }, 201),
@@ -45,5 +51,7 @@ module.exports = {
   updateLots:   wrap(req => updateItemLots(req.params.id, req.body.items || [], req)),
   payables:     wrap(req => getPayables(req.query, req)),
   setDueDate:   wrap(req => setDueDate(req.params.id, req.body, req)),
+  // Factura del proveedor: datos fiscales, alícuota por línea y otros cargos (fiscalCompra.js).
+  setFiscal:    wrap(async req => { await guardarFactura(req.params.id, req.body || {}, req); return getOne(req.params.id, req); }),
   remove:       wrap(async req => { const r = await deletePurchase(req.params.id, req); broadcast(companyId(req), 'products:updated', {}); return r; }),
 };

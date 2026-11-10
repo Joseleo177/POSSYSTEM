@@ -8,6 +8,7 @@ const { assertJournalsInWarehouse } = require('../utils/journalWarehouse');
 const { expenseRefSql } = require('../utils/expenseReference');
 const { anularAvance } = require('../services/cashAdvances');
 const { anularLiquidacion } = require('../services/cashea');
+const { datosFiscalesGasto } = require('../services/fiscal/gastoFiscal');
 
 // ── Listar egresos (paginado + filtros) ──────────────────────
 exports.getAll = async (req, res, next) => {
@@ -78,6 +79,16 @@ exports.getAll = async (req, res, next) => {
       currency_symbol: e.currency?.symbol || '',
       warehouse_id:   e.warehouse_id,
       warehouse_name: e.warehouse?.name || '',
+      // Factura del gasto (Libro de compras).
+      fiscal:         !!e.fiscal,
+      supplier_rif:   e.supplier_rif,
+      supplier_name:  e.supplier_name,
+      invoice_number: e.invoice_number,
+      control_number: e.control_number,
+      invoice_date:   e.invoice_date,
+      iva_rate:       e.iva_rate != null ? parseFloat(e.iva_rate) : null,
+      iva_amount:     parseFloat(e.iva_amount || 0),
+      invoice_total:  e.invoice_total != null ? parseFloat(e.invoice_total) : null,
     }));
 
     res.json({ ok: true, data, total: count });
@@ -131,7 +142,17 @@ exports.create = async (req, res, next) => {
     // El diario elegido tiene que ser compartido o de esa misma sucursal.
     if (payment_journal_id) await assertJournalsInWarehouse(payment_journal_id, warehouse_id);
 
+    // Factura del gasto (opcional): RIF, número, control, alícuota e IVA. Ver gastoFiscal.js.
+    let fiscales;
+    try {
+      fiscales = await datosFiscalesGasto(req.body.factura || {}, { amount, rate, company_id: req.employee?.company_id, fecha: date });
+    } catch (e) {
+      if (e.isOperational) return res.status(400).json({ ok: false, message: e.message });
+      throw e;
+    }
+
     const expense = await Expense.create({
+      ...fiscales,
       description,
       amount,
       category_id,
@@ -158,6 +179,27 @@ exports.create = async (req, res, next) => {
     });
 
     res.status(201).json({ ok: true, data: full });
+  } catch (err) { next(err); }
+};
+
+// ── Factura de un egreso ya registrado ───────────────────────
+// El egreso no se edita (se anula), pero su factura sí: el papel del proveedor puede llegar
+// después del pago, o haberse cargado con un número mal tecleado.
+exports.setFiscal = async (req, res, next) => {
+  try {
+    const expense = await Expense.findByPk(req.params.id);
+    if (!expense) return res.status(404).json({ ok: false, message: 'Egreso no encontrado' });
+    await assertWarehouseAccess(req, expense.warehouse_id, { optional: true });
+    if (expense.status === 'anulado') return res.status(400).json({ ok: false, message: 'El egreso está anulado' });
+    let fiscales;
+    try {
+      fiscales = await datosFiscalesGasto(req.body || {}, { amount: expense.amount, rate: expense.rate, company_id: expense.company_id, fecha: expense.date || expense.created_at });
+    } catch (e) {
+      if (e.isOperational) return res.status(400).json({ ok: false, message: e.message });
+      throw e;
+    }
+    await expense.update(fiscales);
+    res.json({ ok: true, data: expense });
   } catch (err) { next(err); }
 };
 

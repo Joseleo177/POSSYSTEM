@@ -8,7 +8,9 @@ const LABEL = "text-[12px] font-medium text-content-subtle mb-1.5 block";
 // Datos de la orden nueva: a dónde llega, de quién, con qué factura y en qué moneda. Mismo
 // diseño que la cabecera de una orden en borrador (PurchaseDetails), para que crear y editar
 // se sientan la misma pantalla.
-export default function ReceiptInfo({ state }) {
+// `servicios`: la cabecera de una factura de servicios (ServiceInvoiceForm): sin mercancía no hay
+// almacén de destino sino la sucursal del gasto, y el proveedor se pide de una vez.
+export default function ReceiptInfo({ state, servicios = false }) {
     const { baseCurrency, activeCurrencies } = useApp();
     const nonBaseCurrencies = (activeCurrencies || []).filter(c => !c.is_base);
     const {
@@ -40,8 +42,12 @@ export default function ReceiptInfo({ state }) {
     return (
         <div className="bg-surface dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none p-5">
             <div className="mb-4">
-                <p className="text-[14px] font-semibold text-content dark:text-white">Datos de la compra</p>
-                <p className="text-[12px] text-content-subtle">El proveedor puede quedar para después: se pide al confirmar o recibir la orden.</p>
+                <p className="text-[14px] font-semibold text-content dark:text-white">{servicios ? "Datos de la factura" : "Datos de la compra"}</p>
+                <p className="text-[12px] text-content-subtle">
+                    {servicios
+                        ? "De quién es la factura, a qué sucursal corresponde y en qué moneda viene."
+                        : "El proveedor puede quedar para después: se pide al confirmar o recibir la orden."}
+                </p>
             </div>
 
             <div className={`grid grid-cols-1 sm:grid-cols-2 gap-x-5 gap-y-4 ${cols >= 4 ? "xl:grid-cols-4" : cols === 3 ? "xl:grid-cols-3" : ""}`}>
@@ -49,7 +55,7 @@ export default function ReceiptInfo({ state }) {
                     hay más. `selectedWarehouseId` ya queda fijo en el único desde el hook. */}
                 {warehouses.length > 1 && (
                     <div>
-                        <label className={LABEL}>Almacén destino</label>
+                        <label className={LABEL}>{servicios ? "Sucursal" : "Almacén destino"}</label>
                         <CustomSelect
                             value={String(selectedWarehouseId || "")}
                             onChange={val => setSelectedWarehouseId(val)}

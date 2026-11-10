@@ -16,6 +16,7 @@ import { fmtTime } from "../../helpers/dates";
 import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
 import { printPurchaseLetter } from "../../helpers/printPurchaseLetter";
+import SupplierInvoiceCard from "./SupplierInvoice";
 
 const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 // En claro el fondo de página ya es surface-2 (#f9fafb), así que un panel surface-2 era
@@ -33,6 +34,8 @@ const ORDER_STATUS = {
   parcial:   { label: "Recibiendo", tone: "info" },
   recibido:  { label: "Recibida",   tone: "success", quiet: "check" },
 };
+// Una factura de servicios no se recibe: nace registrada.
+const ORDER_STATUS_SERVICIOS = { ...ORDER_STATUS, recibido: { label: "Registrada", tone: "success", quiet: "check" } };
 const PAY_STATUS = {
   pagado:    { label: "Pagada",    tone: "success", quiet: "check" },
   parcial:   { label: "Pago parcial", tone: "warning" },
@@ -41,7 +44,7 @@ const PAY_STATUS = {
 
 export default function PurchaseDetails({ state }) {
   const { detail, refreshDetail, confirmOrder, receivePurchase, loading, warehouses = [], onProductsUpdated } = state;
-  const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth, can } = useApp();
+  const { notify, baseCurrency, activeCurrencies, companyInfo, printerWidth, can, company } = useApp();
   // El vencimiento lo ajusta quien edita la orden o quien le paga al proveedor (misma regla
   // que la ruta).
   const canSetDue = can("purchases.edit") || can("purchases.pay");
@@ -135,6 +138,8 @@ export default function PurchaseDetails({ state }) {
 
   const orderStatus = detail.status || "recibido";
   const isBorrador  = orderStatus === "borrador";
+  // Factura de servicios: sin mercancía, solo líneas de gasto (no se recibe ni lleva productos).
+  const esServicios = detail.kind === "servicios";
   // 'parcial' se sigue editando: es una orden abierta a la que se le van sumando líneas
   // mientras la mercancía ya entró.
   const isEditable  = isBorrador || orderStatus === "pendiente" || orderStatus === "parcial";
@@ -312,6 +317,11 @@ export default function PurchaseDetails({ state }) {
   const invoiceCurRate = invoiceCurrency ? (parseFloat(invoiceCurrency.exchange_rate) || 1) : 1;
   const invoiceRate    = invoiceCurrency ? resolveRate(invoiceRateInput, invoiceCurRate) : 1;
   const inInvoiceCur   = invoiceRate > 1;
+  // Con factura del proveedor (o con otros cargos), el total en su moneda es el del papel, sumado
+  // línea por línea: convertir el total en base lo dejaba un céntimo distinto. Solo mientras la tasa
+  // no se esté editando, porque la factura se calculó con la guardada.
+  const totalFactura = (detail?.fiscal || detail?.charges?.length) && detail?.factura && !isDirty
+    ? detail.factura.total : null;
   const invoiceSym    = invoiceCurrency ? (invoiceCurrency.symbol || invoiceCurrency.code) : (baseCurrency?.symbol || "Ref.");
   const nonBaseCurrencies = (activeCurrencies || []).filter(c => !c.is_base);
 
@@ -336,7 +346,7 @@ export default function PurchaseDetails({ state }) {
                 pastillas de colores apretadas al final. */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                <StatusMark status={orderStatus} map={ORDER_STATUS} />
+                <StatusMark status={orderStatus} map={esServicios ? ORDER_STATUS_SERVICIOS : ORDER_STATUS} />
                 {!isBorrador && <StatusMark status={payStatus} map={PAY_STATUS} />}
               </div>
               <div className="flex items-center gap-2 w-full sm:w-auto">
@@ -485,7 +495,7 @@ export default function PurchaseDetails({ state }) {
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
-                  <StatusMark status={orderStatus} map={ORDER_STATUS} />
+                  <StatusMark status={orderStatus} map={esServicios ? ORDER_STATUS_SERVICIOS : ORDER_STATUS} />
                   <StatusMark status={payStatus} map={PAY_STATUS} />
                 </div>
                 <p className={`${LABEL} mt-3`}>Proveedor</p>
@@ -498,7 +508,7 @@ export default function PurchaseDetails({ state }) {
                 <p className={LABEL}>Total de la compra</p>
                 {inInvoiceCur ? (
                   <>
-                    <p className="text-[26px] font-bold tracking-tight tabular-nums leading-tight text-content dark:text-white">{invoiceSym} {fmt2(total * invoiceRate)}</p>
+                    <p className="text-[26px] font-bold tracking-tight tabular-nums leading-tight text-content dark:text-white">{invoiceSym} {fmt2(totalFactura ?? total * invoiceRate)}</p>
                     <p className="text-[12px] text-content-subtle tabular-nums">≈ Ref. {fmt2(total)}</p>
                   </>
                 ) : (
@@ -518,7 +528,7 @@ export default function PurchaseDetails({ state }) {
                 </dd>
               </div>
               <div>
-                <dt className={LABEL}>Almacén</dt>
+                <dt className={LABEL}>{esServicios ? "Sucursal" : "Almacén"}</dt>
                 <dd className="text-[13px] font-medium text-content dark:text-white mt-0.5">{toNameCase(detail.warehouse_name) || "—"}</dd>
               </div>
               <div>
@@ -563,7 +573,8 @@ export default function PurchaseDetails({ state }) {
         )}
       </div>
 
-      {/* ── PRODUCTOS ── */}
+      {/* ── PRODUCTOS ── Una factura de servicios no tiene: sus líneas están en la tarjeta de abajo. */}
+      {!esServicios && (
       <div className={`${SECTION} overflow-hidden`}>
         {/* En el teléfono los botones de imprimir quedan solo con su icono y "Agregar" se
             acorta: con el texto completo no cabían junto al título y se salían de la tarjeta. */}
@@ -638,6 +649,7 @@ export default function PurchaseDetails({ state }) {
           invoiceRate={invoiceRate}
           invoiceSym={invoiceSym}
           forceLots={localReceiving}
+          totalLabel={detail.fiscal ? "Productos sin IVA" : detail.charges?.length ? "Productos" : "Total"}
         />
 
         {/* Modo recepción. Está acá además de en el alta porque esta es la pantalla donde se
@@ -690,6 +702,15 @@ export default function PurchaseDetails({ state }) {
           </div>
         )}
       </div>
+      )}
+
+      {/* ── FACTURA DEL PROVEEDOR ── (empresas con IVA, y siempre en una factura de servicios, que
+          sin ella no tiene líneas). En cualquier estado: el papel suele llegar después que la
+          mercancía. Con cambios sin guardar se bloquea, porque la factura se calcula sobre las
+          líneas guardadas. */}
+      {(company?.iva_enabled || esServicios) && (
+        <SupplierInvoiceCard detail={detail} disabled={isDirty} onSaved={() => refreshDetail?.()} />
+      )}
 
       {/* ── ESTADO DE CUENTA + PAGOS (solo no-borrador) ── */}
       {!isBorrador && (() => {
@@ -698,7 +719,7 @@ export default function PurchaseDetails({ state }) {
         const vencida   = debe && daysOverdue > 0;
         const porVencer = debe && daysOverdue != null && daysOverdue <= 0 && daysOverdue >= -7;
         const saldoTone = vencida ? "text-red-600 dark:text-red-400" : porVencer ? "text-amber-700 dark:text-amber-400" : debe ? "text-content dark:text-white" : "text-content-subtle";
-        const enMoneda  = (n) => inInvoiceCur ? <span className="block text-[12px] font-normal text-content-subtle tabular-nums mt-0.5">{invoiceSym} {fmt2(n * invoiceRate)}</span> : null;
+        const enMoneda  = (n, papel) => inInvoiceCur ? <span className="block text-[12px] font-normal text-content-subtle tabular-nums mt-0.5">{invoiceSym} {fmt2(papel ?? n * invoiceRate)}</span> : null;
 
         return (
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
@@ -714,15 +735,16 @@ export default function PurchaseDetails({ state }) {
                 monto a la derecha, que es como se lee un estado de cuenta. */}
             <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-px rounded-xl overflow-hidden bg-border/70 dark:bg-white/[0.06] border border-border/70 dark:border-white/[0.06]">
               {[
-                { label: "Total", val: total, cls: "text-content dark:text-white" },
+                { label: "Total", val: total, papel: totalFactura, cls: "text-content dark:text-white" },
                 { label: "Pagado", val: amountPaid, cls: "text-content dark:text-white" },
-                { label: "Saldo", val: balance, cls: saldoTone, strong: true },
+                // Sin abonos, el saldo es el total del papel (no la conversión del saldo en base).
+                { label: "Saldo", val: balance, papel: amountPaid < 0.005 ? totalFactura : null, cls: saldoTone, strong: true },
               ].map(k => (
                 <div key={k.label} className="px-4 py-3 bg-surface-2 dark:bg-surface-dark min-w-0 flex items-baseline justify-between gap-3 sm:block">
                   <p className={LABEL}>{k.label}</p>
                   <div className="min-w-0 text-right sm:text-left">
                     <p className={`sm:mt-1 text-[16px] tabular-nums whitespace-nowrap sm:truncate ${k.strong ? "font-bold" : "font-semibold"} ${k.cls}`}>Ref. {fmt2(k.val)}</p>
-                    {enMoneda(k.val)}
+                    {enMoneda(k.val, k.papel)}
                   </div>
                 </div>
               ))}

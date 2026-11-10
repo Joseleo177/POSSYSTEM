@@ -510,6 +510,8 @@ export const api = {
     payables:       (params = {}) => request("/purchases/payables?"              + new URLSearchParams(params)),
     createBulkPayment: (body)     => request("/purchases/payments/bulk",         { method: "POST",   body: JSON.stringify(body) }),
     setDueDate:     (id, due_date) => request(`/purchases/${id}/due-date`,      { method: "PATCH",  body: JSON.stringify({ due_date }) }),
+    // Factura del proveedor: datos fiscales, alícuota por línea y otros cargos.
+    setFiscal:      (id, body)    => request(`/purchases/${id}/fiscal`,         { method: "PATCH",  body: JSON.stringify(body) }),
     removePayment:  (paymentId)   => request(`/purchase-payments/${paymentId}`, { method: "DELETE" }),
   },
   settings: {
@@ -672,6 +674,19 @@ export const api = {
     paymentJournals:    (params = {}) => request("/reports/payment-journals?"   + new URLSearchParams(params)),
     finance:            (params = {}) => request("/reports/finance?"            + new URLSearchParams(params)),
     libroVentas:        (params = {}) => request("/reports/libro-ventas?"       + new URLSearchParams(params)),
+    libroCompras:       (params = {}) => request("/reports/libro-compras?"      + new URLSearchParams(params)),
+  },
+
+  // Declaración de IVA del período (forma 30). Ver backend services/fiscal/declaracionIva.js.
+  ivaDeclarations: {
+    list:     ()         => request("/iva-declarations"),
+    create:   (body)     => request("/iva-declarations",                 { method: "POST",   body: JSON.stringify(body) }),
+    calcular: (id)       => request(`/iva-declarations/${id}/calcular`,  { method: "POST" }),
+    update:   (id, body) => request(`/iva-declarations/${id}`,           { method: "PATCH",  body: JSON.stringify(body) }),
+    declarar: (id)       => request(`/iva-declarations/${id}/declarar`,  { method: "POST" }),
+    borrador: (id)       => request(`/iva-declarations/${id}/borrador`,  { method: "POST" }),
+    pago:     (id, body) => request(`/iva-declarations/${id}/pago`,      { method: "POST",   body: JSON.stringify(body) }),
+    remove:   (id)       => request(`/iva-declarations/${id}`,           { method: "DELETE" }),
   },
 
   cashSessions: {
@@ -698,6 +713,7 @@ export const api = {
     getCategories:  ()          => request("/expenses/categories"),
     upsertCategory: (body)      => request("/expenses/categories",   { method: "POST", body: JSON.stringify(body) }),
     create:         (body)      => request("/expenses",              { method: "POST", body: JSON.stringify(body) }),
+    setFiscal:      (id, body)  => request(`/expenses/${id}/fiscal`, { method: "PATCH", body: JSON.stringify(body) }),
     void:           (id)        => request(`/expenses/${id}`,           { method: "DELETE" }),
     delete:         (id)        => request(`/expenses/${id}/permanent`, { method: "DELETE" }),
   },

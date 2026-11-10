@@ -9,6 +9,8 @@ const { effectiveDueDate } = require("./payablesService");
 const { updateComboPricesForProduct } = require("../products/productService");
 const { propagateModelToVariants } = require("../products/variantService");
 const { purchaseLineSpec, numberPurchaseReceipt, releasePurchasePieces } = require("../factory/numbering");
+const { recalcularCompra, cargosDe, facturaDe } = require("./fiscalCompra");
+const { tasaDeTipo } = require("../fiscal/iva");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -64,7 +66,11 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
       { model: PurchaseItem, attributes: [],            required: false }
     ],
     attributes: {
-      include: [[Sequelize.fn('COUNT', Sequelize.col('PurchaseItems.id')), 'item_count']]
+      include: [
+        [Sequelize.fn('COUNT', Sequelize.col('PurchaseItems.id')), 'item_count'],
+        // Una factura de servicios no tiene productos: sus líneas son los cargos.
+        [Sequelize.literal('(SELECT COUNT(*) FROM purchase_charges pc WHERE pc.purchase_id = "Purchase"."id")'), 'charge_count'],
+      ]
     },
     group: ['Purchase.id', 'Employee.id', 'Supplier.id', 'Warehouse.id'],
     order: [['created_at', 'DESC']],
@@ -93,9 +99,11 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     const pp = p.toJSON();
     pp.employee_name          = pp.Employee?.full_name ?? null;
     pp.supplier_customer_name = pp.Supplier?.name      ?? null;
-    pp.supplier_rif           = pp.Supplier?.rif       ?? null;
+    // El de la factura del proveedor, si se cargó; si no, el de su ficha.
+    pp.supplier_rif           = pp.supplier_rif || pp.Supplier?.rif || null;
     pp.warehouse_name         = pp.Warehouse?.name     ?? null;
-    pp.item_count             = parseInt(pp.item_count || 0);
+    pp.item_count             = pp.kind === 'servicios' ? parseInt(pp.charge_count || 0) : parseInt(pp.item_count || 0);
+    delete pp.charge_count;
     const amountPaid = paidMap[pp.id] || 0;
     pp.amount_paid = parseFloat(amountPaid.toFixed(6));
     pp.balance     = parseFloat(Math.max(0, parseFloat(pp.total) - amountPaid).toFixed(6));
@@ -114,7 +122,7 @@ async function getOne(id, req) {
     include: [
       { model: Employee,     attributes: ['full_name'], required: false },
       { model: Warehouse,    attributes: ['name'],      required: false },
-      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename', 'unit', 'stock', 'sellable'], required: false }] }
+      { model: PurchaseItem, include: [{ model: Product, attributes: ['image_filename', 'unit', 'stock', 'sellable', 'iva_tipo'], required: false }] }
     ]
   });
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
@@ -132,6 +140,8 @@ async function getOne(id, req) {
     // Al reabrir la línea, el modal necesita saber si el producto es insumo para no
     // ofrecer margen ni precio de venta.
     item.sellable = item.Product?.sellable ?? true;
+    // Alícuota del producto: la que propone la factura del proveedor si la línea no tiene una.
+    item.iva_tipo = item.Product?.iva_tipo ?? 'G';
     delete item.Product;
     return item;
   });
@@ -144,10 +154,16 @@ async function getOne(id, req) {
   // Vencimiento con la misma regla que Cuentas por Pagar: el pactado para esta compra o, si no
   // hay, el que dan los días de crédito del proveedor.
   const supplier = data.supplier_id
-    ? await Customer.findByPk(data.supplier_id, { attributes: ['credit_days'] })
+    ? await Customer.findByPk(data.supplier_id, { attributes: ['credit_days', 'rif'] })
     : null;
   data.supplier_credit_days = supplier?.credit_days ?? null;
   data.effective_due_date   = effectiveDueDate(data, data.supplier_credit_days);
+
+  // Factura del proveedor (ver fiscalCompra.js): los otros cargos y el IVA calculado en la moneda
+  // de la factura, para el detalle. El RIF de la ficha sirve de valor inicial al cargarla.
+  data.charges = await cargosDe(data.id);
+  data.factura = facturaDe(data, data.charges);
+  data.supplier_default_rif = supplier?.rif ?? null;
 
   return { data };
 }
@@ -323,6 +339,15 @@ async function _applyStockAndPrices(purchase, items, transaction, ctx = {}) {
 // Tasa de compra saneada. Una tasa inválida o ≤ 0 no puede llegar a la base: se guardaría un
 // registro que después divide mal los costos al mostrarlos. Sin moneda no hay conversión, y
 // entonces la tasa es 1 por definición.
+// Una factura de servicios (kind 'servicios') no tiene mercancía: no se confirma como orden, no se
+// recibe y no lleva productos. Sus líneas se editan en la factura del proveedor (fiscalCompra.js).
+function assertMercancia(purchase) {
+  if (purchase?.kind === 'servicios') {
+    const e = new Error("Es una factura de servicios: no lleva mercancía. Sus líneas se editan en la factura del proveedor");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+}
+
 function normalizeInvoiceRate(currency_id, exchange_rate) {
   const curId = currency_id ? parseInt(currency_id) : null;
   const rate  = parseFloat(exchange_rate);
@@ -477,6 +502,7 @@ async function confirmOrder(id, req) {
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
   // El destino ya está guardado en la orden: se valida contra los almacenes del empleado.
   await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
+  assertMercancia(purchase);
   if (purchase.status !== 'borrador') {
     const e = new Error("Solo se pueden confirmar órdenes en estado borrador"); e.status = 400; throw e;
   }
@@ -548,6 +574,7 @@ async function receivePurchase(id, req) {
     if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
     // Recibir mueve stock: el destino tiene que ser un almacén propio, sin excepción.
     await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
+    assertMercancia(purchase);
     if (!purchase.warehouse_id) {
       const e = new Error("Debe seleccionar un almacén de destino antes de recibir la mercancía");
       e.status = 400;
@@ -664,6 +691,7 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
   // El destino nuevo lo valida la ruta; acá se valida el que ya tenía, para que nadie edite
   // una orden dirigida a un almacén ajeno.
   await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
+  assertMercancia(purchase);
   // 'parcial' también se edita: es justamente una orden abierta que se sigue cargando
   // mientras la mercancía entra.
   if (!['borrador', 'pendiente', 'parcial'].includes(purchase.status)) {
@@ -798,8 +826,10 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
           await previa.update(datos, { transaction });
           vistos.add(previa.id);
         } else {
+          // Si la compra ya trae factura fiscal, la línea nueva nace con la alícuota del producto
+          // (se cambia en la factura del proveedor). Las existentes conservan la suya.
           const creada = await PurchaseItem.create(
-            { purchase_id: id, received_units: 0, ...datos },
+            { purchase_id: id, received_units: 0, ...datos, iva_rate: purchase.fiscal ? tasaDeTipo(product.iva_tipo) : null },
             { transaction }
           );
           vistos.add(creada.id);
@@ -848,6 +878,9 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
     updateData.receiving_mode = modoRecepcion;
 
     await purchase.update(updateData, { transaction });
+    // El total que se acaba de escribir es el de las líneas: con factura fiscal u otros cargos,
+    // el que se le debe al proveedor los suma (ver fiscalCompra.js).
+    await recalcularCompra(purchase.id, transaction);
 
     // Con el modo prendido, guardar es recibir: entra al stock lo que falte de cada línea y
     // la orden queda abierta en 'parcial' para seguir cargándola. Se hace DENTRO de la misma
@@ -872,6 +905,7 @@ async function updateItemLots(purchaseId, items, req) {
   const purchase = await Purchase.findByPk(purchaseId);
   if (!purchase) { const e = new Error("Compra no encontrada"); e.status = 404; throw e; }
   await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
+  assertMercancia(purchase);
   if (purchase.status === 'recibido') { const e = new Error("Esta compra ya fue recibida"); e.status = 400; throw e; }
 
   for (const { id, lot_number, expiration_date } of items) {

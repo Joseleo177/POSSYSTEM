@@ -52,6 +52,7 @@ const tenantModels = [
   'PaymentReport', 'ProductImage', 'Seller', 'CommissionPayout',
   'CasheaSettlement', 'CurrencyRate', 'CobranzaSector',
   'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
+  'IvaDeclaration',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -220,6 +221,13 @@ if(Purchase && Customer && Employee && Warehouse && PurchaseItem && Product) {
   Purchase.hasMany(PurchaseItem, { foreignKey: 'purchase_id' });
   PurchaseItem.belongsTo(Purchase, { foreignKey: 'purchase_id' });
   PurchaseItem.belongsTo(Product, { foreignKey: 'product_id' });
+}
+
+// Otros cargos de la factura del proveedor (flete, servicio): ver models/purchaseCharge.js.
+if (Purchase && db.PurchaseCharge) {
+  Purchase.hasMany(db.PurchaseCharge, { foreignKey: 'purchase_id', as: 'charges' });
+  db.PurchaseCharge.belongsTo(Purchase, { foreignKey: 'purchase_id' });
+  if (ExpenseCategory) db.PurchaseCharge.belongsTo(ExpenseCategory, { foreignKey: 'expense_category_id', as: 'category' });
 }
 
 if (ProductLot && Product && Warehouse) {
