@@ -211,10 +211,15 @@ export default function CatalogPdfModal({ open, onClose }) {
                     {ICONO_COMPARTIR} Compartir o guardar
                 </button>
             )}
-            <button onClick={() => descargar(trabajo.blob, trabajo.nombre)}
-                className={`${esIOS && puedeCompartir ? "btn-outline" : "btn-accent"} sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold flex items-center justify-center gap-2`}>
-                {ICONO_BAJAR} Descargar
-            </button>
+            {/* En el iPhone, Descargar no guarda: abre el PDF en un visor como blob: y desde ahí
+                se comparte la dirección, no el archivo (probado 11-11-2026 con la app instalada).
+                Con Compartir disponible, ese botón sobra y confunde. */}
+            {!(esIOS && puedeCompartir) && (
+                <button onClick={() => descargar(trabajo.blob, trabajo.nombre)}
+                    className="btn-accent sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold flex items-center justify-center gap-2">
+                    {ICONO_BAJAR} Descargar
+                </button>
+            )}
         </div>
     ) : trabajo ? (
         <div className="flex flex-col sm:flex-row gap-2">
@@ -249,7 +254,7 @@ export default function CatalogPdfModal({ open, onClose }) {
                         <p className="text-[12px] text-content-subtle break-words max-w-sm">{trabajo.nombre} · <span className="whitespace-nowrap">{mb < 1 ? `${Math.max(1, Math.round(mb * 1024))} KB` : `${mb.toFixed(1)} MB`}</span></p>
                         <p className="text-[12px] text-content-subtle max-w-sm mt-1">
                             {esIOS && puedeCompartir
-                                ? "Toca «Compartir o guardar»: ahí eliges Guardar en Archivos o lo mandas por WhatsApp."
+                                ? "Toca «Compartir o guardar» y elige Guardar en Archivos, o un contacto de WhatsApp para mandarle el PDF."
                                 : puedeCompartir ? "Ya se descargó. Con Compartir lo mandas directo por WhatsApp."
                                 : esIOS ? "Toca «Descargar» para guardarlo." : "Si no bajó solo, toca «Descargar»."}
                         </p>
