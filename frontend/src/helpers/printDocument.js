@@ -13,7 +13,7 @@
 const PRINT_ROOT = "data-print-doc";
 
 // iPadOS se presenta como "Macintosh" desde iOS 13; el táctil es lo que lo delata.
-const esWebKitTactil = () => {
+export const esWebKitTactil = () => {
     const ua = navigator.userAgent || "";
     return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Macintosh") && navigator.maxTouchPoints > 1);
 };

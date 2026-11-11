@@ -1,4 +1,4 @@
-import { printHtml, esPantallaTactil, abrirParaGuardar } from "./printDocument";
+import { printHtml, esPantallaTactil, esWebKitTactil, abrirParaGuardar } from "./printDocument";
 import { resolveImageUrl } from "./image";
 
 // Catálogo de productos en PDF para mayoristas (10-11-2026).
@@ -271,7 +271,8 @@ function listaPrecios({ grupos, store, opciones, t }) {
         filas.push({ tipo: "linea", g });
         for (const p of g.productos) filas.push({ tipo: "prod", p, g });
     }
-    const POR_COLUMNA = 24;
+    // En la hoja vertical del iPhone (ver CSS_VERTICAL) entran más filas por columna.
+    const POR_COLUMNA = opciones.vertical ? 28 : 24;
     const hojas = [];
     for (let i = 0; i < filas.length; i += POR_COLUMNA * 2) hojas.push(filas.slice(i, i + POR_COLUMNA * 2));
     const fila = (f) => f.tipo === "linea"
@@ -394,6 +395,55 @@ body { font-family: 'Source Sans 3', 'Segoe UI', sans-serif; -webkit-print-color
 .cierre .eslogan { position: static; text-align: center; max-width: none; font-size: 20pt; }
 `;
 
+// ── Versión vertical (iPhone) ─────────────────────────────────────────────────────────
+// Safari del iPhone imprime siempre en hoja vertical e ignora el tamaño que pide el documento:
+// el catálogo apaisado quedaba chiquito arriba de cada hoja y el resto en blanco (11-11-2026).
+// Ahí el catálogo se arma vertical: mismo estilo, con la foto arriba y la información abajo.
+// La hoja es de 200 x 250 mm, un poco más baja que la Carta y la A4 una vez descontados los
+// márgenes que agrega el iPhone, para que cada página entre entera en una hoja.
+const CSS_VERTICAL = `
+@page { size: 200mm 250mm; margin: 0; }
+.pg { width: 200mm; height: 250mm; }
+.marca { top: 7mm; right: 8mm; width: 19mm; height: 19mm; }
+.eslogan { right: 10mm; bottom: 8mm; font-size: 13pt; max-width: 90mm; }
+
+.portada-cab { top: 18mm; padding: 0 12mm; }
+.portada-logo { max-height: 30mm; max-width: 110mm; }
+.portada h1 { font-size: 28pt; }
+.piso { height: 72mm; }
+.vitrina { bottom: 24mm; height: 112mm; padding: 0 6mm; }
+.vitrina img { height: calc(84mm - (var(--i) * var(--i)) * 5mm); max-width: 29mm; margin: 0 -2.5mm; }
+
+.linea-txt { left: 16mm; right: 16mm; top: 26mm; width: auto; }
+.linea-pre { font-size: 22pt; }
+.linea h2 { font-size: 36pt; }
+.linea-foto { left: 16mm; right: 16mm; top: 100mm; bottom: 26mm; width: auto; }
+.linea-foto .trio { height: 104mm; max-width: 52mm; }
+.linea-foto .trio:nth-child(2) { height: 118mm; max-width: 58mm; }
+
+.prod-foto { left: 14mm; right: 14mm; top: 12mm; bottom: auto; height: 112mm; width: auto; }
+.prod-info { left: 18mm; right: 18mm; top: 130mm; bottom: 24mm; justify-content: flex-start; }
+.sellos { margin-bottom: 4mm; gap: 3mm; }
+.sello { width: 20mm; height: 20mm; }
+.prod h3, .ficha h3 { font-size: 22pt; }
+.regla { margin: 3.5mm 0; }
+.ideal { font-size: 11.5pt; }
+.precio { font-size: 21pt; }
+
+.ficha-foto { left: 18mm; right: 18mm; top: 12mm; bottom: auto; height: 74mm; width: auto; }
+.ficha-txt { left: 18mm; right: 18mm; top: 92mm; bottom: 22mm; width: auto; justify-content: flex-start; }
+.ficha-txt p { font-size: 11pt; line-height: 1.38; }
+.caja-uso { font-size: 12pt; margin: 3mm 0 2.5mm; }
+
+.lista h2 { left: 14mm; top: 12mm; font-size: 18pt; }
+.lp-cols { left: 14mm; right: 14mm; top: 26mm; bottom: 12mm; gap: 7mm; }
+.lp-fila { font-size: 8.6pt; }
+
+.cierre-logo { max-height: 34mm; max-width: 120mm; }
+.cierre-cond { max-width: 160mm; font-size: 12pt; }
+.cierre .eslogan { font-size: 16pt; }
+`;
+
 /**
  * Arma el HTML del catálogo. `datos` es la respuesta de GET /products/catalog-pdf.
  * opciones: { titulo, condiciones, descuento (% para los que no tienen precio al mayor),
@@ -435,7 +485,7 @@ export function armarCatalogoHtml(datos, opciones) {
 
     return `<!doctype html><html lang="es"><head><meta charset="utf-8">
 <title>${esc(opciones.titulo || "Catálogo")} - ${esc(store.name || "")}</title>
-<style>${CSS}</style></head><body>${paginas.join("")}</body></html>`;
+<style>${CSS}${opciones.vertical ? CSS_VERTICAL : ""}</style></head><body>${paginas.join("")}</body></html>`;
 }
 
 // Cuántas páginas va a salir, para decirlo antes de imprimir.
@@ -445,10 +495,13 @@ export function contarPaginas(datos, opciones) {
 }
 
 export function imprimirCatalogo(datos, opciones) {
-    // 1123 x 794 es la hoja A4 apaisada a 96 dpi: el lienzo donde se calcula el layout.
+    // 1123 x 794 es la hoja A4 apaisada a 96 dpi: el lienzo donde se calcula el layout. En el
+    // iPhone y el iPad va la versión vertical (200 x 250 mm = 756 x 945), ver CSS_VERTICAL.
     // En el teléfono, pestaña aparte (ver abrirParaGuardar). Devuelve cómo se abrió.
-    const html = armarCatalogoHtml(datos, opciones);
-    if (esPantallaTactil() && abrirParaGuardar(html, { ancho: 1123 })) return "pestaña";
-    printHtml(html, { width: 1123, height: 794 });
+    const vertical = esWebKitTactil();
+    const html = armarCatalogoHtml(datos, { ...opciones, vertical });
+    const [ancho, alto] = vertical ? [756, 945] : [1123, 794];
+    if (esPantallaTactil() && abrirParaGuardar(html, { ancho })) return "pestaña";
+    printHtml(html, { width: ancho, height: alto });
     return "dialogo";
 }
