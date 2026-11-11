@@ -100,6 +100,7 @@ module.exports = {
       visibles: await visibleWarehouseIds(req),
       category_ids: req.query.category_ids,
       solo_publicados: req.query.solo_publicados,
+      formato: req.query.formato,
     });
   }),
   getOne:  wrap(async req => {

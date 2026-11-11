@@ -1,4 +1,4 @@
-import { printHtml } from "./printDocument";
+import { printHtml, esPantallaTactil, abrirParaGuardar } from "./printDocument";
 import { resolveImageUrl } from "./image";
 
 // Catálogo de productos en PDF para mayoristas (10-11-2026).
@@ -47,7 +47,7 @@ const legibleSobre = (rgb, fondo, minimo) => {
 };
 
 // Los cinco tonos de una línea a partir de su color.
-function tema(hex, i = 0) {
+export function tema(hex, i = 0) {
     const base = hexARgb(hex) || hexARgb(PALETA[i % PALETA.length]);
     const blanco = [255, 255, 255];
     const fondo = mezclar(base, blanco, 0.80);
@@ -63,10 +63,10 @@ function tema(hex, i = 0) {
 }
 
 // ── Texto ─────────────────────────────────────────────────────────────────────────────
-const esc = (s) => String(s ?? "")
+export const esc = (s) => String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const parrafos = (s) => String(s || "").split(/\n\s*\n|\r\n\s*\r\n/).map(p => p.trim()).filter(Boolean);
-const conSaltos = (s) => esc(s).replace(/\r?\n/g, "<br>");
+export const conSaltos = (s) => esc(s).replace(/\r?\n/g, "<br>");
 
 // La descripción es un solo campo de texto. Lo que la tienda escribe como "Ideal para: …",
 // "Ingredientes: …" o "Modo de uso: …" se separa en su recuadro; el resto es la descripción.
@@ -109,8 +109,8 @@ export function partirDescripcion(texto) {
     return out;
 }
 
-const precioTxt = (n, simbolo) => `${simbolo} ${(Math.round(Number(n) * 100) / 100).toFixed(2)}`;
-const absoluta = (url) => {
+export const precioTxt = (n, simbolo) => `${simbolo} ${(Math.round(Number(n) * 100) / 100).toFixed(2)}`;
+export const absoluta = (url) => {
     const r = resolveImageUrl(url);
     if (!r) return null;
     try { return new URL(r, window.location.href).href; } catch { return r; }
@@ -446,5 +446,9 @@ export function contarPaginas(datos, opciones) {
 
 export function imprimirCatalogo(datos, opciones) {
     // 1123 x 794 es la hoja A4 apaisada a 96 dpi: el lienzo donde se calcula el layout.
-    printHtml(armarCatalogoHtml(datos, opciones), { width: 1123, height: 794 });
+    // En el teléfono, pestaña aparte (ver abrirParaGuardar). Devuelve cómo se abrió.
+    const html = armarCatalogoHtml(datos, opciones);
+    if (esPantallaTactil() && abrirParaGuardar(html, { ancho: 1123 })) return "pestaña";
+    printHtml(html, { width: 1123, height: 794 });
+    return "dialogo";
 }

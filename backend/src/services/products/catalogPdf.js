@@ -26,14 +26,20 @@ const AJUSTES = [
   "catalog_whatsapp", "catalog_instagram", "brand_color", "catalog_brand_color",
 ];
 
-const TOPE = 400;
+// El catálogo con fotos lleva dos páginas por producto: más de 400 sería un PDF inmanejable.
+// La lista de precios es una fila por producto, y una tienda de repuestos pasa de 3.000.
+const TOPE = { catalogo: 400, lista: 6000 };
 
 function listaIds(valor) {
   const crudo = Array.isArray(valor) ? valor : String(valor || "").split(",");
   return crudo.map(n => parseInt(n, 10)).filter(Number.isInteger);
 }
 
-async function datosCatalogo({ company_id, visibles = null, category_ids, solo_publicados }) {
+async function datosCatalogo({ company_id, visibles = null, category_ids, solo_publicados, formato }) {
+  // "lista": lista de precios densa (repuestos, bodegas, vendedores). No lleva descripción,
+  // sellos ni foto adicional, así que no se piden: con miles de filas pesarían de más.
+  const esLista = formato === "lista";
+  const tope = esLista ? TOPE.lista : TOPE.catalogo;
   if (!company_id) {
     const e = new Error("Elige una empresa para generar el catálogo"); e.status = 400; e.isOperational = true; throw e;
   }
@@ -53,7 +59,8 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
   const [ajustes, productos] = await Promise.all([
     q(`SELECT key, value FROM settings WHERE company_id = :cid AND key IN (:keys)`, { cid: company_id, keys: AJUSTES }),
     q(`
-      SELECT p.id, p.name, p.brand, p.short_description, p.description, p.net_content, p.visible_in_catalog,
+      SELECT p.id, p.name, p.brand, p.short_description, ${esLista ? "NULL AS description" : "p.description"}, p.net_content, p.visible_in_catalog,
+             p.barcode, p.unit,
              p.price::float AS price, p.wholesale_price::float AS wholesale_price,
              p.image_filename, p.category_id,
              c.name AS category_name, c.color AS category_color,
@@ -62,15 +69,15 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
         LEFT JOIN categories c ON c.id = p.category_id
        WHERE ${filtros.join(" AND ")}
        ORDER BY c.name NULLS LAST, p.name
-       LIMIT ${TOPE + 1}`,
+       LIMIT ${tope + 1}`,
       { cid: company_id, cats: categorias.length ? categorias : [0] }),
   ]);
 
-  const truncado = productos.length > TOPE;
-  if (truncado) productos.length = TOPE;
+  const truncado = productos.length > tope;
+  if (truncado) productos.length = tope;
   const ids = productos.map(p => p.id);
 
-  const [sellos, fotos] = ids.length ? await Promise.all([
+  const [sellos, fotos] = ids.length && !esLista ? await Promise.all([
     q(`SELECT pbt.product_id, bt.name
          FROM product_benefit_tags pbt
          JOIN catalog_benefit_tags bt ON bt.id = pbt.benefit_tag_id
@@ -125,6 +132,8 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
       tagline: p.short_description || null,
       description: p.description || null,
       net_content: p.net_content || null,
+      barcode: p.barcode || null,
+      unit: p.unit || null,
       price: p.price,
       wholesale_price: p.wholesale_price,
       category_id: p.category_id,
@@ -134,7 +143,7 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
       benefits: sellosDe.get(p.id) || [],
     })),
     truncated: truncado,
-    limit: TOPE,
+    limit: tope,
   };
 }
 

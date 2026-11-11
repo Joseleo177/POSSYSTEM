@@ -157,3 +157,53 @@ export function printHtml(html, { width = 816, height = 1056 } = {}) {
     if (esWebKitTactil()) imprimirEnLaPagina(html);
     else imprimirEnIframe(html, { width, height });
 }
+
+// ── Documentos largos en el teléfono: pestaña aparte ────────────────────────────────
+// El catálogo PDF (decenas de páginas con fotos) no salía en el teléfono (11-11-2026): Chrome de
+// Android no imprime desde un iframe, y en iOS el camino de la página propia tiene que esperar
+// cientos de fotos. En una pantalla táctil el documento se abre en su propia pestaña, con una
+// barra que dice cómo guardarlo; desde ahí el diálogo del navegador sí ofrece guardar el PDF.
+export const esPantallaTactil = () =>
+    typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches;
+
+/**
+ * Abre el documento en otra pestaña. Hay que llamarla en el mismo clic del usuario: si no, el
+ * navegador la toma por una ventana emergente y la bloquea. Devuelve false si no se pudo abrir.
+ * `ancho`: ancho de la hoja en px, para que el teléfono la muestre entera.
+ */
+export function abrirParaGuardar(html, { ancho = 1123 } = {}) {
+    const ios = esWebKitTactil();
+    const ayuda = ios
+        ? "Toca «Guardar PDF» y, en la vista previa, el botón Compartir → Guardar en Archivos."
+        : "Toca «Guardar PDF» y elige «Guardar como PDF» como impresora.";
+    const barra = `
+<style>
+  @media screen {
+    /* Chrome del teléfono agranda el texto de las páginas anchas por su cuenta y la tabla se
+       salía de la pantalla. La lista, además, no tiene hojas de ancho fijo: se le da el suyo. */
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body { padding-top: 64px !important; }
+    html:not(:has(section.pg)) body { max-width: ${ancho}px; margin: 0 auto !important; padding-left: 14px !important; padding-right: 14px !important; }
+    html:has(section.pg) body { background: #e9e9ee !important; }
+    .barra-guardar { position: fixed; top: 0; left: 0; right: 0; z-index: 99; display: flex; align-items: center; gap: 12px;
+      padding: 10px 14px; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.15); font: 15px/1.3 -apple-system, 'Segoe UI', sans-serif; color: #333; }
+    .barra-guardar span { flex: 1; min-width: 0; font-size: 13px; color: #666; }
+    .barra-guardar button { flex: none; height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: #111; color: #fff; font: 600 15px -apple-system, 'Segoe UI', sans-serif; }
+    section.pg { margin: 0 auto 14px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
+  }
+  @media print { .barra-guardar { display: none !important; } }
+</style>
+<div class="barra-guardar"><span>${ayuda}</span><button type="button" onclick="window.print()">Guardar PDF</button></div>`;
+    // Ancho de la hoja más un margen, y la escala inicial explícita: sin ella el teléfono abría
+    // la lista acercada y la tabla quedaba cortada a la derecha.
+    const w = ancho + 40;
+    const escala = Math.min(1, (window.screen?.width || 400) / w).toFixed(4);
+    const doc = html
+        .replace(/<head>/i, `<head><meta name="viewport" content="width=${w}, initial-scale=${escala}">`)
+        .replace(/<body([^>]*)>/i, `<body$1>${barra}`);
+    const url = URL.createObjectURL(new Blob([doc], { type: "text/html" }));
+    const win = window.open(url, "_blank");
+    // Se libera tarde: si el usuario recarga la pestaña, la dirección tiene que seguir viva.
+    setTimeout(() => URL.revokeObjectURL(url), 10 * 60 * 1000);
+    return !!win;
+}
