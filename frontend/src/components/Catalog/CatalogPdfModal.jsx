@@ -1,12 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Modal from "../ui/Modal";
 import Check from "../ui/Check";
 import Segmented from "../ui/Segmented";
 import { Spinner } from "../ui/Spinner";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
-import { armarCatalogoHtml, contarPaginas, imprimirCatalogo } from "../../helpers/catalogPdf";
-import { catalogoAPdf, listaAPdf, nombreArchivo, descargar, sePuedeCompartir, compartir } from "../../helpers/pdfDirecto";
+import { contarPaginas, imprimirCatalogo } from "../../helpers/catalogPdf";
 import { imprimirLista, paginasLista } from "../../helpers/priceListPdf";
 import { monedaLocal } from "../../helpers/currency";
 
@@ -148,125 +147,35 @@ export default function CatalogPdfModal({ open, onClose }) {
         fecha: new Date().toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" }),
     });
 
-    // Descarga directa (11-11-2026): el PDF se arma aquí mismo y se entrega con Descargar o
-    // Compartir. Es el camino principal porque en el teléfono el diálogo de impresión no servía
-    // para cualquier usuario. `trabajo`: null | { fase, hecho, total } | { listo, blob, nombre }.
-    const [trabajo, setTrabajo] = useState(null);
-    const parar = useRef(false);
-    useEffect(() => { if (!open) { parar.current = true; setTrabajo(null); } }, [open]);
-
-    const descargarDirecto = async () => {
-        if (!cuantos || trabajo) return;
-        guardarPrefs();
-        parar.current = false;
-        setTrabajo({ fase: "fotos", hecho: 0, total: 0 });
-        try {
-            const avance = (a) => setTrabajo(t => (t && !t.listo ? a : t));
-            const blob = esLista
-                ? await listaAPdf(elegidos, opcionesLista(), { alAvanzar: avance })
-                : await catalogoAPdf(armarCatalogoHtml(elegidos, opciones), {
-                    logoUrl: elegidos.store?.logo_url, alAvanzar: avance, debeParar: () => parar.current });
-            if (!blob || parar.current) { setTrabajo(null); return; }
-            const nombre = nombreArchivo(esLista ? opcionesLista().titulo : opciones.titulo, elegidos.store?.name);
-            setTrabajo({ listo: true, blob, nombre });
-            // En la computadora y en Android baja solo. En el iPhone la descarga tiene que salir
-            // de un toque, así que ahí se espera al botón.
-            if (!/iPad|iPhone|iPod/.test(navigator.userAgent) && !(navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)) {
-                descargar(blob, nombre);
-            }
-        } catch (e) {
-            setTrabajo(null);
-            notify(e?.message ? `No se pudo armar el PDF: ${e.message}` : "No se pudo armar el PDF", "err");
-        }
-    };
-
-    // Imprimir queda como alternativa en la computadora: texto real y un archivo más liviano.
-    const imprimir = () => {
+    // En la computadora abre el diálogo de impresión; en el teléfono, una pestaña con el botón
+    // "Guardar PDF" (ver abrirParaGuardar). Se probó armar el PDF dentro de la app con descarga
+    // directa (11-11-2026) y el usuario prefirió volver a esto: en el teléfono el archivo igual
+    // se abría como blob: y era más lento.
+    const generar = () => {
         if (!cuantos) return;
         guardarPrefs();
-        if (esLista) imprimirLista(elegidos, opcionesLista());
-        else imprimirCatalogo(elegidos, opciones);
-        notify("En el diálogo de impresión elige «Guardar como PDF»");
+        const como = esLista ? imprimirLista(elegidos, opcionesLista()) : imprimirCatalogo(elegidos, opciones);
+        notify(como === "pestaña"
+            ? "Se abrió en otra pestaña: toca «Guardar PDF» arriba"
+            : "En el diálogo de impresión elige «Guardar como PDF»");
     };
 
-    const listo = trabajo?.listo;
-    const mb = listo ? (trabajo.blob.size / 1024 / 1024) : 0;
-    const puedeCompartir = listo && sePuedeCompartir(trabajo.blob, trabajo.nombre);
-
-    const pie = listo ? (
-        <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={() => setTrabajo(null)} className="btn-outline h-12 sm:h-11 px-5 rounded-lg text-[13px] font-medium">
-                Volver
-            </button>
-            {puedeCompartir && (
-                <button onClick={() => compartir(trabajo.blob, trabajo.nombre).catch(() => {})}
-                    className="btn-outline sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold flex items-center justify-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v12m0-12l-4 4m4-4l4 4M5 13v6a2 2 0 002 2h10a2 2 0 002-2v-6" /></svg>
-                    Compartir
-                </button>
-            )}
-            <button onClick={() => descargar(trabajo.blob, trabajo.nombre)}
-                className="btn-accent sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold active:scale-[0.99] flex items-center justify-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" /></svg>
-                Descargar PDF
-            </button>
-        </div>
-    ) : trabajo ? (
-        <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={() => { parar.current = true; setTrabajo(null); }} className="btn-outline h-12 sm:h-11 px-5 rounded-lg text-[13px] font-medium">
-                Detener
-            </button>
-        </div>
-    ) : (
+    const pie = (
         <div className="flex flex-col sm:flex-row gap-2">
             <button onClick={onClose} className="btn-outline h-12 sm:h-11 px-5 rounded-lg text-[13px] font-medium">
                 Cancelar
             </button>
             {cuantos > 0 && (
-                <button onClick={imprimir} className="hidden lg:inline-flex btn-outline h-11 px-5 rounded-lg text-[13px] font-medium items-center justify-center">
-                    Imprimir
-                </button>
-            )}
-            {cuantos > 0 && (
-                <button onClick={descargarDirecto}
+                <button onClick={generar}
                     className="btn-accent sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold active:scale-[0.99] flex items-center justify-center gap-2 tabular-nums">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v12m0 0l-4-4m4 4l4-4M5 20h14" /></svg>
-                    Descargar PDF de {cuantos} {cuantos === 1 ? "producto" : "productos"}
+                    Generar PDF de {cuantos} {cuantos === 1 ? "producto" : "productos"}
                 </button>
             )}
         </div>
     );
 
     return (
-        <Modal open={open} onClose={trabajo && !listo ? () => {} : onClose} title="Catálogo PDF" width={720} footer={pie}>
-            {trabajo ? (
-                listo ? (
-                    <div className="py-10 flex flex-col items-center text-center gap-2">
-                        <span className="w-12 h-12 rounded-full bg-success/10 text-success flex items-center justify-center">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M5 13l4 4L19 7" /></svg>
-                        </span>
-                        <p className="text-[15px] font-semibold text-content dark:text-white">Tu PDF está listo</p>
-                        <p className="text-[12px] text-content-subtle break-all max-w-sm">{trabajo.nombre} · {mb < 1 ? `${Math.max(1, Math.round(mb * 1024))} KB` : `${mb.toFixed(1)} MB`}</p>
-                        <p className="text-[12px] text-content-subtle max-w-sm mt-1">
-                            {puedeCompartir ? "Descárgalo o mándalo directo por WhatsApp con Compartir." : "Si no bajó solo, toca «Descargar PDF»."}
-                        </p>
-                    </div>
-                ) : (
-                    <div className="py-12 flex flex-col items-center text-center gap-3">
-                        <Spinner />
-                        <p className="text-[14px] font-semibold text-content dark:text-white">
-                            {trabajo.fase === "paginas" ? `Armando página ${trabajo.hecho} de ${trabajo.total}` : "Preparando las fotos…"}
-                        </p>
-                        <div className="w-full max-w-sm h-2 rounded-full bg-surface-3 dark:bg-white/[0.08] overflow-hidden">
-                            <div className="h-full bg-brand-600 dark:bg-brand-500 transition-[width] duration-300"
-                                style={{ width: `${trabajo.total ? Math.round((trabajo.hecho / trabajo.total) * 100) : 4}%` }} />
-                        </div>
-                        <p className="text-[12px] text-content-subtle max-w-sm">
-                            {esLista ? "Un momento." : "Con muchos productos tarda uno o dos minutos."} No cierres esta ventana.
-                        </p>
-                    </div>
-                )
-            ) : (<>
+        <Modal open={open} onClose={onClose} title="Catálogo PDF" width={720} footer={pie}>
             <div className="mb-5">
                 <Segmented value={formato} onChange={setFormato}
                     className="w-full [&>button]:flex-1 [&>button]:justify-center"
@@ -420,7 +329,7 @@ export default function CatalogPdfModal({ open, onClose }) {
                     </aside>
                 </div>
             )}
-            </>)}
+
         </Modal>
     );
 }
