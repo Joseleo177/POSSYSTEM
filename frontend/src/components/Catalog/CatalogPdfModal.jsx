@@ -185,9 +185,22 @@ export default function CatalogPdfModal({ open, onClose }) {
             if (!blob || parar.current) { setTrabajo(null); return; }
             const nombre = nombreArchivo(esLista ? opcionesLista().titulo : opciones.titulo, elegidos.store?.name);
             setTrabajo({ listo: true, blob, nombre });
+            try { sessionStorage.removeItem("nxus_recarga_pdf"); } catch { /* modo privado */ }
             if (!esIOS) descargar(blob, nombre);
         } catch (e) {
             setTrabajo(null);
+            // Tras un despliegue, la app abierta (o la instalada, que viene de la caché) pide las
+            // librerías del PDF por su nombre viejo, que ya no existe en Vercel. Mismo arreglo que
+            // App.jsx con las pantallas: recargar UNA vez para traer la versión nueva. Lo elegido
+            // en el diálogo ya quedó guardado (guardarPrefs) y vuelve al abrirlo.
+            const versionVieja = /dynamically imported module|Importing a module script failed|error loading dynamically/i.test(e?.message || "");
+            let yaRecargo = true;
+            try { yaRecargo = !!sessionStorage.getItem("nxus_recarga_pdf"); sessionStorage.setItem("nxus_recarga_pdf", "1"); } catch { /* modo privado */ }
+            if (versionVieja && !yaRecargo) {
+                notify("Hay una versión nueva de la app: se recarga sola. Luego vuelve a tocar Descargar.");
+                setTimeout(() => window.location.reload(), 1800);
+                return;
+            }
             notify(e?.message ? `No se pudo armar el PDF: ${e.message}` : "No se pudo armar el PDF", "err");
         }
     };
