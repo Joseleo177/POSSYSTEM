@@ -28,7 +28,18 @@ const fmtRegistrado = (p) => fmtDateShort(p.created_at).slice(0, 5);
 
 // Cobro casado con una línea del extracto del banco (Conciliación). Es la confirmación de que
 // el dinero llegó: lo normal, así que va en gris con su visto.
-const VERIFIED = { ok: { label: "Conciliado", tone: "success", quiet: "check" } };
+// Cobro conjunto: el servidor manda todas las facturas unidas con " · ". Con 21 facturas la
+// referencia ocupaba tres renglones y aplastaba cliente y diario. En la lista va la primera y
+// cuántas más; el detalle del cobro las lista todas con lo aplicado a cada una.
+const refDeFila = (item, isInvoice) => {
+    if (item.group_count > 1 && item.invoice_number) {
+        const [primera] = item.invoice_number.split(" · ");
+        return `${primera} y ${item.group_count - 1} más`;
+    }
+    return item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`);
+};
+
+const VERIFIED = { ok:{ label: "Conciliado", tone: "success", quiet: "check" } };
 
 export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayment, setReceiptSale, journals = [] }) {
     // Avance de efectivo que pasó por el punto con el cobro. Lo cobrado (avance + comisión) va en
@@ -255,8 +266,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 return (
                                     <tr key={`${viewType}-${item.id}`} {...row}>
                                         <td className="pl-4">
-                                            <span className="text-[13px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums">
-                                                {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
+                                            <span title={item.group_count > 1 ? item.invoice_number : undefined} className="text-[13px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums whitespace-nowrap">
+                                                {refDeFila(item, isInvoice)}
                                             </span>
                                             {/* Un solo movimiento de dinero que saldó varias facturas: la
                                                 fila es el movimiento, no cada factura. */}
@@ -402,8 +413,8 @@ export default function PagosTab({ notify, can, baseCurrency, fmtPrice, fmtPayme
                                 className="relative rounded-xl border border-border/70 dark:border-white/[0.06] bg-white dark:bg-white/[0.02] pl-3.5 pr-2.5 py-3 overflow-hidden active:scale-[0.99] transition-transform">
                                 {tone && <span aria-hidden="true" className="absolute left-0 inset-y-0 w-[3px]" style={{ backgroundColor: tone }} />}
                                 <div className="flex items-start justify-between gap-3 pr-1">
-                                    <span className="min-w-0 text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums break-words">
-                                        {item.invoice_number || (isInvoice ? `Factura #${item.id}` : `Cobro #${item.id}`)}
+                                    <span className="min-w-0 text-[14px] font-semibold text-brand-700 dark:text-brand-300 tabular-nums truncate">
+                                        {refDeFila(item, isInvoice)}
                                     </span>
                                     <Money value={isInvoice ? fmtPrice(item.total) : (item.cash_advance ? fmtPaso(item) : fmtPayment(item))} className="shrink-0 text-[15px] font-semibold text-content dark:text-white" />
                                 </div>
