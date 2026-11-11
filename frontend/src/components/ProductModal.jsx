@@ -1136,14 +1136,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                                         onChange={e => set("wholesale_price", e.target.value.replace(/[^0-9.]/g, ""))}
                                                         type="text" inputMode="decimal" className="input !pl-6 tabular-nums" placeholder="0.00" />
                                                 </div>
-                                                <p className={`mt-1 text-[12px] leading-snug ${ganancia != null && ganancia < 0 ? "text-danger" : "text-content-subtle"}`}>
-                                                    {mayor > 0
-                                                        ? [
+                                                {/* Vacío no lleva pie: el usuario no quiso un texto explicando
+                                                    dónde se usa. Solo la cuenta, cuando hay precio. */}
+                                                {mayor > 0 && (
+                                                    <p className={`mt-1 text-[12px] leading-snug ${ganancia != null && ganancia < 0 ? "text-danger" : "text-content-subtle"}`}>
+                                                        {[
                                                             rebaja != null && (rebaja >= 0 ? `${rebaja.toFixed(1)} % menos que el detal` : `${Math.abs(rebaja).toFixed(1)} % más que el detal`),
                                                             ganancia != null && (ganancia < 0 ? "por debajo del costo" : `deja ${ganancia.toFixed(1)} %`),
-                                                          ].filter(Boolean).join(" · ")
-                                                        : "Sale en el catálogo PDF para mayoristas."}
-                                                </p>
+                                                        ].filter(Boolean).join(" · ")}
+                                                    </p>
+                                                )}
                                             </div>
                                         );
                                     })()}

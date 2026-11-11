@@ -173,31 +173,66 @@ export const esPantallaTactil = () =>
  */
 export function abrirParaGuardar(html, { ancho = 1123 } = {}) {
     const ios = esWebKitTactil();
+    // Ancho de la hoja más un margen, y la escala inicial explícita: sin ella el teléfono abría
+    // la lista acercada y la tabla quedaba cortada a la derecha.
+    const w = ancho + 40;
+    const escala = Math.min(1, (window.screen?.width || 400) / w).toFixed(4);
+    // La página se ve alejada para que entre la hoja entera; la barra y la ayuda se agrandan en
+    // la misma proporción para leerse a tamaño normal.
+    const k = (1 / escala).toFixed(3);
     const ayuda = ios
-        ? "Toca «Guardar PDF» y, en la vista previa, el botón Compartir → Guardar en Archivos."
+        ? "Toca «Guardar PDF» y, en la vista previa, Compartir → Guardar en Archivos."
         : "Toca «Guardar PDF» y elige «Guardar como PDF» como impresora.";
+    // Plan B (11-11-2026): en el iPhone, Brave —y a veces Chrome— ignoran window.print() y el
+    // botón no hacía nada. Si en un momento no se abrió la impresión (no llegó `beforeprint`),
+    // se muestran los pasos por el menú Compartir del navegador, que sí imprime en todos.
+    const pasos = ios
+        ? `<li>Toca <b>Compartir</b> (el cuadro con la flecha hacia arriba). En Brave está en el menú <b>···</b>.</li>
+           <li>Elige <b>Imprimir</b>.</li>
+           <li>En la vista previa toca <b>Compartir</b> otra vez y luego <b>Guardar en Archivos</b>.</li>`
+        : `<li>Abre el menú del navegador (<b>⋮</b>) y toca <b>Compartir</b> → <b>Imprimir</b>.</li>
+           <li>Como impresora elige <b>Guardar como PDF</b> y toca descargar.</li>`;
     const barra = `
 <style>
   @media screen {
     /* Chrome del teléfono agranda el texto de las páginas anchas por su cuenta y la tabla se
        salía de la pantalla. La lista, además, no tiene hojas de ancho fijo: se le da el suyo. */
     html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
-    body { padding-top: 64px !important; }
+    body { padding-top: calc(64px * ${k}) !important; }
     html:not(:has(section.pg)) body { max-width: ${ancho}px; margin: 0 auto !important; padding-left: 14px !important; padding-right: 14px !important; }
     html:has(section.pg) body { background: #e9e9ee !important; }
+    .barra-guardar, .ayuda-guardar { zoom: ${k}; font-family: -apple-system, 'Segoe UI', sans-serif; }
     .barra-guardar { position: fixed; top: 0; left: 0; right: 0; z-index: 99; display: flex; align-items: center; gap: 12px;
-      padding: 10px 14px; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.15); font: 15px/1.3 -apple-system, 'Segoe UI', sans-serif; color: #333; }
+      padding: 10px 14px; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.15); font-size: 15px; line-height: 1.3; color: #333; }
     .barra-guardar span { flex: 1; min-width: 0; font-size: 13px; color: #666; }
     .barra-guardar button { flex: none; height: 44px; padding: 0 20px; border: 0; border-radius: 10px; background: #111; color: #fff; font: 600 15px -apple-system, 'Segoe UI', sans-serif; }
+    .ayuda-guardar { display: none; position: fixed; top: 72px; left: 10px; right: 10px; z-index: 100; background: #fff; border-radius: 14px;
+      box-shadow: 0 8px 30px rgba(0,0,0,.25); padding: 16px 18px; font-size: 15px; line-height: 1.45; color: #222; }
+    .ayuda-guardar p { margin: 0 0 8px; font-weight: 600; }
+    .ayuda-guardar ol { margin: 0 0 12px; padding-left: 20px; }
+    .ayuda-guardar li { margin-bottom: 6px; }
+    .ayuda-guardar button { height: 40px; padding: 0 16px; border: 1px solid #ccc; border-radius: 10px; background: #fff; font: 600 14px -apple-system, 'Segoe UI', sans-serif; color: #222; }
     section.pg { margin: 0 auto 14px; box-shadow: 0 2px 10px rgba(0,0,0,.12); }
   }
-  @media print { .barra-guardar { display: none !important; } }
+  @media print { .barra-guardar, .ayuda-guardar { display: none !important; } }
 </style>
-<div class="barra-guardar"><span>${ayuda}</span><button type="button" onclick="window.print()">Guardar PDF</button></div>`;
-    // Ancho de la hoja más un margen, y la escala inicial explícita: sin ella el teléfono abría
-    // la lista acercada y la tabla quedaba cortada a la derecha.
-    const w = ancho + 40;
-    const escala = Math.min(1, (window.screen?.width || 400) / w).toFixed(4);
+<div class="barra-guardar"><span>${ayuda}</span><button type="button" onclick="guardarPdf()">Guardar PDF</button></div>
+<div class="ayuda-guardar" id="ayuda-guardar">
+  <p>Este navegador no abrió la impresión. Hazlo desde su menú:</p>
+  <ol>${pasos}</ol>
+  <button type="button" onclick="document.getElementById('ayuda-guardar').style.display='none'">Entendido</button>
+</div>
+<script>
+  (function () {
+    var abierto = false;
+    window.addEventListener("beforeprint", function () { abierto = true; });
+    window.guardarPdf = function () {
+      abierto = false;
+      try { window.print(); } catch (e) {}
+      setTimeout(function () { if (!abierto) document.getElementById("ayuda-guardar").style.display = "block"; }, 1500);
+    };
+  })();
+</script>`;
     const doc = html
         .replace(/<head>/i, `<head><meta name="viewport" content="width=${w}, initial-scale=${escala}">`)
         .replace(/<body([^>]*)>/i, `<body$1>${barra}`);
