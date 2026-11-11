@@ -180,16 +180,29 @@ export function abrirParaGuardar(html, { ancho = 1123 } = {}) {
     // La página se ve alejada para que entre la hoja entera; la barra y la ayuda se agrandan en
     // la misma proporción para leerse a tamaño normal.
     const k = (1 / escala).toFixed(3);
+    // Safari del iPhone ignora el tamaño de hoja del documento y abre en vertical: el catálogo
+    // apaisado quedaba chiquito arriba de cada hoja. Hay que decirle al usuario que gire la hoja.
+    const horizontal = ancho > 1000;
+    const girar = horizontal ? " En Orientación elige la hoja <b>horizontal</b>." : "";
     const ayuda = ios
-        ? "Toca «Guardar PDF» y, en la vista previa, Compartir → Guardar en Archivos."
+        ? (horizontal
+            ? "Toca «Guardar PDF», pon la orientación horizontal y luego Compartir → Guardar en Archivos."
+            : "Toca «Guardar PDF» y, en la vista previa, Compartir → Guardar en Archivos.")
         : "Toca «Guardar PDF» y elige «Guardar como PDF» como impresora.";
     // Plan B (11-11-2026): en el iPhone, Brave —y a veces Chrome— ignoran window.print() y el
     // botón no hacía nada. Si en un momento no se abrió la impresión (no llegó `beforeprint`),
     // se muestran los pasos por el menú Compartir del navegador, que sí imprime en todos.
-    const pasos = ios
+    // Con la app instalada en la pantalla de inicio, el iPhone abre la pestaña en un visor propio
+    // que no imprime (probado 11-11-2026). Ahí no sirven los pasos: hay que ir a Safari.
+    const appInstalada = ios && window.navigator.standalone === true;
+    const pasos = appInstalada
+        ? `<li>Cierra esto con la <b>X</b> de arriba.</li>
+           <li>Abre <b>Safari</b> y entra a la app desde ahí, no desde su ícono.</li>
+           <li>Genera el PDF de nuevo: en Safari el botón «Guardar PDF» sí funciona.</li>`
+        : ios
         ? `<li>Toca <b>Compartir</b> (el cuadro con la flecha hacia arriba). En Brave está en el menú <b>···</b>.</li>
            <li>Elige <b>Imprimir</b>.</li>
-           <li>En la vista previa toca <b>Compartir</b> otra vez y luego <b>Guardar en Archivos</b>.</li>`
+           <li>${girar} En la vista previa toca <b>Compartir</b> otra vez y luego <b>Guardar en Archivos</b>.</li>`
         : `<li>Abre el menú del navegador (<b>⋮</b>) y toca <b>Compartir</b> → <b>Imprimir</b>.</li>
            <li>Como impresora elige <b>Guardar como PDF</b> y toca descargar.</li>`;
     const barra = `
@@ -218,7 +231,7 @@ export function abrirParaGuardar(html, { ancho = 1123 } = {}) {
 </style>
 <div class="barra-guardar"><span>${ayuda}</span><button type="button" onclick="guardarPdf()">Guardar PDF</button></div>
 <div class="ayuda-guardar" id="ayuda-guardar">
-  <p>Este navegador no abrió la impresión. Hazlo desde su menú:</p>
+  <p>${appInstalada ? "Desde la app instalada el iPhone no deja guardar el PDF." : "Este navegador no abrió la impresión. Hazlo desde su menú:"}</p>
   <ol>${pasos}</ol>
   <button type="button" onclick="document.getElementById('ayuda-guardar').style.display='none'">Entendido</button>
 </div>
