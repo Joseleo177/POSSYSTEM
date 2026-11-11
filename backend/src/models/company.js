@@ -42,6 +42,8 @@ module.exports = (sequelize, DataTypes) => {
     // Agenda de citas (barberías, consultorios, autolavados; ver services/agenda). Extra que
     // enciende el superusuario.
     citas_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Extra: catálogo PDF al mayor (ver migración 20261118110000-catalogo-pdf).
+    catalogo_pdf_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // La vitrina aparece en Google: entra al sitemap y su cabecera no lleva noindex. Encendido
     // por defecto (el catálogo ya es público); lo apaga el superusuario a quien no lo quiera.
     seo_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

@@ -85,6 +85,23 @@ module.exports = {
     return result;
   }),
   getAll:  wrap(listar),
+  // Catálogo PDF: quien no es admin solo ve los productos de sus sucursales.
+  // Es un extra por empresa (companies.catalogo_pdf_enabled): sin él no responde, aunque el
+  // rol tenga permiso para ver productos.
+  catalogPdf: wrap(async req => {
+    const { datosCatalogo } = require("../services/products/catalogPdf");
+    const { Company } = require("../models");
+    const empresa = req.employee?.company_id
+      ? await Company.findByPk(req.employee.company_id, { attributes: ["catalogo_pdf_enabled"] })
+      : null;
+    if (!empresa?.catalogo_pdf_enabled) throw prohibido("El catálogo PDF no está activado para esta empresa");
+    return datosCatalogo({
+      company_id: req.employee?.company_id ?? null,
+      visibles: await visibleWarehouseIds(req),
+      category_ids: req.query.category_ids,
+      solo_publicados: req.query.solo_publicados,
+    });
+  }),
   getOne:  wrap(async req => {
     const visibles = await assertProductAccess(req, req.params.id);
     return getOne(req.params.id, req.employee?.company_id ?? null, visibles);

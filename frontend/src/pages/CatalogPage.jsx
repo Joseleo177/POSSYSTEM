@@ -18,6 +18,7 @@ import ProductModal from "../components/ProductModal";
 import PublicLinkModal from "../components/Catalog/PublicLinkModal";
 import PriceLabelsView from "../components/Catalog/PriceLabelsView";
 import ImportProductsModal from "../components/Catalog/ImportProductsModal";
+import CatalogPdfModal from "../components/Catalog/CatalogPdfModal";
 import FilterPopover from "../components/ui/FilterPopover";
 import SucursalFilter, { useSucursalFilter } from "../components/ui/SucursalFilter";
 import { monedaLocal } from "../helpers/currency";
@@ -46,6 +47,7 @@ export default function CatalogPage() {
     const [productModal, setProductModal] = useState(false);
     const [publicLinkModal, setPublicLinkModal] = useState(false);
     const [importModal, setImportModal] = useState(false);
+    const [pdfModal, setPdfModal] = useState(false);
     // Vista lista/cuadrícula. Se recuerda entre sesiones: es una preferencia de trabajo,
     // no un filtro, y reiniciarla en cada carga resulta molesto.
     const [viewMode, setViewMode] = useState(() => localStorage.getItem("catalog_view") || "list");
@@ -234,6 +236,17 @@ export default function CatalogPage() {
                             title="Enlace de solo lectura para clientes">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13.828 10.172a4 4 0 010 5.656l-3 3a4 4 0 01-5.656-5.656l1.5-1.5m8.156-1.328l1.5-1.5a4 4 0 00-5.656-5.656l-3 3a4 4 0 000 5.656" /></svg>
                             <span className="hidden sm:inline">Compartir</span>
+                        </Button>
+                    )}
+                    {/* Catálogo PDF con precios al mayor: portada, una página por línea y dos
+                        por producto. Lo arma el navegador (helpers/catalogPdf.js). */}
+                    {/* Extra por empresa: lo enciende el superusuario en Empresas. */}
+                    {company?.catalogo_pdf_enabled && selectedProducts.length === 0 && (
+                        <Button onClick={() => setPdfModal(true)} variant="ghost"
+                            className="h-8 px-2 sm:px-3 text-[11px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-content"
+                            title="Catálogo en PDF con precios al mayor">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M14 3v5h5M9 13h6M9 17h4" /></svg>
+                            <span className="hidden sm:inline">Catálogo PDF</span>
                         </Button>
                     )}
                     {/* Importar crea y además pisa lo existente, así que pide las dos cosas,
@@ -536,6 +549,7 @@ export default function CatalogPage() {
                 notify={notify}
                 onDone={() => loadProducts(1, warehouseId)}
             />
+            {company?.catalogo_pdf_enabled && <CatalogPdfModal open={pdfModal} onClose={() => setPdfModal(false)} />}
 
             <ConfirmModal
                 isOpen={!!deleteProductDialog}

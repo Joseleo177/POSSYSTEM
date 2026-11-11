@@ -26,6 +26,8 @@ const EMPTY = {
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
+    // Precio al mayor (de la empresa, para el catálogo PDF) y contenido del envase ("450 ml").
+    wholesale_price: "", net_content: "",
     visible_in_catalog: false, sellable: true, has_variants: false, kitchen_prep: false,
     // Alícuota de IVA (solo en empresas con IVA): G 16 %, R 8 %, A lujo, E exento.
     iva_tipo: "G",
@@ -40,6 +42,8 @@ const EMPTY = {
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "", onPickExisting, onRegistered }) {
     const { notify, activeCurrencies, company, can } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
+    // Extra por empresa: precio al mayor y textos de ficha para el catálogo PDF.
+    const pdfEnabled = !!company?.catalogo_pdf_enabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
     const ivaEnabled = !!company?.iva_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
@@ -123,6 +127,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     short_description: editData.short_description || "",
                     description: editData.description || "",
                     benefit_tag_ids: editData.benefit_tag_ids || [],
+                    wholesale_price: editData.wholesale_price != null && editData.wholesale_price !== "" ? String(parseFloat(editData.wholesale_price)) : "",
+                    net_content: editData.net_content || "",
                     visible_in_catalog: editData.visible_in_catalog || false,
                     // Los productos creados antes de que existiera la marca vienen sin el
                     // campo: se asumen vendibles, que es como se comportaban.
@@ -373,7 +379,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             return notify("El precio de venta debe ser mayor a 0", "err");
         }
         if (form.cost_price !== "" && parseFloat(form.cost_price) < 0) return notify("El costo unitario no puede ser negativo", "err");
+        if (form.wholesale_price !== "" && !(parseFloat(form.wholesale_price) >= 0)) {
+            setTab("costos");
+            return notify("El precio al mayor tiene que ser un número", "err");
+        }
         const submissionForm = { ...form };
+        // Hay pantallas que abren la ficha con un producto a medias (una línea de compra). Si
+        // no traía estos campos, mandarlos vacíos borraría el precio al mayor sin que nadie lo
+        // tocara: el servidor conserva lo que no viene.
+        if (!pdfEnabled || (editData && !("wholesale_price" in editData))) delete submissionForm.wholesale_price;
+        if (!pdfEnabled || (editData && !("net_content" in editData))) delete submissionForm.net_content;
         if (form.has_variants) {
             // Sin abrir la pestaña no hay nada que mandar: el servidor deja las variantes como
             // están y solo les pasa lo que cambió en el modelo (nombre, precio, categoría).
@@ -754,11 +769,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         ["receta", "Receta"],
                         ["variantes", "Variantes"],
                         ["costos", "Costos"],
-                        // El extra del catálogo público lo enciende el superusuario por
-                        // empresa (ver CompanyModal): sin él, esta pestaña no tendría nada
-                        // que ofrecer — sus campos son marca, descripción y beneficios de
-                        // cara a una vitrina que esta empresa no tiene.
-                        ...(catalogEnabled ? [["vitrina", "Vitrina"]] : []),
+                        // Antes solo existía con el extra del catálogo público. Desde el
+                        // catálogo PDF (10-11-2026) sus textos también salen ahí, así que va
+                        // para todos; sin vitrina se llama "Ficha".
+                        ...((catalogEnabled || pdfEnabled) ? [["vitrina", catalogEnabled ? "Vitrina" : "Ficha"]] : []),
                     ].map(([id, label]) => (
                         <button
                             key={id}
@@ -944,8 +958,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                 {tab === "vitrina" && (
                     <div className="p-4 rounded-lg border border-border/40 dark:border-white/5 bg-surface-2 dark:bg-white/5 space-y-3 mt-1">
-                        {form.visible_in_catalog && form.sellable ? (
+                        {/* Sin el extra del catálogo PDF, estos textos son solo de la vitrina y se
+                            piden con el producto publicado. Con el extra también salen en el PDF,
+                            y un mayorista puede querer la ficha completa sin publicar el producto. */}
+                        {(pdfEnabled ? form.sellable : (form.visible_in_catalog && form.sellable)) ? (
                             <>
+                                {pdfEnabled && catalogEnabled && !form.visible_in_catalog && (
+                                    <p className="text-[12px] text-content-subtle leading-snug">
+                                        No está publicado en la vitrina. Estos textos igual salen en el catálogo PDF.
+                                    </p>
+                                )}
                                 {/* Varias fotos: los demás modelos de un producto que no usa
                                     variantes. Una variante suelta no tiene ficha propia en la
                                     vitrina, así que no las lleva. */}
@@ -963,15 +985,27 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         }}
                                     />
                                 )}
-                                <div>
-                                    <label className="label">Marca o línea</label>
-                                    <input
-                                        value={form.brand}
-                                        onChange={e => set("brand", e.target.value)}
-                                        className="input"
-                                        maxLength={80}
-                                        placeholder="Ej. Poción Kids"
-                                    />
+                                <div className={`grid grid-cols-1 gap-3 ${pdfEnabled ? "sm:grid-cols-[1fr_9rem]" : ""}`}>
+                                    <div className="min-w-0">
+                                        <label className="label">Marca o línea</label>
+                                        <input
+                                            value={form.brand}
+                                            onChange={e => set("brand", e.target.value)}
+                                            className="input"
+                                            maxLength={80}
+                                            placeholder="Ej. Poción Kids"
+                                        />
+                                    </div>
+                                    {pdfEnabled && <div className="min-w-0">
+                                        <label className="label">Contenido</label>
+                                        <input
+                                            value={form.net_content}
+                                            onChange={e => set("net_content", e.target.value)}
+                                            className="input"
+                                            maxLength={30}
+                                            placeholder="Ej. 450 ml"
+                                        />
+                                    </div>}
                                 </div>
                                 <div>
                                     <label className="label">Frase de beneficio</label>
@@ -995,8 +1029,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         rows={4}
                                         placeholder="Texto largo para la ficha del producto. Un párrafo por línea en blanco."
                                     />
-                                    <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1">
-                                        Se muestra en la página propia del producto, no en la tarjeta del catálogo.
+                                    <div className="text-[11px] text-content-subtle dark:text-content-dark-muted mt-1 leading-snug">
+                                        Se muestra en la página propia del producto.
+                                        {pdfEnabled && " Para el catálogo PDF, empieza un renglón con «Ideal para:», «Ingredientes:» o «Modo de uso:» y sale en su recuadro."}
                                     </div>
                                 </div>
                                 <div>
@@ -1012,9 +1047,9 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                             // sin publicar. Explica qué interruptor prender y en qué pestaña
                             // está, para no dejar al usuario buscándolo.
                             <p className="text-[12px] font-semibold text-content-subtle dark:text-content-dark-muted text-center py-4">
-                                {form.sellable
-                                    ? 'Activa "Mostrar en catálogo público" en la pestaña General para escribir estos textos.'
-                                    : "Los insumos no se publican, así que no tienen textos de vitrina."}
+                                {!form.sellable
+                                    ? "Los insumos no se publican ni salen en el catálogo, así que no llevan estos textos."
+                                    : 'Activa "Mostrar en catálogo público" en la pestaña General para escribir estos textos.'}
                             </p>
                         )}
                     </div>
@@ -1081,6 +1116,37 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             </div>
                                         </div>
                                     ) : null}
+                                    {/* Precio al mayor: de la empresa, no de la sucursal. Hoy lo
+                                        usa el catálogo PDF; la caja sigue cobrando el detal. */}
+                                    {form.sellable && pdfEnabled && (() => {
+                                        const mayor = parseFloat(form.wholesale_price);
+                                        const costo = parseFloat(form.cost_price);
+                                        const detal = parseFloat(form.price);
+                                        const ganancia = mayor > 0 && costo > 0 ? ((mayor / costo) - 1) * 100 : null;
+                                        const rebaja = mayor > 0 && detal > 0 ? (1 - mayor / detal) * 100 : null;
+                                        return (
+                                            <div>
+                                                <label className="label flex items-center justify-between gap-2">
+                                                    <span>Precio al mayor</span>
+                                                    <span className="text-[11px] text-content-subtle font-normal">Opcional</span>
+                                                </label>
+                                                <div className="relative">
+                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">$</span>
+                                                    <input value={form.wholesale_price}
+                                                        onChange={e => set("wholesale_price", e.target.value.replace(/[^0-9.]/g, ""))}
+                                                        type="text" inputMode="decimal" className="input !pl-6 tabular-nums" placeholder="0.00" />
+                                                </div>
+                                                <p className={`mt-1 text-[12px] leading-snug ${ganancia != null && ganancia < 0 ? "text-danger" : "text-content-subtle"}`}>
+                                                    {mayor > 0
+                                                        ? [
+                                                            rebaja != null && (rebaja >= 0 ? `${rebaja.toFixed(1)} % menos que el detal` : `${Math.abs(rebaja).toFixed(1)} % más que el detal`),
+                                                            ganancia != null && (ganancia < 0 ? "por debajo del costo" : `deja ${ganancia.toFixed(1)} %`),
+                                                          ].filter(Boolean).join(" · ")
+                                                        : "Sale en el catálogo PDF para mayoristas."}
+                                                </p>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                                 {form.sellable && (
                                 <div className="flex items-center justify-between gap-3 p-3 px-4 rounded-lg bg-surface-2 dark:bg-white/[0.04]">

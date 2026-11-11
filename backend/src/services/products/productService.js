@@ -596,6 +596,21 @@ function derivarMargen(price, cost_price, profit_margin) {
   return parseFloat((((p / c) - 1) * 100).toFixed(2));
 }
 
+// Precio al mayor tal como llega del formulario. `undefined` = no vino (se conserva lo que
+// había); vacío = se quita; un número negativo o que no es número se rechaza en vez de
+// guardarse como 0, que en un catálogo se leería "gratis".
+function precioMayor(valor) {
+  if (valor === undefined) return undefined;
+  if (valor === null || String(valor).trim() === "") return null;
+  const n = parseFloat(valor);
+  if (!Number.isFinite(n) || n < 0) {
+    const e = new Error("El precio al mayor tiene que ser un número mayor o igual a cero");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+  return n;
+}
+const contenidoNeto = (valor) => (valor === undefined ? undefined : (String(valor ?? "").trim().slice(0, 30) || null));
+
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
@@ -649,6 +664,8 @@ async function createProduct({ body, file, company_id }) {
       package_size: package_size || null,
       package_unit: package_unit || null,
       bulk_price: bulk_price || null,
+      wholesale_price: precioMayor(body.wholesale_price) ?? null,
+      net_content: contenidoNeto(body.net_content) ?? null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
       is_service: isServiceBool,
@@ -888,6 +905,9 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       package_size: opt(package_size, product.package_size),
       package_unit: opt(package_unit, product.package_unit),
       bulk_price: opt(bulk_price, product.bulk_price),
+      // De la empresa, no de la sucursal: se escribe aunque se esté editando parado en una.
+      wholesale_price: precioMayor(body.wholesale_price) === undefined ? product.wholesale_price : precioMayor(body.wholesale_price),
+      net_content: contenidoNeto(body.net_content) === undefined ? product.net_content : contenidoNeto(body.net_content),
       min_stock: alcanceSucursal
         ? product.min_stock
         : (min_stock === undefined ? product.min_stock : (parseFloat(min_stock) || 0)),

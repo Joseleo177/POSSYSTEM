@@ -95,6 +95,10 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
     const margen = numero(row.profit_margin);
     if (margen != null && margen < 0) { errores.push({ fila, motivo: `"${name}": el % de ganancia no puede ser negativo` }); return; }
 
+    // Opcional. Vacío no borra el que ya tenía: la plantilla vieja no trae la columna.
+    const mayor = numero(row.wholesale_price);
+    if (mayor != null && mayor < 0) { errores.push({ fila, motivo: `"${name}": el precio al mayor no puede ser negativo` }); return; }
+
     // El precio se escribe, o sale del costo más el margen. Una de las dos.
     let price = numero(row.price);
     if (price == null && cost != null && margen != null) {
@@ -137,6 +141,7 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
       package_unit: pkgUnit,
       package_size: pkgSize,
       bulk_price: bulk,
+      wholesale_price: mayor,
       cost_price: cost,
       min_stock: min,
       stock: existencia,
@@ -235,6 +240,8 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
         ...(r.package_unit ? { package_unit: r.package_unit } : {}),
         ...(r.package_size != null ? { package_size: r.package_size } : {}),
         ...(r.bulk_price != null ? { bulk_price: r.bulk_price } : {}),
+        // El precio al mayor es de la empresa, no de la sucursal (ver migración precio-mayor).
+        ...(r.wholesale_price != null ? { wholesale_price: r.wholesale_price } : {}),
       };
       // Lo que puede diferir por sucursal.
       const camposPrecio = {

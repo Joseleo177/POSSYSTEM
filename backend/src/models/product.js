@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
     package_size: { type: DataTypes.DECIMAL(10, 3) },
     package_unit: { type: DataTypes.STRING(50) },
     bulk_price: { type: DataTypes.DECIMAL(14, 5) },
+    // Precio de venta al mayor, de toda la empresa. Hoy solo lo usa el catálogo PDF para
+    // mayoristas; la caja cobra `price`. Ver migración 20261118100000-precio-mayor.
+    wholesale_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
+    // Contenido del envase como va impreso ("450 ml", "200 g"). Texto libre, solo para mostrar.
+    net_content: { type: DataTypes.STRING(30), allowNull: true },
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_service: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Minutos que dura el servicio en la agenda de citas. Nulo = no se agenda.
