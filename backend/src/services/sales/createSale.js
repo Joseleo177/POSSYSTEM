@@ -16,6 +16,7 @@ const {
 } = require("./shared");
 const { Quotation, QuotationItem, Seller } = require("../../models");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
+const { cargarMayor, decidirMayor } = require("./precioMayor");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
@@ -186,13 +187,27 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
       }
     }
 
+
+    // Venta al mayor (ver precioMayor.js): se decide antes de recorrer las líneas porque la
+    // cantidad mínima se cuenta sobre TODO el modelo, que puede venir en varias líneas. Sin
+    // conexión cada línea ya trae lo que la caja cobró.
+    const reglaMayor = offline ? null : await cargarMayor({
+      warehouse_id, customer_id, product_ids: items.map(i => i.product_id), transaction,
+    });
+    const mayorDe = decidirMayor(reglaMayor, items.map(it => ({
+      product_id: it.product_id,
+      qty: it.quantity,
+      base: reglaMayor?.productos.get(parseInt(it.product_id, 10))?.price,
+      manual: !!leerDescuentoLinea(it.line_discount),
+      pactado: precioPactado.has(parseInt(it.product_id, 10)),
+    })), activePromos);
     let total = 0;
     const enrichedItems = [];
     // Para el control de descuentos: lo bruto de la venta y cada descuento manual por línea.
     let subtotalBruto = 0;
     const descuentosManuales = [];
 
-    for (const item of items) {
+    for (const [idx, item] of items.entries()) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw new Error(`Producto ${item.product_id} no encontrado`);
       // Un insumo se consume dentro de un plato, no se cobra suelto. La comprobación va sobre
@@ -234,8 +249,20 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           ? precioPactado.get(product.id)
           : parseFloat(fichaSucursal?.price ?? product.price);
       }
+      // Al mayor: el precio al mayor reemplaza al detal y la línea no lleva promoción (no se
+      // acumulan). Sin conexión, la caja ya mandó el precio cobrado y dice si fue al mayor.
+      let alMayor = false;
+      let listPrice = null;
+      if (offline) {
+        const lp = parseFloat(item.list_price);
+        if (item.wholesale === true && Number.isFinite(lp) && lp >= 0) { alMayor = true; listPrice = lp; }
+      } else if (mayorDe[idx]) {
+        alMayor = true;
+        listPrice = rawPrice;
+        rawPrice = mayorDe[idx].price;
+      }
       const roundedPrice = round2(rawPrice);
-      const promosLinea = offline ? promoDeLinea(product.id, item.promo) : activePromos;
+      const promosLinea = alMayor ? [] : (offline ? promoDeLinea(product.id, item.promo) : activePromos);
       // lineDiscountUsd: usa roundedPrice (pista $, para sale.total)
       // lineDiscountBs:  usa rawPrice    (pista Bs, para SaleItem.discount y subtotal generado)
       // El descuento manual de la caja, si lo hay, reemplaza a la promoción (ver lineDiscount.js).
@@ -253,7 +280,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         total += roundedPrice * item.quantity - lineDiscountUsd;
         // stockEntry va solo para congelar el costo de esta sucursal (el servicio no mueve
         // existencias): mismo criterio que el precio, y que el COALESCE que ve la caja.
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -292,7 +319,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
       } else {
         // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
@@ -305,7 +332,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note) });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
       }
     }
 
@@ -406,6 +433,8 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           line_discount_value: entry.manual ? entry.manual.value : null,
           discount_by:         entry.manual ? (employee_id || req?.employee?.id || null) : null,
           cost_price: unitCost,
+          wholesale: !!entry.alMayor,
+          list_price: entry.alMayor ? entry.listPrice : null,
           note: entry.note,
           components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
         },

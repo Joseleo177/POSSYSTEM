@@ -50,6 +50,15 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DECIMAL(5, 2),
       allowNull: true
     },
+    // Precio al mayor y "al mayor desde" de esta sucursal. NULL = hereda del producto.
+    wholesale_price: {
+      type: DataTypes.DECIMAL(14, 5),
+      allowNull: true
+    },
+    wholesale_min_qty: {
+      type: DataTypes.DECIMAL(10, 3),
+      allowNull: true
+    },
     company_id: {
       type: DataTypes.INTEGER,
       allowNull: true

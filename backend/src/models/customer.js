@@ -23,6 +23,8 @@ module.exports = (sequelize, DataTypes) => {
     credit_days: { type: DataTypes.INTEGER, allowNull: true },
     // Pueblo o zona de cobranza (cobranza_sectors). Solo con companies.cobranza_enabled.
     sector_id: { type: DataTypes.INTEGER, allowNull: true },
+    // 'detal' | 'mayor': el mayorista paga el precio al mayor aunque lleve una unidad.
+    price_level: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'detal' },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

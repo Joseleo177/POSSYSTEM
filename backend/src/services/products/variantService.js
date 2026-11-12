@@ -178,6 +178,9 @@ function heredado(modelo) {
     package_size: modelo.package_size,
     min_stock: modelo.min_stock,
     iva_tipo: modelo.iva_tipo,
+    // Venta al mayor: la cantidad suma todo el modelo, así que precio y mínimo son del modelo.
+    wholesale_price: modelo.wholesale_price,
+    wholesale_min_qty: modelo.wholesale_min_qty,
   };
 }
 

@@ -20,9 +20,11 @@ module.exports = (sequelize, DataTypes) => {
     package_size: { type: DataTypes.DECIMAL(10, 3) },
     package_unit: { type: DataTypes.STRING(50) },
     bulk_price: { type: DataTypes.DECIMAL(14, 5) },
-    // Precio de venta al mayor, de toda la empresa. Hoy solo lo usa el catálogo PDF para
-    // mayoristas; la caja cobra `price`. Ver migración 20261118100000-precio-mayor.
+    // Precio de venta al mayor. El general del producto: cada sucursal puede tener el suyo en
+    // product_stock.wholesale_price (NULL = hereda). Ver migraciones 20261118100000 y 20261119100000.
     wholesale_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
+    // "Al mayor desde" esta cantidad (venta al mayor, 12-11-2026). NULL = solo el cliente mayorista.
+    wholesale_min_qty: { type: DataTypes.DECIMAL(10, 3), allowNull: true },
     // Contenido del envase como va impreso ("450 ml", "200 g"). Texto libre, solo para mostrar.
     net_content: { type: DataTypes.STRING(30), allowNull: true },
     is_combo: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },

@@ -51,7 +51,7 @@ tr.grupo i { font-style: normal; color: #999; font-size: 8pt; margin-left: 2mm; 
 /**
  * Arma el HTML de la lista. `datos` es la respuesta de GET /products/catalog-pdf?formato=lista.
  * opciones: { titulo, condiciones, columnas: { foto, codigo, detal, mayor, bs }, tasa,
- *             simboloLocal, simbolo, fecha }
+ *             simboloLocal, simbolo, fecha, sucursal }  (sucursal: sale junto al nombre de la tienda)
  */
 export function armarListaHtml(datos, opciones) {
     const store = datos.store || {};
@@ -111,7 +111,7 @@ export function armarListaHtml(datos, opciones) {
     ${store.logo_url ? `<img src="${esc(absoluta(store.logo_url))}" alt="">` : ""}
     <div class="cab-txt">
       <h1>${esc(opciones.titulo || "Lista de precios")}</h1>
-      <div class="tienda">${esc(store.name || "")}</div>
+      <div class="tienda">${esc([store.name, opciones.sucursal].filter(Boolean).join(" · "))}</div>
       ${contacto ? `<div class="datos">${esc(contacto)}</div>` : ""}
     </div>
     <div class="cab-der">

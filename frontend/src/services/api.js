@@ -259,7 +259,7 @@ async function requestServidor(path, options = {}) {
 // producto—, pero en estos vaciar la caja es justamente cómo se quita el dato, y sin esto no
 // habría manera de borrarlo desde el modal. El código de barras va aquí porque uno mal
 // cargado (o repetido) tiene que poder quitarse: el servidor guarda el vacío como NULL.
-const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode", "piece_mode", "piece_width_mm", "wholesale_price", "net_content"];
+const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode", "piece_mode", "piece_width_mm", "wholesale_price", "wholesale_min_qty", "net_content"];
 
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();

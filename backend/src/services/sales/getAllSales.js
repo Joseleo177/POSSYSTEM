@@ -115,7 +115,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       ],
     },
     include: [
-      { model: Customer, attributes: ["name", "rif"], required: false },
+      { model: Customer, attributes: ["name", "rif", "price_level"], required: false },
       { model: Employee, attributes: ["full_name"], required: false },
       { model: Currency, attributes: ["symbol", "code"], required: false },
       { model: Warehouse, attributes: ["name"], required: false },
@@ -134,6 +134,8 @@ module.exports = async function getAllSales(query, tenant = {}) {
     const item = s.toJSON();
     item.customer_name = item.Customer?.name ?? null;
     item.customer_rif  = item.Customer?.rif ?? null;
+    // Venta al mayor: la caja que recupera la cuenta sabe si el cliente es mayorista.
+    item.customer_price_level = item.Customer?.price_level ?? null;
     item.employee_name = item.Employee?.full_name ?? null;
     item.currency_symbol = item.Currency?.symbol ?? null;
     item.currency_code = item.Currency?.code ?? null;

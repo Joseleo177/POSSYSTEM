@@ -19,6 +19,7 @@ import HeldCartsModal      from "../components/HeldCartsModal";
 import TableMapModal       from "../components/mesas/TableMapModal";
 import PosAddonModal       from "../components/cobro/PosAddonModal";
 import { cartKey }         from "../helpers/cartLine";
+import { aplicarMayor }    from "../helpers/precioMayor";
 import PendingSalesModal   from "../components/cobro/PendingSalesModal";
 import ReturnableSalesModal from "../components/cobro/ReturnableSalesModal";
 import SellerPickerModal from "../components/cobro/SellerPickerModal";
@@ -601,6 +602,17 @@ export default function CobroPage() {
                 currSym={currSym}
                 secondaryCurrency={secondaryCurrency}
                 fmt={fmt}
+                // Venta al mayor: la línea como quedaría con la cantidad escrita, junto al resto del
+                // carrito (las variantes del mismo modelo suman). Misma regla que el carrito.
+                precioPara={company?.mayor_enabled && qtyModalItem ? (q) => {
+                    const k = cartKey(qtyModalItem);
+                    const detal = (i) => ({ ...i, price: i.precio_detal ?? i.price });
+                    const otros = cart.filter(i => cartKey(i) !== k).map(detal);
+                    const r = aplicarMayor([...otros, { ...detal(qtyModalItem), qty: q }], {
+                        activo: true, mayorista: selectedCustomer?.price_level === "mayor", promos: activePromos,
+                    });
+                    return r[r.length - 1];
+                } : null}
                 onSave={(id, q) => {
                     const isInCart = cart.find(i => cartKey(i) === id);
                     if (isInCart) {

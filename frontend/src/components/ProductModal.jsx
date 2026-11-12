@@ -26,8 +26,8 @@ const EMPTY = {
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
-    // Precio al mayor (de la empresa, para el catálogo PDF) y contenido del envase ("450 ml").
-    wholesale_price: "", net_content: "",
+    // Precio al mayor y "al mayor desde" (por sucursal, como el precio) y contenido del envase.
+    wholesale_price: "", wholesale_min_qty: "", net_content: "",
     visible_in_catalog: false, sellable: true, has_variants: false, kitchen_prep: false,
     // Alícuota de IVA (solo en empresas con IVA): G 16 %, R 8 %, A lujo, E exento.
     iva_tipo: "G",
@@ -44,6 +44,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const catalogEnabled = !!company?.catalog_enabled;
     // Extra por empresa: precio al mayor y textos de ficha para el catálogo PDF.
     const pdfEnabled = !!company?.catalogo_pdf_enabled;
+    // Venta al mayor (extra por empresa): precio al mayor y cantidad mínima que usa la caja.
+    // Sin ella no hay precio al mayor: el catálogo PDF sale con el precio normal (pedido 12-11).
+    const mayorEnabled = !!company?.mayor_enabled;
+    const conPrecioMayor = mayorEnabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
     const ivaEnabled = !!company?.iva_enabled;
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
@@ -128,6 +132,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     description: editData.description || "",
                     benefit_tag_ids: editData.benefit_tag_ids || [],
                     wholesale_price: editData.wholesale_price != null && editData.wholesale_price !== "" ? String(parseFloat(editData.wholesale_price)) : "",
+                    wholesale_min_qty: editData.wholesale_min_qty != null && editData.wholesale_min_qty !== "" ? String(parseFloat(editData.wholesale_min_qty)) : "",
                     net_content: editData.net_content || "",
                     visible_in_catalog: editData.visible_in_catalog || false,
                     // Los productos creados antes de que existiera la marca vienen sin el
@@ -383,11 +388,16 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             setTab("costos");
             return notify("El precio al mayor tiene que ser un número", "err");
         }
+        if (form.wholesale_min_qty !== "" && !(parseFloat(form.wholesale_min_qty) > 0)) {
+            setTab("costos");
+            return notify("La cantidad para el precio al mayor tiene que ser mayor que cero", "err");
+        }
         const submissionForm = { ...form };
         // Hay pantallas que abren la ficha con un producto a medias (una línea de compra). Si
         // no traía estos campos, mandarlos vacíos borraría el precio al mayor sin que nadie lo
         // tocara: el servidor conserva lo que no viene.
-        if (!pdfEnabled || (editData && !("wholesale_price" in editData))) delete submissionForm.wholesale_price;
+        if (!conPrecioMayor || (editData && !("wholesale_price" in editData))) delete submissionForm.wholesale_price;
+        if (!mayorEnabled || (editData && !("wholesale_min_qty" in editData))) delete submissionForm.wholesale_min_qty;
         if (!pdfEnabled || (editData && !("net_content" in editData))) delete submissionForm.net_content;
         if (form.has_variants) {
             // Sin abrir la pestaña no hay nada que mandar: el servidor deja las variantes como
@@ -1116,33 +1126,55 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                             </div>
                                         </div>
                                     ) : null}
-                                    {/* Precio al mayor: de la empresa, no de la sucursal. Hoy lo
-                                        usa el catálogo PDF; la caja sigue cobrando el detal. */}
-                                    {form.sellable && pdfEnabled && (() => {
+                                    {/* Precio al mayor y "al mayor desde": por sucursal, como el
+                                        precio (vacío = hereda el general). La caja cobra al mayor
+                                        al cliente mayorista o a quien llegue a la cantidad; el
+                                        catálogo PDF usa el precio. La cantidad solo existe con
+                                        la venta al mayor encendida. */}
+                                    {form.sellable && conPrecioMayor && (() => {
                                         const mayor = parseFloat(form.wholesale_price);
                                         const costo = parseFloat(form.cost_price);
                                         const detal = parseFloat(form.price);
                                         const ganancia = mayor > 0 && costo > 0 ? ((mayor / costo) - 1) * 100 : null;
                                         const rebaja = mayor > 0 && detal > 0 ? (1 - mayor / detal) * 100 : null;
+                                        const entera = String(form.unit || "").toUpperCase() === "UNIDAD";
+                                        const unidad = { UNIDAD: "und", KG: "kg", LITRO: "L", METRO: "m", M2: "m²" }[String(form.unit || "").toUpperCase()] || "";
                                         return (
-                                            <div>
-                                                <label className="label flex items-center justify-between gap-2">
-                                                    <span>Precio al mayor</span>
-                                                    <span className="text-[11px] text-content-subtle font-normal">Opcional</span>
-                                                </label>
-                                                <div className="relative">
-                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">$</span>
-                                                    <input value={form.wholesale_price}
-                                                        onChange={e => set("wholesale_price", e.target.value.replace(/[^0-9.]/g, ""))}
-                                                        type="text" inputMode="decimal" className="input !pl-6 tabular-nums" placeholder="0.00" />
+                                            <div className={mayorEnabled ? "grid grid-cols-2 gap-3" : ""}>
+                                                <div className="min-w-0">
+                                                    <label className="label flex items-center justify-between gap-2">
+                                                        <span className="truncate">{sucursal ? `Al mayor en ${sucursal}` : "Precio al mayor"}</span>
+                                                        {!mayorEnabled && <span className="text-[11px] text-content-subtle font-normal">Opcional</span>}
+                                                    </label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">$</span>
+                                                        <input value={form.wholesale_price}
+                                                            onChange={e => set("wholesale_price", e.target.value.replace(/[^0-9.]/g, ""))}
+                                                            type="text" inputMode="decimal" className="input !pl-6 tabular-nums" placeholder="0.00" />
+                                                    </div>
                                                 </div>
-                                                {/* Vacío no lleva pie: el usuario no quiso un texto explicando
-                                                    dónde se usa. Solo la cuenta, cuando hay precio. */}
+                                                {mayorEnabled && (
+                                                    <div className="min-w-0">
+                                                        <label className="label">Al mayor desde</label>
+                                                        <div className="relative">
+                                                            <input value={form.wholesale_min_qty}
+                                                                onChange={e => set("wholesale_min_qty", e.target.value.replace(entera ? /[^0-9]/g : /[^0-9.]/g, ""))}
+                                                                type="text" inputMode={entera ? "numeric" : "decimal"} className="input pr-10 tabular-nums" placeholder="Ej. 12" />
+                                                            {unidad && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-content-subtle text-xs font-semibold">{unidad}</span>}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Solo la cuenta, cuando hay precio: el usuario no quiso un
+                                                    texto explicando dónde se usa. La regla de la cantidad sí se
+                                                    dice, porque cambia lo que cobra la caja. */}
                                                 {mayor > 0 && (
-                                                    <p className={`mt-1 text-[12px] leading-snug ${ganancia != null && ganancia < 0 ? "text-danger" : "text-content-subtle"}`}>
+                                                    <p className={`${mayorEnabled ? "col-span-2" : "mt-1"} text-[12px] leading-snug ${ganancia != null && ganancia < 0 ? "text-danger" : "text-content-subtle"}`}>
                                                         {[
                                                             rebaja != null && (rebaja >= 0 ? `${rebaja.toFixed(1)} % menos que el detal` : `${Math.abs(rebaja).toFixed(1)} % más que el detal`),
                                                             ganancia != null && (ganancia < 0 ? "por debajo del costo" : `deja ${ganancia.toFixed(1)} %`),
+                                                            mayorEnabled && (parseFloat(form.wholesale_min_qty) > 0
+                                                                ? `al mayor desde ${parseFloat(form.wholesale_min_qty)} ${unidad} o para clientes mayoristas`
+                                                                : "sin cantidad: solo para clientes mayoristas"),
                                                         ].filter(Boolean).join(" · ")}
                                                     </p>
                                                 )}

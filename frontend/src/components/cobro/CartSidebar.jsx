@@ -106,7 +106,10 @@ export default function CartSidebar({
     };
     return (
         <aside className={`w-full h-full lg:w-[360px] bg-white dark:bg-[#0c0c0c] flex-col border-b lg:border-r border-border dark:border-white/5 shadow-[20px_0_60px_rgba(0,0,0,0.03)] z-20 shrink-0 order-2 lg:order-1 relative ${mobileTab === "cart" ? "flex" : "hidden"} lg:flex`}>
-            <div className="p-3 space-y-2 flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden scrollbar-hide">
+            {/* En una pantalla baja (laptop, navegador con barras) los controles de arriba se comían
+                todo el alto y la lista de productos quedaba en cero: ahora la lista tiene un mínimo y,
+                si no cabe, este bloque se desplaza entero. Total y "Finalizar venta" quedan fijos. */}
+            <div className="p-3 space-y-2 flex-1 min-h-0 flex flex-col overflow-y-auto scrollbar-hide">
 
                 {/* Mobile toggle */}
                 <div className="lg:hidden flex items-center gap-2">
@@ -499,7 +502,7 @@ export default function CartSidebar({
             </div>
 
                 {/* Ítems del carrito */}
-                <div className="flex-1 lg:overflow-y-auto space-y-2 lg:space-y-3 scrollbar-hide pt-2">
+                <div className="flex-1 lg:min-h-[11rem] lg:overflow-y-auto space-y-2 lg:space-y-3 scrollbar-hide pt-2">
                     {cart.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center opacity-30 gap-3 py-8">
                             <div className="w-14 h-14 rounded-2xl bg-surface-2 dark:bg-white/5 flex items-center justify-center text-content-subtle opacity-20">
@@ -554,13 +557,18 @@ export default function CartSidebar({
                                         {/* El nombre se lee entero: truncado, "SARDINA INCOSA T..." no
                                             distingue una presentación de otra en pleno cobro. */}
                                         <div className="text-[12px] font-bold dark:text-white leading-tight break-words min-w-0 flex-1">{i.name}</div>
+                                        {/* Precio al mayor (cliente mayorista o cantidad mínima, ver
+                                            helpers/precioMayor.js): no lleva promoción encima. */}
+                                        {i.mayor && (
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300 shrink-0">Al mayor</span>
+                                        )}
                                         {/* Descuento manual de la línea (se da en la revisión del pedido):
                                             reemplaza a la promoción, así que se muestra en su lugar. */}
                                         {i.ld_mode ? (
                                             <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300 shrink-0">
                                                 {i.ld_mode === "pct" ? `-${parseFloat(i.ld_value).toLocaleString("es-VE", { maximumFractionDigits: 2 })}%` : "Desc."}
                                             </span>
-                                        ) : activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
+                                        ) : !i.mayor && activePromos.find(p => p.product_ids?.includes(i.id)) && (() => {
                                             const promo = activePromos.find(p => p.product_ids?.includes(i.id));
                                             return (
                                                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-success/10 text-success border border-success/20 shrink-0">
@@ -581,6 +589,7 @@ export default function CartSidebar({
                                         <div className="text-[11px] text-content-subtle tabular-nums flex items-center gap-1 flex-wrap">
                                             <span>{fmtQtyUnit(i.qty, i.unit).toLowerCase()}</span>
                                             <span className="opacity-40">×</span>
+                                            {i.mayor && <span className="line-through opacity-60">{fmt(convertToDisplay(i.precio_detal), currSym)}</span>}
                                             <span>{fmt(convertToDisplay(i.price), currSym)}</span>
                                             {lineDiscount > 0 && (
                                                 <span className="text-success">-{fmt(lineDiscount, currSym)}</span>

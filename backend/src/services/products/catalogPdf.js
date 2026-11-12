@@ -17,8 +17,8 @@ const { condicionSucursal } = require("./productAccess");
 //  - Con `solo_publicados`, solo los que están en la vitrina pública.
 //  - Quien no es admin ve lo de sus sucursales, igual que en el listado de productos.
 //
-// Precio: el general del producto, no el de una sucursal. El precio al mayor es de la empresa
-// y el detal sugerido que acompaña tiene que ser el mismo para todos los que reciben el PDF.
+// Precio: con `warehouse_id`, el de esa sucursal (product_stock.price pisa al general, igual
+// que en la caja); sin él, el general. Lo mismo el precio al mayor.
 
 const AJUSTES = [
   "store_name", "store_slogan", "store_address", "store_city", "store_rif",
@@ -35,7 +35,7 @@ function listaIds(valor) {
   return crudo.map(n => parseInt(n, 10)).filter(Number.isInteger);
 }
 
-async function datosCatalogo({ company_id, visibles = null, category_ids, solo_publicados, formato }) {
+async function datosCatalogo({ company_id, visibles = null, warehouse_id = null, con_mayor = false, category_ids, solo_publicados, formato }) {
   // "lista": lista de precios densa (repuestos, bodegas, vendedores). No lleva descripción,
   // sellos ni foto adicional, así que no se piden: con miles de filas pesarían de más.
   const esLista = formato === "lista";
@@ -44,6 +44,7 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
     const e = new Error("Elige una empresa para generar el catálogo"); e.status = 400; e.isOperational = true; throw e;
   }
   const q = (sql, replacements) => sequelize.query(sql, { replacements, type: Sequelize.QueryTypes.SELECT });
+  const wid = parseInt(warehouse_id, 10) || null;
 
   const categorias = listaIds(category_ids);
   const filtros = [
@@ -56,21 +57,30 @@ async function datosCatalogo({ company_id, visibles = null, category_ids, solo_p
   if (solo_publicados === true || solo_publicados === "true") filtros.push("p.visible_in_catalog = true");
   if (visibles) filtros.push(condicionSucursal("p", visibles));
 
+  // La sucursal tiene que ser de la empresa. Al admin assertWarehouseAccess no lo mira, y esta
+  // consulta es SQL directo, fuera del filtro de tenant.
+  if (wid) {
+    const [propia] = await q(`SELECT 1 FROM warehouses WHERE id = :wid AND company_id = :cid`, { wid, cid: company_id });
+    if (!propia) { const e = new Error("Sucursal no encontrada"); e.status = 404; e.isOperational = true; throw e; }
+  }
+
   const [ajustes, productos] = await Promise.all([
     q(`SELECT key, value FROM settings WHERE company_id = :cid AND key IN (:keys)`, { cid: company_id, keys: AJUSTES }),
     q(`
       SELECT p.id, p.name, p.brand, p.short_description, ${esLista ? "NULL AS description" : "p.description"}, p.net_content, p.visible_in_catalog,
              p.barcode, p.unit,
-             p.price::float AS price, p.wholesale_price::float AS wholesale_price,
+             ${wid ? "COALESCE(ps.price, p.price)" : "p.price"}::float AS price,
+             ${!con_mayor ? "NULL" : wid ? "COALESCE(ps.wholesale_price, p.wholesale_price)" : "p.wholesale_price"}::float AS wholesale_price,
              p.image_filename, p.category_id,
              c.name AS category_name, c.color AS category_color,
              c.image_filename AS category_image, c.short_description AS category_description
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
+        ${wid ? "LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid" : ""}
        WHERE ${filtros.join(" AND ")}
        ORDER BY c.name NULLS LAST, p.name
        LIMIT ${tope + 1}`,
-      { cid: company_id, cats: categorias.length ? categorias : [0] }),
+      { cid: company_id, wid, cats: categorias.length ? categorias : [0] }),
   ]);
 
   const truncado = productos.length > tope;

@@ -238,15 +238,15 @@ export default function CatalogPage() {
                             <span className="hidden sm:inline">Compartir</span>
                         </Button>
                     )}
-                    {/* Catálogo PDF con precios al mayor: portada, una página por línea y dos
-                        por producto. Lo arma el navegador (helpers/catalogPdf.js). */}
-                    {/* Extra por empresa: lo enciende el superusuario en Empresas. */}
-                    {company?.catalogo_pdf_enabled && selectedProducts.length === 0 && (
+                    {/* PDF de la sucursal que se está viendo. La lista de precios es de todas
+                        las empresas; el catálogo con fotos (portada, una página por línea y dos
+                        por producto) es un extra que enciende el superusuario en Empresas. */}
+                    {selectedProducts.length === 0 && (
                         <Button onClick={() => setPdfModal(true)} variant="ghost"
                             className="h-8 px-2 sm:px-3 text-[11px] shadow-none border border-border dark:border-white/10 text-content-subtle hover:text-content"
-                            title="Catálogo en PDF con precios al mayor">
+                            title={company?.catalogo_pdf_enabled ? "Catálogo o lista de precios en PDF" : "Lista de precios en PDF"}>
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M7 3h7l5 5v13a1 1 0 01-1 1H7a1 1 0 01-1-1V4a1 1 0 011-1z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M14 3v5h5M9 13h6M9 17h4" /></svg>
-                            <span className="hidden sm:inline">Catálogo PDF</span>
+                            <span className="hidden sm:inline">{company?.catalogo_pdf_enabled ? "Catálogo PDF" : "Lista de precios"}</span>
                         </Button>
                     )}
                     {/* Importar crea y además pisa lo existente, así que pide las dos cosas,
@@ -549,7 +549,8 @@ export default function CatalogPage() {
                 notify={notify}
                 onDone={() => loadProducts(1, warehouseId)}
             />
-            {company?.catalogo_pdf_enabled && <CatalogPdfModal open={pdfModal} onClose={() => setPdfModal(false)} />}
+            <CatalogPdfModal open={pdfModal} onClose={() => setPdfModal(false)}
+                warehouseId={warehouseId} sucursal={selectedWarehouseName} />
 
             <ConfirmModal
                 isOpen={!!deleteProductDialog}

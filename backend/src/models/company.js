@@ -44,6 +44,8 @@ module.exports = (sequelize, DataTypes) => {
     citas_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // Extra: catálogo PDF al mayor (ver migración 20261118110000-catalogo-pdf).
     catalogo_pdf_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Vende al mayor: precio al mayor y mínimo por sucursal, clientes mayoristas (12-11-2026).
+    mayor_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     // La vitrina aparece en Google: entra al sitemap y su cabecera no lleva noindex. Encendido
     // por defecto (el catálogo ya es público); lo apaga el superusuario a quien no lo quiera.
     seo_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },

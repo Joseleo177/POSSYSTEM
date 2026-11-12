@@ -5,7 +5,9 @@ import StockQty, { splitQty } from "../ui/StockQty";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { cartKey } from "../../helpers/cartLine";
 
-export default function QuantityModal({ isOpen, onClose, item, onSave, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt }) {
+// precioPara(qty): la línea como quedaría con esa cantidad (venta al mayor, helpers/precioMayor.js);
+// null si la empresa no vende al mayor.
+export default function QuantityModal({ isOpen, onClose, item, onSave, convertToDisplay, convertToSecondary, currSym, secondaryCurrency, fmt, precioPara }) {
     const [val, setVal] = useState("");
     const [error, setError] = useState(null);
     const inputRef = useRef(null);
@@ -100,11 +102,6 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
         setError(null);
     };
 
-    const primaryPrice = convertToDisplay ? fmt(convertToDisplay(item.price), currSym) : null;
-    const secondaryPrice = secondaryCurrency && convertToSecondary
-        ? fmt(convertToSecondary(item.price), secondaryCurrency.symbol)
-        : null;
-
     // Importe de la línea según lo que hay escrito ahora mismo. Mismo redondeo por línea
     // que CartContext (round2 del precio en la moneda mostrada × qty) para que coincida
     // con lo que se verá en el carrito. Las promociones no entran aquí: se aplican después.
@@ -114,9 +111,18 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
         if (isNaN(n) || n < 0) return 0;
         return isInteger ? Math.floor(n) : n;
     })();
-    const lineTotal = convertToDisplay ? round2(convertToDisplay(item.price)) * qtyNum : null;
+    // Al mayor: con esta cantidad, ¿la línea gana el precio al mayor? (cliente mayorista o cantidad
+    // mínima). El carrito guarda el detal en precio_detal cuando la línea ya va al mayor.
+    const conCantidad = precioPara ? precioPara(qtyNum) : null;
+    const alMayor = !!conCantidad?.mayor;
+    const unitario = alMayor ? conCantidad.price : (item.precio_detal ?? item.price);
+    const primaryPrice = convertToDisplay ? fmt(convertToDisplay(unitario), currSym) : null;
+    const secondaryPrice = secondaryCurrency && convertToSecondary
+        ? fmt(convertToSecondary(unitario), secondaryCurrency.symbol)
+        : null;
+    const lineTotal = convertToDisplay ? round2(convertToDisplay(unitario)) * qtyNum : null;
     const lineTotalSecondary = secondaryCurrency && convertToSecondary
-        ? round2(convertToSecondary(item.price)) * qtyNum
+        ? round2(convertToSecondary(unitario)) * qtyNum
         : null;
 
     return (
@@ -222,7 +228,10 @@ export default function QuantityModal({ isOpen, onClose, item, onSave, convertTo
                 {primaryPrice && (
                     <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-surface-2 dark:bg-white/[0.04]">
                         <div className="flex flex-col">
-                            <span className="text-[13px] font-semibold text-content dark:text-white">Subtotal</span>
+                            <span className="text-[13px] font-semibold text-content dark:text-white flex items-center gap-1.5">
+                                Subtotal
+                                {alMayor && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300">Al mayor</span>}
+                            </span>
                             <span className="text-[12px] text-content-subtle tabular-nums mt-0.5">
                                 {fmtQtyUnit(qtyNum, item.unit).toLowerCase()} <span className="opacity-60">×</span> {primaryPrice}
                             </span>

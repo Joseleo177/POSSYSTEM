@@ -85,19 +85,29 @@ module.exports = {
     return result;
   }),
   getAll:  wrap(listar),
-  // Catálogo PDF: quien no es admin solo ve los productos de sus sucursales.
-  // Es un extra por empresa (companies.catalogo_pdf_enabled): sin él no responde, aunque el
-  // rol tenga permiso para ver productos.
+  // Catálogo PDF y lista de precios. Quien no es admin solo ve los productos de sus sucursales.
+  //  - La LISTA de precios es de todas las empresas (12-11-2026).
+  //  - El catálogo con fotos es un extra por empresa (companies.catalogo_pdf_enabled): sin él
+  //    no responde, aunque el rol tenga permiso para ver productos.
+  //  - El precio al mayor solo viaja a la empresa que vende al mayor (mayor_enabled). Sin
+  //    ella el catálogo con fotos sale con el precio normal (pedido 12-11-2026).
+  // Con `warehouse_id` (la sucursal que muestra el catálogo) salen sus productos y SUS precios:
+  // el PDF tiene que decir lo mismo que cobra la caja de esa sucursal.
   catalogPdf: wrap(async req => {
     const { datosCatalogo } = require("../services/products/catalogPdf");
     const { Company } = require("../models");
+    const esLista = req.query.formato === "lista";
     const empresa = req.employee?.company_id
-      ? await Company.findByPk(req.employee.company_id, { attributes: ["catalogo_pdf_enabled"] })
+      ? await Company.findByPk(req.employee.company_id, { attributes: ["catalogo_pdf_enabled", "mayor_enabled"] })
       : null;
-    if (!empresa?.catalogo_pdf_enabled) throw prohibido("El catálogo PDF no está activado para esta empresa");
+    if (!esLista && !empresa?.catalogo_pdf_enabled) throw prohibido("El catálogo PDF no está activado para esta empresa");
+    const wid = parseInt(req.query.warehouse_id, 10) || null;
+    if (wid) await assertWarehouseAccess(req, wid);
     return datosCatalogo({
       company_id: req.employee?.company_id ?? null,
-      visibles: await visibleWarehouseIds(req),
+      visibles: wid ? [wid] : await visibleWarehouseIds(req),
+      warehouse_id: wid,
+      con_mayor: !!empresa?.mayor_enabled,
       category_ids: req.query.category_ids,
       solo_publicados: req.query.solo_publicados,
       formato: req.query.formato,

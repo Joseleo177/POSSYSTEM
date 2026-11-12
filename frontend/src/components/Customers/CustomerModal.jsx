@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import CustomSelect from "../ui/CustomSelect";
+import Segmented from "../ui/Segmented";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 
@@ -20,6 +21,7 @@ const EMPTY = {
   notes: "",
   credit_days: "",
   sector_id: "",
+  price_level: "detal",
 };
 
 export default function CustomerModal({ open, onClose, onSave, editData, loading }) {
@@ -28,6 +30,9 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
   // Sector de cobranza: solo en empresas con el extra y para quien ve la cobranza. Si la lista no
   // llegó, el campo no se manda y el cliente conserva el suyo.
   const conCobranza = !!company?.cobranza_enabled && (can("cobranza.view") || can("cobranza.manage"));
+  // Venta al mayor: solo en empresas que venden al mayor. Sin el extra el campo no se manda y el
+  // cliente conserva el suyo.
+  const conMayor = !!company?.mayor_enabled;
   const [sectores, setSectores] = useState(null);
   useEffect(() => {
     if (!open || !conCobranza) return;
@@ -52,6 +57,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
           // 0 se conserva: es "de contado" a propósito, distinto de vacío (plazo general).
           credit_days: editData.credit_days === null || editData.credit_days === undefined ? "" : String(editData.credit_days),
           sector_id: editData.sector_id ? String(editData.sector_id) : "",
+          price_level: editData.price_level === "mayor" ? "mayor" : "detal",
         });
       } else {
         // En alta también aceptamos un documento prellenado (ej. desde el buscador de
@@ -90,6 +96,7 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
       rif: form.rif ? `${form.doc_prefix}-${form.rif}` : "",
       credit_days: form.credit_days === "" ? null : parseInt(form.credit_days, 10),
       ...(sectores && !isProveedor ? { sector_id: form.sector_id ? parseInt(form.sector_id, 10) : null } : { sector_id: undefined }),
+      price_level: conMayor && !isProveedor ? form.price_level : undefined,
     });
   };
 
@@ -198,6 +205,20 @@ export default function CustomerModal({ open, onClose, onSave, editData, loading
               placeholder="+58 412 0000000"
             />
           </div>
+
+          {conMayor && !isProveedor && (
+            <div className="sm:col-span-2">
+              <label className="label mb-1.5">Precio que paga</label>
+              <Segmented value={form.price_level} onChange={v => setForm(p => ({ ...p, price_level: v }))}
+                className="w-full [&>button]:flex-1 [&>button]:justify-center"
+                options={[{ key: "detal", label: "Detal" }, { key: "mayor", label: "Mayorista" }]} />
+              <p className="text-[11px] font-medium text-content-subtle dark:text-white/35 mt-1">
+                {form.price_level === "mayor"
+                  ? "Paga el precio al mayor en todo lo que lo tenga, aunque lleve una sola unidad."
+                  : "Paga el detal. Igual recibe el precio al mayor en los productos donde llegue a la cantidad mínima."}
+              </p>
+            </div>
+          )}
 
           {sectores && sectores.length > 0 && !isProveedor && (
             <div className="sm:col-span-2">

@@ -263,6 +263,10 @@ async function getProducts(req) {
       COALESCE(ps.price, p.price) AS price,
       (ps.price IS NOT NULL) AS price_own,
       COALESCE(ps.min_stock, p.min_stock) AS min_stock,
+      -- Venta al mayor: precio y "al mayor desde" de esta sucursal (la caja decide con
+      -- helpers/precioMayor.js, igual que el servidor con services/sales/precioMayor.js).
+      COALESCE(ps.wholesale_price, p.wholesale_price) AS wholesale_price,
+      COALESCE(ps.wholesale_min_qty, p.wholesale_min_qty) AS wholesale_min_qty,
       (ps.min_stock IS NOT NULL) AS min_stock_own,
       c.name AS category_name, c.id AS category_id,
       ps.qty,
@@ -372,6 +376,8 @@ async function getProducts(req) {
     id:           p.id,
     name:         p.name,
     price:        parseFloat(p.price),
+    wholesale_price:   p.wholesale_price != null ? parseFloat(p.wholesale_price) : null,
+    wholesale_min_qty: p.wholesale_min_qty != null ? parseFloat(p.wholesale_min_qty) : null,
     // El vigente en esta sucursal ya viene resuelto por el COALESCE; los flags dicen si es
     // propio o heredado del producto, que es lo que la pantalla de stock necesita marcar.
     price_own:    p.price_own,

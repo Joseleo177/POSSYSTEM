@@ -17,8 +17,9 @@ export const COLUMNAS = [
   // A cómo se vende
   { key: "price",        label: "Precio",          obligatoria: false, ejemplos: [1.85, ""] },
   { key: "profit_margin",label: "% Ganancia",      obligatoria: false, ejemplos: ["", 30] },
-  // Opcional: el precio para mayoristas que lleva el catálogo PDF. Vacío no borra el que hay.
+  // Opcional: precio al mayor y desde qué cantidad rige (venta al mayor). Vacío no borra lo que hay.
   { key: "wholesale_price", label: "Precio al Mayor", obligatoria: false, ejemplos: [1.50, ""] },
+  { key: "wholesale_min_qty", label: "Al Mayor Desde", obligatoria: false, ejemplos: [12, ""] },
   // Cómo se compró. Mismos términos que la ficha del producto y la orden de compra: quien
   // llena esto ya los conoce de esas pantallas y no tiene por qué aprender otros.
   { key: "cost_price",   label: "Costo",             obligatoria: false, ejemplos: [1.20, ""] },
@@ -64,6 +65,8 @@ const ALIAS = COLUMNAS.reduce((acc, c) => {
   "ganancia": "profit_margin", "margen": "profit_margin", "% de ganancia": "profit_margin",
   "precio mayor": "wholesale_price", "precio al por mayor": "wholesale_price", "mayor": "wholesale_price",
   "precio mayorista": "wholesale_price", "al mayor": "wholesale_price",
+  "al mayor desde": "wholesale_min_qty", "mayor desde": "wholesale_min_qty", "minimo al mayor": "wholesale_min_qty", "cantidad al mayor": "wholesale_min_qty",
+  "minimo mayor": "wholesale_min_qty", "minimo mayorista": "wholesale_min_qty",
   "utilidad": "profit_margin", "porcentaje de ganancia": "profit_margin",
   "empaque": "package_unit", "presentacion": "package_unit", "bulto": "package_unit",
   "unidades por presentacion": "package_size", "contenido": "package_size",
@@ -83,10 +86,11 @@ const ALIAS = COLUMNAS.reduce((acc, c) => {
 });
 
 // Genera y descarga la plantilla vacía, con una fila de ejemplo.
-// `precioMayor`: la columna "Precio al Mayor" solo va en la plantilla de las empresas con el
-// extra del catálogo PDF. Leer el archivo la acepta siempre (el servidor la guarda y nada más).
-export function descargarPlantilla({ precioMayor = false } = {}) {
-  const COLS = COLUMNAS.filter(c => precioMayor || c.key !== "wholesale_price");
+// `precioMayor`: la columna "Precio al Mayor" solo va en la plantilla de las empresas que venden
+// al mayor o tienen el catálogo PDF; `mayorDesde` ("Al Mayor Desde"), solo en las que venden al
+// mayor. Leer el archivo las acepta siempre.
+export function descargarPlantilla({ precioMayor = false, mayorDesde = false } = {}) {
+  const COLS = COLUMNAS.filter(c => (precioMayor || c.key !== "wholesale_price") && (mayorDesde || c.key !== "wholesale_min_qty"));
   const encabezados = COLS.map(c => c.obligatoria ? `${c.label} *` : c.label);
   // Dos ejemplos a propósito: uno que se vende por pieza con el precio puesto a mano, y otro
   // que se vende por kilo y sale del costo más un margen. Entre los dos se ve todo.
@@ -244,6 +248,8 @@ export async function leerArchivo(file) {
 
     const mayor = aNumero(row.wholesale_price);
     if (mayor != null && mayor < 0) { errores.push({ fila, motivo: `"${name}": el precio al mayor no puede ser negativo` }); continue; }
+    const mayorDesde = aNumero(row.wholesale_min_qty);
+    if (mayorDesde != null && mayorDesde <= 0) { errores.push({ fila, motivo: `"${name}": "Al mayor desde" tiene que ser mayor que cero` }); continue; }
 
     const min = aNumero(row.min_stock);
     if (min != null && min < 0) { errores.push({ fila, motivo: `"${name}": el mínimo no puede ser negativo` }); continue; }
@@ -281,6 +287,7 @@ export async function leerArchivo(file) {
       package_size: pkgSize,
       bulk_price: bulk,
       wholesale_price: mayor,
+      wholesale_min_qty: mayorDesde,
       // Solo para que la vista previa pueda decir "3 CAJA = 72"; no se guarda en el producto.
       package_qty: pkgQty,
       stock_de_presentaciones: stockDePresentaciones,

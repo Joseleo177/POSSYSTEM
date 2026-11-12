@@ -412,7 +412,7 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
       required: false,
       // price, min_stock, cost_price y profit_margin salen de la misma fila: viendo un
       // almacén, lo que vale es lo que esa sucursal tenga definido.
-      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin']
+      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin', 'wholesale_price', 'wholesale_min_qty']
     });
   }
 
@@ -473,6 +473,11 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
       if (prod.min_stock_own) prod.min_stock = ficha.min_stock;
       prod.cost_own = ficha.cost_price != null;
       if (prod.cost_own) prod.cost_price = ficha.cost_price;
+      // Venta al mayor: igual que el precio, lo de la sucursal pisa al general.
+      prod.wholesale_own = ficha.wholesale_price != null;
+      if (prod.wholesale_own) prod.wholesale_price = ficha.wholesale_price;
+      prod.wholesale_min_own = ficha.wholesale_min_qty != null;
+      if (prod.wholesale_min_own) prod.wholesale_min_qty = ficha.wholesale_min_qty;
 
       // El margen se recalcula sobre el precio y el costo que acaban de quedar, que son los
       // de esta sucursal. Guardado en el producto es el del precio general, y mostrarlo junto
@@ -508,6 +513,8 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
       prod.price_own = false;
       prod.min_stock_own = false;
       prod.cost_own = false;
+      prod.wholesale_own = false;
+      prod.wholesale_min_own = false;
     }
     if (prod.is_combo) {
       prod.comboItems = comboItemsMap[prod.id] || [];
@@ -611,6 +618,19 @@ function precioMayor(valor) {
 }
 const contenidoNeto = (valor) => (valor === undefined ? undefined : (String(valor ?? "").trim().slice(0, 30) || null));
 
+// "Al mayor desde": cantidad mínima de la línea (el modelo suma sus variantes). Igual que el precio
+// al mayor: undefined = no vino, vacío = se quita. Cero o menos no tiene sentido como mínimo.
+function cantidadMayor(valor) {
+  if (valor === undefined) return undefined;
+  if (valor === null || String(valor).trim() === "") return null;
+  const n = parseFloat(valor);
+  if (!Number.isFinite(n) || n <= 0) {
+    const e = new Error("La cantidad para el precio al mayor tiene que ser mayor que cero");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+  return n;
+}
+
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
@@ -665,6 +685,7 @@ async function createProduct({ body, file, company_id }) {
       package_unit: package_unit || null,
       bulk_price: bulk_price || null,
       wholesale_price: precioMayor(body.wholesale_price) ?? null,
+      wholesale_min_qty: cantidadMayor(body.wholesale_min_qty) ?? null,
       net_content: contenidoNeto(body.net_content) ?? null,
       min_stock: parseFloat(min_stock) || 0,
       is_combo: isComboBool,
@@ -808,6 +829,9 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       currentImageValue = await inheritImageByBarcode(opt(barcode, product.barcode), company_id);
     }
 
+    // Precio al mayor y su cantidad mínima, ya validados (undefined = no vinieron).
+    const mayorNuevo = precioMayor(body.wholesale_price);
+    const minMayorNuevo = cantidadMayor(body.wholesale_min_qty);
     const precioFinal = opt(price, product.price, product.price);
     const costoFinal  = isComboBool ? null : opt(cost_price, product.cost_price);
     // El margen manda solo si viene escrito; si no, se recalcula. Conservar el anterior
@@ -870,6 +894,20 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       if (cambio(cost_price, ficha?.cost_price ?? product.cost_price)) cambios.cost_price = valor(cost_price, product.cost_price);
       if (cambio(min_stock,  ficha?.min_stock  ?? product.min_stock))  cambios.min_stock  = valor(min_stock,  product.min_stock);
 
+      // Precio al mayor y "al mayor desde": misma herencia que el precio (NULL = el general).
+      // Vaciar el campo en la sucursal = volver a heredar. Se escribe solo lo que cambió.
+      const propio = (nuevo, enFicha, general) => {
+        if (nuevo === undefined) return undefined;
+        const v = nuevo === null || Math.abs(nuevo - parseFloat(general ?? NaN)) < 1e-9 ? null : nuevo;
+        const actual = enFicha == null ? null : parseFloat(enFicha);
+        if (v === null ? actual === null : (actual !== null && Math.abs(v - actual) < 1e-9)) return undefined;
+        return v;
+      };
+      const mayorPropio = propio(mayorNuevo, ficha?.wholesale_price, product.wholesale_price);
+      if (mayorPropio !== undefined) cambios.wholesale_price = mayorPropio;
+      const minPropio = propio(minMayorNuevo, ficha?.wholesale_min_qty, product.wholesale_min_qty);
+      if (minPropio !== undefined) cambios.wholesale_min_qty = minPropio;
+
       precioSeraPropio = (cambios.price !== undefined ? cambios.price : (ficha?.price ?? null)) != null;
 
       // El margen viaja con el precio: si la sucursal tiene precio propio, el porcentaje con
@@ -884,8 +922,9 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       }
     }
 
-    // Con alcance de sucursal, los tres valores que tienen ficha propia —precio, costo y
-    // mínimo— no se tocan en el producto: se escriben más abajo en `product_stock`. Lo demás
+    // Con alcance de sucursal, los valores que tienen ficha propia —precio, costo, mínimo de
+    // existencia, precio al mayor y su cantidad—
+    // no se tocan en el producto: se escriben más abajo en `product_stock`. Lo demás
     // (nombre, categoría, unidad, código de barras, combo) es del producto y sigue siendo
     // igual para todas las sucursales, porque no tendría sentido de otro modo.
     await product.update({
@@ -905,8 +944,10 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       package_size: opt(package_size, product.package_size),
       package_unit: opt(package_unit, product.package_unit),
       bulk_price: opt(bulk_price, product.bulk_price),
-      // De la empresa, no de la sucursal: se escribe aunque se esté editando parado en una.
-      wholesale_price: precioMayor(body.wholesale_price) === undefined ? product.wholesale_price : precioMayor(body.wholesale_price),
+      // Precio al mayor y su mínimo: con alcance de sucursal van a la ficha (más abajo), como
+      // el precio. Un modelo o un combo/servicio sin ficha los guarda aquí, en el general.
+      wholesale_price: (alcanceSucursal && !esGlobalSinFicha) || mayorNuevo === undefined ? product.wholesale_price : mayorNuevo,
+      wholesale_min_qty: (alcanceSucursal && !esGlobalSinFicha) || minMayorNuevo === undefined ? product.wholesale_min_qty : minMayorNuevo,
       net_content: contenidoNeto(body.net_content) === undefined ? product.net_content : contenidoNeto(body.net_content),
       min_stock: alcanceSucursal
         ? product.min_stock

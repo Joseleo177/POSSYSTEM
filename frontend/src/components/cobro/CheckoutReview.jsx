@@ -173,7 +173,8 @@ export default function CheckoutReview({
         };
     };
 
-    const promoDe = (i) => activePromos.find(p => p.product_ids?.includes(i.id));
+    // Al mayor no lleva promoción (no se acumulan, ver helpers/precioMayor.js).
+    const promoDe = (i) => (i.mayor ? null : activePromos.find(p => p.product_ids?.includes(i.id)));
 
     // IVA que ya va dentro del total (los precios lo incluyen). Mismo reparto que la factura:
     // el total se divide entre las alícuotas en proporción a sus líneas.
@@ -393,6 +394,7 @@ export default function CheckoutReview({
                                         )}
                                         <div className="mt-0.5 text-[13px] text-content-subtle tabular-nums flex flex-wrap items-center gap-x-1.5">
                                             <span>{fmtQtyUnit(i.qty, i.unit).toLowerCase()} × {fmt(convertToDisplay(i.price), currSym)}</span>
+                                            {i.mayor && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300">Al mayor</span>}
                                             {/* El descuento manual reemplaza a la promoción: se muestra uno u otro. */}
                                             {i.ld_mode ? (
                                                 <span className="text-[11px] font-semibold px-1.5 py-px rounded bg-brand-500/10 text-brand-700 dark:text-brand-300">{etiquetaDescuento(i)}</span>

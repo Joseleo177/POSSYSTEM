@@ -243,7 +243,7 @@ export async function listaAPdf(datos, opciones, { alAvanzar } = {}) {
     pdf.setFont("helvetica", "bold").setFontSize(17).setTextColor(...acento);
     pdf.text(opciones.titulo || "Lista de precios", x, 17);
     pdf.setFontSize(10).setTextColor(34, 34, 34);
-    pdf.text(store.name || "", x, 22.5);
+    pdf.text([store.name, opciones.sucursal].filter(Boolean).join(" · "), x, 22.5);
     const contacto = [store.whatsapp && `WhatsApp +${store.whatsapp}`, store.phone && `Tel. ${store.phone}`, store.rif && `RIF ${store.rif}`, store.address].filter(Boolean).join(" · ");
     pdf.setFont("helvetica", "normal").setFontSize(8).setTextColor(110, 110, 110);
     const lineasContacto = pdf.splitTextToSize(contacto, ANCHO - M - x - 38).slice(0, 2);

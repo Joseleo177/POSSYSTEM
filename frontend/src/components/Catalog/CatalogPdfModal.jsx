@@ -11,12 +11,13 @@ import { esPantallaTactil, esWebKitTactil } from "../../helpers/printDocument";
 import { imprimirLista, paginasLista } from "../../helpers/priceListPdf";
 import { monedaLocal } from "../../helpers/currency";
 
-// Catálogo en PDF para mayoristas. Se traen los datos una sola vez al abrir (una petición:
-// ver services/products/catalogPdf.js en el backend) y todo lo demás —qué líneas, qué hacer
-// con los productos sin precio al mayor— se filtra aquí, sin volver a pedir nada.
+// Lista de precios (todas las empresas) y catálogo con fotos (extra por empresa) en PDF, de la
+// sucursal que muestra el catálogo: sus productos y sus precios, los mismos que cobra su caja.
+// Se traen los datos una sola vez por formato (una petición: ver services/products/catalogPdf.js
+// en el backend) y todo lo demás —qué líneas, qué hacer con los productos sin precio al mayor—
+// se filtra aquí, sin volver a pedir nada.
 //
-// El PDF lo hace el navegador: se abre el diálogo de impresión con la hoja apaisada y ahí se
-// elige "Guardar como PDF".
+// Computadora: diálogo de impresión → "Guardar como PDF". Teléfono: el PDF se arma aquí mismo.
 
 const LABEL = "text-[12px] font-medium text-content-subtle";
 const INPUT = "w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] font-medium text-content dark:text-white placeholder:text-content-subtle/50 dark:placeholder:text-white/25 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 transition-colors";
@@ -29,13 +30,20 @@ const fechaHoy = () => { const d = new Date(); return `${MESES[d.getMonth()].rep
 const PREF = "catalogo_pdf_prefs";
 const leerPrefs = () => { try { return JSON.parse(localStorage.getItem(PREF) || "{}"); } catch { return {}; } };
 
-export default function CatalogPdfModal({ open, onClose }) {
-    const { notify, company, baseCurrency, activeCurrencies } = useApp();
+export default function CatalogPdfModal({ open, onClose, warehouseId = null, sucursal = "" }) {
+    const { notify, company, baseCurrency, activeCurrencies, sucursales } = useApp();
+    // La lista de precios es de todas las empresas; el catálogo con fotos, de las que tienen el
+    // extra (companies.catalogo_pdf_enabled). El precio al mayor, solo de las que venden al mayor
+    // (companies.mayor_enabled): sin eso el catálogo sale con el precio normal del producto.
+    const conCatalogo = !!company?.catalogo_pdf_enabled;
+    const conMayor = !!company?.mayor_enabled;
     const local = monedaLocal(activeCurrencies) ?? null;
     const tasa = parseFloat(local?.exchange_rate || 0);
     // Dos formatos: el catálogo con fotos (dos páginas por producto) y la lista de precios
     // densa para repuestos, bodegas o la carpeta del vendedor (helpers/priceListPdf.js).
-    const [formato, setFormato] = useState("catalogo");
+    // Sin el extra solo existe la lista.
+    const [formatoElegido, setFormato] = useState("catalogo");
+    const formato = conCatalogo ? formatoElegido : "lista";
     const [tituloLista, setTituloLista] = useState("Lista de precios");
     const [col, setCol] = useState({ codigo: true, foto: false, detal: true, mayor: false, bs: false });
     const ponerCol = (k) => (v) => setCol(c => ({ ...c, [k]: v }));
@@ -47,7 +55,9 @@ export default function CatalogPdfModal({ open, onClose }) {
     const [sinPrecio, setSinPrecio] = useState("descuento");
     // Qué precio sale: el al mayor o el detal de siempre (quien todavía no cargó precios al
     // mayor igual puede repartir su catálogo con precios).
-    const [modoPrecio, setModoPrecio] = useState("mayor");
+    const [modoElegido, setModoPrecio] = useState("mayor");
+    // Sin venta al mayor no hay qué elegir: sale el precio normal.
+    const modoPrecio = conMayor ? modoElegido : "detal";
     const [descuento, setDescuento] = useState("");
     const [soloPublicados, setSoloPublicados] = useState(false);
     const [fichas, setFichas] = useState(true);
@@ -58,7 +68,7 @@ export default function CatalogPdfModal({ open, onClose }) {
         if (!open) return;
         const p = leerPrefs();
         if (p.titulo) setTitulo(p.titulo);
-        if (p.formato) setFormato(p.formato);
+        if (p.formato && conCatalogo) setFormato(p.formato);
         if (p.tituloLista) setTituloLista(p.tituloLista);
         if (p.col) setCol(c => ({ ...c, ...p.col }));
         if (p.condiciones != null) setCondiciones(p.condiciones);
@@ -78,12 +88,12 @@ export default function CatalogPdfModal({ open, onClose }) {
         let vigente = true;
         setCargando(true);
         setDatos(null);
-        api.products.catalogPdf(formato === "lista" ? { formato: "lista" } : {})
+        api.products.catalogPdf({ ...(formato === "lista" ? { formato: "lista" } : {}), ...(warehouseId ? { warehouse_id: warehouseId } : {}) })
             .then(r => { if (vigente) setDatos(r); })
             .catch(e => { if (vigente) { notify(e.message, "err"); onClose(); } })
             .finally(() => { if (vigente) setCargando(false); });
         return () => { vigente = false; };
-    }, [open, formato]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [open, formato, warehouseId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const todasLineas = datos?.lines || [];
     const claveLinea = (l) => l.id ?? 0;
@@ -126,7 +136,9 @@ export default function CatalogPdfModal({ open, onClose }) {
 
     const esLista = formato === "lista";
     // La lista necesita al menos una columna de precio: sin ninguna no hay qué listar.
-    const sinColPrecio = esLista && !col.detal && !col.mayor;
+    // Sin precio al mayor en la empresa, esa columna no existe aunque haya quedado marcada.
+    const colReal = { ...col, mayor: col.mayor && conMayor };
+    const sinColPrecio = esLista && !colReal.detal && !colReal.mayor;
     const sinMayor = esLista || modoPrecio === "detal" ? 0 : (elegidos?.products.filter(p => p.wholesale_price == null).length ?? 0);
     const cuantos = !elegidos || sinColPrecio ? 0
         : (!esLista && sinPrecio === "omitir" ? elegidos.products.length - sinMayor : elegidos.products.length);
@@ -137,13 +149,15 @@ export default function CatalogPdfModal({ open, onClose }) {
 
     const guardarPrefs = () => {
         try {
-            localStorage.setItem(PREF, JSON.stringify({ formato, titulo, tituloLista, col, condiciones, sinPrecio, modoPrecio, descuento, fichas, lista, mostrarDetal }));
+            localStorage.setItem(PREF, JSON.stringify({ formato: formatoElegido, titulo, tituloLista, col, condiciones, sinPrecio, modoPrecio: modoElegido, descuento, fichas, lista, mostrarDetal }));
         } catch { /* sin almacenamiento: la próxima vez arranca con lo de fábrica */ }
     };
     const opcionesLista = () => ({
         titulo: tituloLista.trim() || "Lista de precios",
         condiciones: opciones.condiciones,
-        columnas: { ...col, bs: col.bs && tasa > 0 },
+        columnas: { ...colReal, bs: colReal.bs && tasa > 0 },
+        // Con varias sucursales, cuál es: cada una puede tener sus precios.
+        sucursal: sucursales?.length > 1 ? sucursal : "",
         tasa, simboloLocal: local?.symbol || "Bs.",
         simbolo: opciones.simbolo,
         fecha: new Date().toLocaleDateString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric" }),
@@ -256,7 +270,7 @@ export default function CatalogPdfModal({ open, onClose }) {
     );
 
     return (
-        <Modal open={open} onClose={trabajo && !listo ? () => {} : onClose} title="Catálogo PDF" width={720} footer={pie}>
+        <Modal open={open} onClose={trabajo && !listo ? () => {} : onClose} title={conCatalogo ? "Catálogo PDF" : "Lista de precios"} width={720} footer={pie}>
             {trabajo ? (
                 listo ? (
                     <div className="py-10 flex flex-col items-center text-center gap-2">
@@ -289,26 +303,29 @@ export default function CatalogPdfModal({ open, onClose }) {
                 )
             ) : (<>
             <div className="mb-5">
-                <Segmented value={formato} onChange={setFormato}
-                    className="w-full [&>button]:flex-1 [&>button]:justify-center"
-                    options={[{ key: "catalogo", label: "Catálogo con fotos" }, { key: "lista", label: "Lista de precios" }]} />
-                <p className="text-[12px] text-content-subtle mt-1.5 leading-snug">
+                {conCatalogo && (
+                    <Segmented value={formato} onChange={setFormato}
+                        className="w-full mb-1.5 [&>button]:flex-1 [&>button]:justify-center"
+                        options={[{ key: "catalogo", label: "Catálogo con fotos" }, { key: "lista", label: "Lista de precios" }]} />
+                )}
+                <p className="text-[12px] text-content-subtle leading-snug">
                     {esLista
                         ? "Una fila por producto, agrupada por categoría, en hoja vertical. Para repuestos, bodegas o los vendedores."
                         : "Portada, una página por línea y dos por producto, con fotos grandes, sellos y precio."}
+                    {sucursales?.length > 1 && sucursal && <> Con los productos y precios de <b className="font-semibold text-content dark:text-white">{sucursal}</b>.</>}
                 </p>
             </div>
             {cargando || !datos ? (
                 <div className="py-16 flex flex-col items-center gap-3 text-[13px] text-content-subtle">
                     <Spinner />
-                    Juntando productos, fotos y precios…
+                    {esLista ? "Juntando productos y precios…" : "Juntando productos, fotos y precios…"}
                 </div>
             ) : !datos.products.length ? (
                 <div className="py-12 flex flex-col items-center text-center gap-2">
                     <span className="w-12 h-12 rounded-xl bg-surface-3 dark:bg-white/[0.06] flex items-center justify-center text-content-subtle">
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
                     </span>
-                    <p className="text-[14px] font-semibold text-content dark:text-white">No hay productos para el catálogo</p>
+                    <p className="text-[14px] font-semibold text-content dark:text-white">{esLista ? "No hay productos para la lista" : "No hay productos para el catálogo"}</p>
                     <p className="text-[12px] text-content-subtle">Solo entran los productos que se venden (los insumos no).</p>
                 </div>
             ) : (
@@ -330,7 +347,7 @@ export default function CatalogPdfModal({ open, onClose }) {
                             </label>
                             <textarea className={`${INPUT} !h-auto py-2 mt-1 resize-none`} rows={2} maxLength={300}
                                 value={condiciones} onChange={e => setCondiciones(e.target.value)}
-                                placeholder="Ej. Pedido mínimo 12 unidades surtidas. Precios en dólares." />
+                                placeholder={conMayor ? "Ej. Pedido mínimo 12 unidades surtidas. Precios en dólares." : "Ej. Precios en dólares, sujetos a cambio sin previo aviso."} />
                             <p className="text-[11px] text-content-subtle mt-1">
                                 {esLista ? "Salen arriba de la lista." : "Salen en la portada y en la última página."}
                             </p>
@@ -340,9 +357,11 @@ export default function CatalogPdfModal({ open, onClose }) {
                             <div>
                                 <div className={LABEL}>Columnas</div>
                                 <div className="mt-1.5 rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06] overflow-hidden">
-                                    <Opcion checked={col.detal} onChange={ponerCol("detal")} titulo="Precio detal" />
-                                    <Opcion checked={col.mayor} onChange={ponerCol("mayor")} titulo="Precio al mayor"
-                                        detalle="El de la ficha (pestaña Costos). Si un producto no lo tiene, sale una raya." />
+                                    <Opcion checked={col.detal} onChange={ponerCol("detal")} titulo={conMayor ? "Precio detal" : "Precio"} />
+                                    {conMayor && (
+                                        <Opcion checked={col.mayor} onChange={ponerCol("mayor")} titulo="Precio al mayor"
+                                            detalle="El de la ficha (pestaña Costos). Si un producto no lo tiene, sale una raya." />
+                                    )}
                                     {local && (
                                         <Opcion checked={col.bs && tasa > 0} onChange={ponerCol("bs")}
                                             titulo={`En ${local.symbol || "Bs."} a la tasa de hoy`}
@@ -361,7 +380,7 @@ export default function CatalogPdfModal({ open, onClose }) {
                             </div>
                         )}
 
-                        {!esLista && <div>
+                        {!esLista && conMayor && <div>
                             <div className={LABEL}>Qué precio sale</div>
                             <Segmented value={modoPrecio} onChange={setModoPrecio}
                                 className="mt-1.5 w-full sm:w-auto [&>button]:flex-1 sm:[&>button]:flex-none [&>button]:justify-center"

@@ -315,7 +315,7 @@ const normalizarNombre = (v) => {
   return limpio ? limpio.toUpperCase() : null;
 };
 
-function buildPayload({ type, name, phone, email, address, rif, tax_name, notes, credit_days, sector_id }) {
+function buildPayload({ type, name, phone, email, address, rif, tax_name, notes, credit_days, sector_id, price_level }) {
   if (!name) { const e = new Error("El nombre es requerido");      e.status = 400; throw e; }
   if (!rif)  { const e = new Error("La cédula / RIF es requerida"); e.status = 400; throw e; }
   const recordType = ["cliente", "proveedor"].includes(type) ? type : "cliente";
@@ -341,9 +341,17 @@ function buildPayload({ type, name, phone, email, address, rif, tax_name, notes,
     if (sid !== null && !(sid > 0)) { const e = new Error("Sector inválido"); e.status = 400; throw e; }
     sector.sector_id = sid;
   }
+  // Nivel de precio (venta al mayor): solo se toca si viene, como el crédito. Un proveedor no
+  // compra, así que siempre queda en detal.
+  const nivel = {};
+  if (price_level !== undefined) {
+    if (!["detal", "mayor"].includes(price_level)) { const e = new Error("Nivel de precio inválido"); e.status = 400; throw e; }
+    nivel.price_level = recordType === "proveedor" ? "detal" : price_level;
+  }
   return {
     ...creditDays,
     ...sector,
+    ...nivel,
     type:     recordType,
     name:     normalizarNombre(name),
     phone:    phone    || null,

@@ -57,7 +57,7 @@ const Dato = ({ label, value, sub }) => (
 );
 
 export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify, activeJournals, activeCurrencies, employee, can } = useApp();
+    const { baseCurrency, notify, activeJournals, activeCurrencies, employee, can, company } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     // Proveedor: la compra que se está viendo y la que se está pagando (una o varias).
     const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
@@ -261,7 +261,8 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                 {iniciales}
                             </div>
                             <div className="min-w-0">
-                                <p className="text-[12px] text-content-subtle">{esCliente ? "Cliente" : "Proveedor"}</p>
+                                {/* Mayorista: paga el precio al mayor (venta al mayor encendida). */}
+                                <p className="text-[12px] text-content-subtle">{!esCliente ? "Proveedor" : company?.mayor_enabled && detail.price_level === "mayor" ? "Cliente mayorista" : "Cliente"}</p>
                                 <h2 className="text-[20px] font-semibold tracking-tight text-content dark:text-white leading-tight break-words">{detail.name}</h2>
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-content-subtle">
                                     {detail.rif && <span className="tabular-nums">{detail.rif}</span>}

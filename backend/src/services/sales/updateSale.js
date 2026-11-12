@@ -9,6 +9,7 @@ const {
 } = require("./shared");
 const getOneSale = require("./getOneSale");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
+const { cargarMayor, decidirMayor } = require("./precioMayor");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
 const { leerTasaDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
@@ -163,9 +164,25 @@ module.exports = async function updateSale(saleId, body, req) {
     let total = append
       ? (parseFloat(sale.total) || 0) + (parseFloat(sale.discount_amount) || 0) - (parseFloat(sale.service_charge) || 0)
       : 0;
+    // Venta al mayor (ver precioMayor.js), sobre la cuenta completa: el mínimo se cuenta con
+    // todo el modelo. El cliente es el que manda la caja ahora, o el que ya tenía la cuenta.
+    // Una ronda incremental (append) no lo evalúa: la caja rehace la cuenta entera al cobrar.
+    const reglaMayor = append ? null : await cargarMayor({
+      warehouse_id: warehouseId,
+      customer_id: body.customer_id !== undefined ? body.customer_id : sale.customer_id,
+      product_ids: items.map(i => i.product_id),
+      transaction,
+    });
+    const mayorDe = decidirMayor(reglaMayor, items.map(it => ({
+      product_id: it.product_id,
+      qty: it.qty,
+      // La base es el detal: el que manda la caja (precio de la cuenta) o el de la sucursal.
+      base: it.price ?? reglaMayor?.productos.get(parseInt(it.product_id, 10))?.price,
+      manual: it.line_discount === undefined ? manualPrevio.has(parseInt(it.product_id, 10)) : !!leerDescuentoLinea(it.line_discount),
+    })), activePromos);
     // Restaurante: el plato se vende aunque no alcance un ingrediente (ver recipeStock.js).
     let sinInsumo;
-    for (const item of items) {
+    for (const [idx, item] of items.entries()) {
       const product = await Product.findByPk(item.product_id, { transaction, lock: true });
       if (!product) throw bad(`Producto ${item.product_id} no encontrado`, 404);
 
@@ -183,7 +200,11 @@ module.exports = async function updateSale(saleId, body, req) {
       });
       if (ficha?.price != null) precioBase = ficha.price;
       if (ficha?.cost_price != null) costoBase = ficha.cost_price;
-      const unitPrice = parseFloat(item.price ?? precioBase);
+      // Al mayor: el precio al mayor reemplaza al detal y la línea va sin promoción.
+      const alMayor = mayorDe[idx];
+      const listPrice = alMayor ? parseFloat(item.price ?? precioBase) : null;
+      const unitPrice = alMayor ? parseFloat(alMayor.price) : parseFloat(item.price ?? precioBase);
+      const promosLinea = alMayor ? [] : activePromos;
       const qty = parseFloat(item.qty);
       if (qty <= 0) continue;
 
@@ -195,10 +216,10 @@ module.exports = async function updateSale(saleId, body, req) {
       const manual = item.line_discount === undefined ? previo : leerDescuentoLinea(item.line_discount);
       const lineDiscountUsd = manual
         ? calcDescuentoLinea(manual, round2(unitPrice), qty)
-        : calcLineDiscount(product.id, round2(unitPrice), qty, activePromos);
+        : calcLineDiscount(product.id, round2(unitPrice), qty, promosLinea);
       const lineDiscountBs = manual
         ? calcDescuentoLinea(manual, unitPrice, qty)
-        : calcLineDiscount(product.id, unitPrice, qty, activePromos);
+        : calcLineDiscount(product.id, unitPrice, qty, promosLinea);
       subtotalBruto += round2(unitPrice) * qty;
       // Solo se controla lo que cambia: el descuento que ya estaba lo autorizó quien lo dio.
       const mismo = previo && manual && previo.mode === manual.mode && Math.abs(previo.value - manual.value) < 0.000005;
@@ -285,6 +306,8 @@ module.exports = async function updateSale(saleId, body, req) {
           line_discount_value: manual ? manual.value : null,
           discount_by:         manual ? (mismo ? previo.by : (req?.employee?.id || null)) : null,
           cost_price: unitCost,
+          wholesale: !!alMayor,
+          list_price: listPrice,
           note: notaDe(item),
           components,
         },

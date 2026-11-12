@@ -22,6 +22,10 @@ module.exports = (sequelize, DataTypes) => {
     // Costo congelado al momento de la venta. Sin esto la utilidad histórica se
     // recalcularía con el costo actual. Null en ventas previas a la migración.
     cost_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
+    // Venta al mayor (migración 20261119110000): la línea se cobró al mayor, y el precio detal
+    // que se dejó de cobrar (base con que la cuenta en espera vuelve al carrito).
+    wholesale: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    list_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
     subtotal: { type: DataTypes.DECIMAL(14, 5) },
     // Nota de ESTA línea ("sin cebolla"), para la comanda. Distinta de sales.web_note, que es
     // del pedido entero.

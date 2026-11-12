@@ -98,6 +98,8 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
     // Opcional. Vacío no borra el que ya tenía: la plantilla vieja no trae la columna.
     const mayor = numero(row.wholesale_price);
     if (mayor != null && mayor < 0) { errores.push({ fila, motivo: `"${name}": el precio al mayor no puede ser negativo` }); return; }
+    const mayorDesde = numero(row.wholesale_min_qty);
+    if (mayorDesde != null && mayorDesde <= 0) { errores.push({ fila, motivo: `"${name}": la cantidad para el precio al mayor tiene que ser mayor que cero` }); return; }
 
     // El precio se escribe, o sale del costo más el margen. Una de las dos.
     let price = numero(row.price);
@@ -142,6 +144,7 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
       package_size: pkgSize,
       bulk_price: bulk,
       wholesale_price: mayor,
+      wholesale_min_qty: mayorDesde,
       cost_price: cost,
       min_stock: min,
       stock: existencia,
@@ -240,14 +243,15 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
         ...(r.package_unit ? { package_unit: r.package_unit } : {}),
         ...(r.package_size != null ? { package_size: r.package_size } : {}),
         ...(r.bulk_price != null ? { bulk_price: r.bulk_price } : {}),
-        // El precio al mayor es de la empresa, no de la sucursal (ver migración precio-mayor).
-        ...(r.wholesale_price != null ? { wholesale_price: r.wholesale_price } : {}),
       };
       // Lo que puede diferir por sucursal.
       const camposPrecio = {
         price: r.price,
         ...(r.cost_price != null ? { cost_price: r.cost_price } : {}),
         ...(r.min_stock != null ? { min_stock: r.min_stock } : {}),
+        // Venta al mayor: por sucursal, igual que el precio (migración venta-al-mayor).
+        ...(r.wholesale_price != null ? { wholesale_price: r.wholesale_price } : {}),
+        ...(r.wholesale_min_qty != null ? { wholesale_min_qty: r.wholesale_min_qty } : {}),
       };
       // Habiendo costo, el margen se deduce del precio final: es la única cifra que no puede
       // contradecir a las otras dos. El escrito solo se guarda cuando no hay costo con qué
@@ -312,7 +316,7 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
         const cambios = {};
         if (r.stock != null) { cambios.qty = r.stock; conStock++; }
 
-        // Precio, costo y mínimo de la sucursal, solo para los que ya existían: en uno recién
+        // Precio, costo, mínimo y venta al mayor de la sucursal, solo para los que ya existían: en uno recién
         // creado ya quedaron en el producto y repetirlos aquí sería anclar la sucursal a un
         // número que de todos modos hereda. Un valor igual al general se guarda como NULL,
         // por lo mismo: es el general escrito a mano, no un precio propio.
@@ -326,6 +330,10 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
           if (p !== undefined) cambios.price = p;
           if (c !== undefined) cambios.cost_price = c;
           if (m !== undefined) cambios.min_stock = m;
+          const pm = propio(r.wholesale_price, producto.wholesale_price);
+          const dm = propio(r.wholesale_min_qty, producto.wholesale_min_qty);
+          if (pm !== undefined) cambios.wholesale_price = pm;
+          if (dm !== undefined) cambios.wholesale_min_qty = dm;
         }
 
         const antes = parseFloat(ficha.qty || 0);
