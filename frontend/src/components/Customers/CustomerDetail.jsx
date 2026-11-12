@@ -94,7 +94,15 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     }, [showRefund, employee?.id]); // eslint-disable-line
 
     const fmtPrice = (n) => fmtBase(n, baseCurrency);
-    const fmtSale  = (sale, amount) => fmtSaleHelper(sale, amount, baseCurrency);
+    // Lo que falta por cobrar se muestra a la tasa de HOY, no a la de la factura: la deuda es
+    // en base y se cobra a la tasa del día. Con la tasa vieja, si el bolívar subió, se le
+    // decía al cliente un monto menor al que de verdad se le va a cobrar. Si la moneda ya no
+    // está activa, queda la tasa guardada en la venta.
+    const fmtPendiente = (sale, amount) => {
+        const cur = sale.currency_id ? activeCurrencies.find(c => c.id === parseInt(sale.currency_id)) : null;
+        const tasaHoy = cur && !cur.is_base ? parseFloat(cur.exchange_rate) : 0;
+        return fmtSaleHelper(tasaHoy > 0 ? { ...sale, exchange_rate: tasaHoy } : sale, amount, baseCurrency);
+    };
 
     // Moneda/tasa del diario seleccionado para la devolución
     const refundJournal  = activeJournals.find(j => String(j.id) === String(refundForm.journal_id));
@@ -370,7 +378,7 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                                 const marcada = checkedIds.includes(sale.id);
                                 const dias = diasVencida(sale);
                                 const abrir = () => esCliente ? setSelectedSaleId(sale.id) : setSelectedPurchaseId(sale.id);
-                                const enVenta = esCliente ? fmtSale(sale, sale.balance) : fmtPrice(sale.balance);
+                                const enVenta = esCliente ? fmtPendiente(sale, sale.balance) : fmtPrice(sale.balance);
                                 const enBase  = fmtPrice(sale.balance);
                                 const abonado = parseFloat(sale.amount_paid || 0) > 0.001;
                                 return (

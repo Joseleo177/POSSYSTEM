@@ -7,6 +7,7 @@ import JournalPickerButton from "./cobro/JournalPickerButton";
 import { api } from "../services/api";
 import { fmtBase, printNotaCreditoDoc, todayISO, journalsForWarehouse, toNameCase, factorDevolucion } from "../helpers";
 import { isIntegerUnit } from "../helpers/unitFormatter";
+import { aplicarMayor } from "../helpers/precioMayor";
 import ConfirmModal from "./ui/ConfirmModal";
 import PaymentFormModal from "./PaymentFormModal";
 import ReceiptModal from "./ReceiptModal";
@@ -42,7 +43,7 @@ const fmtCant = (n, unit) => {
 const esEntera = (unit, vendido) => unit ? isIntegerUnit(unit) : Number.isInteger(parseFloat(vendido || 0));
 
 export default function ReturnModal({ open, onClose, sale, onReturnSuccess, notify }) {
-    const { companyInfo, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, printerWidth } = useApp();
+    const { companyInfo, baseCurrency, activeCurrencies, activeJournals: allActiveJournals, printerWidth, company } = useApp();
     const fmtB = (n) => fmtBase(n, baseCurrency);
     // El reembolso sale de la caja de la sucursal donde se vendió, no de la de otra tienda.
     const activeJournals = journalsForWarehouse(allActiveJournals, sale?.warehouse_id);
@@ -137,7 +138,12 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
     const netoDe = (i) => (parseFloat(i.price) - parseFloat(i.discount || 0)) * factor;
     const totalReturn = sale.items.reduce((acc, i) => acc + cantDe(i) * netoDe(i), 0);
 
-    const totalReplacement = replacementItems.reduce((acc, i) => acc + (parseFloat(i.price) * parseFloat(i.qty)), 0);
+    // Lo nuevo al precio que le toca al cliente (al mayor por cliente o por cantidad), igual que
+    // lo calcula el servidor (services/returns/exchangeService.js). Un cambio no lleva promociones.
+    const reemplazoEf = aplicarMayor(replacementItems.map(i => ({ ...i, id: i.product_id })), {
+        activo: !!company?.mayor_enabled, mayorista: sale.customer_price_level === "mayor", promos: [],
+    });
+    const totalReplacement = reemplazoEf.reduce((acc, i) => acc + (parseFloat(i.price) * parseFloat(i.qty)), 0);
 
     // Reparto de lo devuelto, el mismo que hace el servidor (services/returns/shared.js): en una
     // factura a crédito rebaja primero lo que se debe; lo libre paga la mercancía del cambio; y
@@ -166,7 +172,9 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
                 const newQty = existing.qty + 1;
                 return prev.map(i => i.product_id === product.id ? { ...i, qty: newQty, qtyRaw: String(newQty) } : i);
             }
-            return [...prev, { product_id: product.id, name: product.name, price: parseFloat(product.price || 0), qty: 1, qtyRaw: "1", stock: parseFloat(product.stock || 0), unit: product.unit || null }];
+            return [...prev, { product_id: product.id, name: product.name, price: parseFloat(product.price || 0), qty: 1, qtyRaw: "1", stock: parseFloat(product.stock || 0), unit: product.unit || null,
+                // Venta al mayor: lo nuevo del cambio sigue la misma regla que la caja.
+                parent_id: product.parent_id ?? null, wholesale_price: product.wholesale_price ?? null, wholesale_min_qty: product.wholesale_min_qty ?? null }];
         });
         setProductSearch("");
         setProductResults([]);
@@ -608,11 +616,11 @@ export default function ReturnModal({ open, onClose, sale, onReturnSuccess, noti
 
                                     {replacementItems.length > 0 && (
                                         <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
-                                            {replacementItems.map(item => (
+                                            {reemplazoEf.map(item => (
                                                 <div key={item.product_id} className="flex items-center gap-3 px-3.5 py-3">
                                                     <div className="flex-1 min-w-0">
                                                         <p className="text-[13px] font-semibold text-content dark:text-white truncate">{item.name}</p>
-                                                        <p className="text-[12px] text-content-subtle tabular-nums"><Money value={fmtB(item.price)} /> c/u</p>
+                                                        <p className="text-[12px] text-content-subtle tabular-nums flex items-center gap-1.5 flex-wrap"><span><Money value={fmtB(item.price)} /> c/u</span>{item.mayor && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/10 text-brand-700 dark:text-brand-300">Al mayor</span>}</p>
                                                     </div>
                                                     <Cantidad
                                                         value={item.qtyRaw !== undefined ? item.qtyRaw : String(item.qty)}

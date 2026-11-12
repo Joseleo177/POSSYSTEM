@@ -23,7 +23,7 @@ const { Op } = Sequelize;
 const PAYMENT_METHODS = ["efectivo", "transferencia", "pago_movil", "zelle", "punto_venta"];
 
 const SALE_INCLUDE = [
-  { model: Customer, attributes: ["id", "name", "rif", "address", "phone"], required: false },
+  { model: Customer, attributes: ["id", "name", "rif", "address", "phone", "price_level"], required: false },
   { model: Employee, attributes: ["id", "full_name"], required: false },
   { model: Currency, attributes: ["id", "symbol", "code"], required: false },
   { model: Warehouse, attributes: ["id", "name"], required: false },

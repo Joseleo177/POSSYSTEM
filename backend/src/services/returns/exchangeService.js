@@ -5,6 +5,7 @@ const {
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 const { vendeSinInsumo, fichaEnCero, fotoConsumo, consumoDeLinea } = require("../products/recipeStock");
+const { cargarMayor, decidirMayor } = require("../sales/precioMayor");
 
 module.exports = async function createExchange({ saleId, returnItems, replacementItems, reason, employeeId, surplusMode, refund }, req) {
   if (!returnItems?.length)      { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -146,7 +147,19 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
     const replacementLines = [];
     let sinInsumo;
 
-    for (const item of replacementItems) {
+    // Venta al mayor (ver sales/precioMayor.js): lo nuevo sale al mayor o al detal según el cliente
+    // de la venta o la cantidad que se lleva, igual que en la caja. Lo devuelto ya se acreditó
+    // arriba al precio con que se vendió. Un cambio no lleva promociones.
+    const reglaMayor = await cargarMayor({
+      warehouse_id: sale.warehouse_id, customer_id: sale.customer_id,
+      product_ids: replacementItems.map(i => i.product_id), transaction: t,
+    });
+    const mayorDe = decidirMayor(reglaMayor, replacementItems.map(i => ({
+      product_id: i.product_id, qty: i.qty,
+      base: reglaMayor?.productos.get(parseInt(i.product_id, 10))?.price,
+    })), []);
+
+    for (const [idx, item] of replacementItems.entries()) {
       const { product_id, name, qty } = item;
       const parsedQty   = parseFloat(qty);
       if (!product_id || isNaN(parsedQty) || parsedQty <= 0) {
@@ -165,7 +178,9 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
         attributes: ["price"],
         transaction: t,
       });
-      const parsedPrice = parseFloat(fichaReemplazo?.price ?? product.price);
+      const precioDetal = parseFloat(fichaReemplazo?.price ?? product.price);
+      const alMayor = mayorDe[idx];
+      const parsedPrice = alMayor ? parseFloat(alMayor.price) : precioDetal;
       if (isNaN(parsedPrice) || parsedPrice < 0) {
         const e = new Error(`"${product.name}" no tiene precio de venta definido`); e.status = 400; throw e;
       }
@@ -208,7 +223,8 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       const subtotal = parseFloat((parsedPrice * parsedQty).toFixed(6));
       replacementTotal += subtotal;
       replacementLines.push({ 
-        product_id, name: product.name, qty: parsedQty, price: parsedPrice, subtotal, 
+        product_id, name: product.name, qty: parsedQty, price: parsedPrice, subtotal,
+        wholesale: !!alMayor, list_price: alMayor ? precioDetal : null,
         is_service: product.is_service, is_combo: product.is_combo,
         ingredientsData, mainStockEntry 
       });
@@ -266,6 +282,7 @@ module.exports = async function createExchange({ saleId, returnItems, replacemen
       await SaleItem.create({
         sale_id: exchangeSale.id, product_id: line.product_id,
         name: line.name, price: line.price, quantity: line.qty,
+        wholesale: line.wholesale, list_price: line.list_price,
         discount: 0,
         components: line.is_combo && !line.is_service ? fotoConsumo(line.ingredientsData, line.qty) : null,
       }, { transaction: t });

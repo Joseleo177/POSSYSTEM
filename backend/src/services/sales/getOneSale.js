@@ -15,6 +15,8 @@ module.exports = async function getOneSale(id, req) {
   const item = s.toJSON();
   item.customer_name = item.Customer?.name ?? null;
   item.customer_rif  = item.Customer?.rif ?? null;
+  // Venta al mayor: el cambio de mercancía muestra lo nuevo al precio que le toca al cliente.
+  item.customer_price_level = item.Customer?.price_level ?? null;
   item.employee_name = item.Employee?.full_name ?? null;
   item.currency_symbol = item.Currency?.symbol ?? null;
   item.currency_code = item.Currency?.code ?? null;
