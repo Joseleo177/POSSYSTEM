@@ -362,6 +362,13 @@ export const api = {
     // Publica u oculta varios productos del catálogo público en una sola llamada
     setCatalogVisibility: (ids, visible) =>
       request("/products/catalog-visibility", { method: "PATCH", body: JSON.stringify({ ids, visible }) }),
+    // Alícuota de IVA en lote: { ids } | { category_id } | { todos: true }, y tipo al aplicar.
+    ivaResumen: (body) => request("/products/iva-tipo/resumen", { method: "POST", body: JSON.stringify(body) }),
+    setIvaTipo: (body) => request("/products/iva-tipo", { method: "PATCH", body: JSON.stringify(body) }),
+    // Sumar o quitar el IVA a los precios de venta: vista previa, aplicar y deshacer el último.
+    ivaPreciosVista: (body) => request("/products/iva-precios/vista", { method: "POST", body: JSON.stringify(body) }),
+    ivaPreciosAplicar: (body) => request("/products/iva-precios", { method: "POST", body: JSON.stringify(body) }),
+    ivaPreciosDeshacer: () => request("/products/iva-precios/deshacer", { method: "POST", body: "{}" }),
     // Carga masiva desde Excel. El archivo se lee en el navegador; aquí solo viajan las
     // filas ya normalizadas, que el servidor revalida antes de escribir.
     importar: (body) => request("/products/import", { method: "POST", body: JSON.stringify(body) }),

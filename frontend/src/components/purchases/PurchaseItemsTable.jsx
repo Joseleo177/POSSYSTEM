@@ -3,6 +3,7 @@ import { fmtQty, toNameCase } from "../../helpers";
 import { fmtDateShort } from "../../helpers/dates";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 import EditablePriceInput from "../ui/EditablePriceInput";
+import { useFactorIva } from "../../hooks/useFactorIva";
 
 // Líneas de una compra. Las cifras van en tinta: antes cada columna tenía su color (costo
 // azul, precio verde, subtotal naranja, unidades cian) y la tabla se leía como un semáforo
@@ -23,6 +24,7 @@ export default function PurchaseItemsTable({
     // metiendo mercancía: ahí el lote sí se está cargando y la columna tiene que verse.
     forceLots = false,
 }) {
+    const factorIva = useFactorIva();
     // 'parcial' es una orden abierta con mercancía ya adentro: se sigue editando, con el
     // límite de que una línea no puede bajar de lo que ya entró (lo valida el backend).
     const isEditing = ["borrador", "pendiente", "parcial"].includes(orderStatus);
@@ -160,7 +162,7 @@ export default function PurchaseItemsTable({
                                                     const num = parseFloat(raw) || 0;
                                                     const newPrice = enMoneda ? num / invoiceRate : num;
                                                     const cost = parseFloat(item.unit_cost) || 0;
-                                                    if (cost > 0 && newPrice >= 0) onUpdate?.(uid, { profit_margin: ((newPrice / cost) - 1) * 100 });
+                                                    if (cost > 0 && newPrice >= 0) onUpdate?.(uid, { profit_margin: ((newPrice / factorIva(item) / cost) - 1) * 100 });
                                                 }}
                                                 className={`${FIELD} !h-10 pl-10`}
                                             />
@@ -349,7 +351,7 @@ export default function PurchaseItemsTable({
                                                         const newPrice = enMoneda ? num / invoiceRate : num;
                                                         const cost = parseFloat(item.unit_cost) || 0;
                                                         if (cost > 0 && newPrice >= 0) {
-                                                            onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / cost) - 1) * 100 });
+                                                            onUpdate?.(item.id ?? item.key, { profit_margin: ((newPrice / factorIva(item) / cost) - 1) * 100 });
                                                         }
                                                     }}
                                                     className={`${FIELD} pl-10`}

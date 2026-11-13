@@ -161,7 +161,9 @@ function aNumero(v) {
  * La validación se hace acá para que el usuario vea lo que está mal ANTES de tocar la base;
  * el servidor la repite igual, porque esta es una cortesía y no un control.
  */
-export async function leerArchivo(file) {
+// factorIva: en una empresa con IVA, el precio que sale del costo y el margen lo lleva encima
+// (1,16; el servidor lo vuelve a calcular con la alícuota de cada producto existente).
+export async function leerArchivo(file, { factorIva = 1 } = {}) {
   const buf = await file.arrayBuffer();
   const wb = XLSX.read(buf, { type: "array" });
 
@@ -238,7 +240,7 @@ export async function leerArchivo(file) {
     // El precio se puede escribir, o salir del costo más el margen. Una de las dos.
     let price = aNumero(row.price);
     if (price == null && cost != null && margen != null) {
-      price = parseFloat((cost * (1 + margen / 100)).toFixed(2));
+      price = parseFloat((cost * (1 + margen / 100) * factorIva).toFixed(2));
     }
     if (price == null) {
       errores.push({ fila, motivo: `"${name}": falta el precio (o el costo y el % de ganancia para calcularlo)` });

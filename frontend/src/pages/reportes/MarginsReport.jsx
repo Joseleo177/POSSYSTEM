@@ -73,18 +73,23 @@ export default function MarginsReport() {
  const dias = (data?.by_day ?? []).map(d => ({ ...d, profit_bar: Math.max(0, d.profit), cost_bar: Math.min(d.cost, d.revenue - d.sin_costo) }));
  const haySinCosto = dias.some(d => d.sin_costo > 0);
 
- // Del total a la utilidad, renglón por renglón. Los que restan llevan el signo delante.
+ // Del total a la utilidad, renglón por renglón. Los que restan llevan el signo delante. Con
+ // IVA, el impuesto incluido en el precio se resta antes: es del fisco, no ganancia.
+ const conIva = (s?.total_iva ?? 0) > 0.004;
  const filas = !s ? [] : cobro ? [
   { label: "Cobros del período", value: s.cobrado },
   s.vuelto > 0.004 && { label: "Vuelto entregado", value: s.vuelto, minus: true },
   Math.abs(s.ajustes) > 0.004 && { label: s.ajustes > 0 ? "Saldo a favor aplicado" : "Sobrante que no es de la venta", value: Math.abs(s.ajustes), minus: s.ajustes < 0 },
-  { label: "Ingreso cobrado", value: s.total_revenue, sub: true },
+  conIva && { label: "IVA incluido (es del fisco)", value: s.total_iva, minus: true },
+  { label: conIva ? "Ingreso cobrado sin IVA" : "Ingreso cobrado", value: s.total_revenue, sub: true },
   { label: "Costo de lo cobrado", value: s.total_cost - s.forgiven_cost, minus: true },
   s.forgiven_cost > 0.004 && { label: "Mercancía exonerada", value: s.forgiven_cost, minus: true },
   s.sin_costo > 0.004 && { label: "Cobrado sin costo cargado", value: s.sin_costo, minus: true },
   { label: "Utilidad cobrada", value: s.total_margin, strong: true },
  ].filter(Boolean) : [
-  { label: "Total vendido", value: s.total_revenue },
+  { label: "Total vendido", value: s.total_revenue + (conIva ? s.total_iva : 0) },
+  conIva && { label: "IVA incluido (es del fisco)", value: s.total_iva, minus: true },
+  conIva && { label: "Vendido sin IVA", value: s.total_revenue, sub: true },
   s.sin_costo > 0.004 && { label: "Vendido sin costo cargado", value: s.sin_costo, minus: true },
   { label: "Costo de mercancía", value: s.total_cost, minus: true },
   { label: "Utilidad bruta", value: s.total_margin, strong: true },
@@ -116,7 +121,7 @@ export default function MarginsReport() {
  <KpiCard label={cobro ? "Margen cobrado" : "Margen bruto"} value={fmtPct(s.avg_margin_pct)} sub="Sobre lo que tiene costo" />
  <KpiCard label={cobro ? "Utilidad cobrada" : "Utilidad bruta"} value={fmt$(s.total_margin)} />
  <KpiCard
-  label={cobro ? "Ingreso cobrado" : "Total vendido"}
+  label={cobro ? (conIva ? "Cobrado sin IVA" : "Ingreso cobrado") : (conIva ? "Vendido sin IVA" : "Total vendido")}
   value={fmt$(s.total_revenue)}
   sub={`${fmtNumber(s.sales_count, 0)} ${cobro ? (s.sales_count === 1 ? "factura cobrada" : "facturas cobradas") : (s.sales_count === 1 ? "venta" : "ventas")}`}
  />

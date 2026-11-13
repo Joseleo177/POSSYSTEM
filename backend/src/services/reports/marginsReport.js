@@ -31,6 +31,11 @@ const { sanitizeDate, dateClause, dateClauseOn, localDate, DISPATCHED_SQL } = re
 //    Con la rebaja en divisas el dinero llega completo a ref − fx_forgiven y el costo completo
 //    se reconoce igual: la ganancia baja en lo que se dejó de cobrar.
 //
+// IVA: en una empresa con IVA el precio lo incluye, y ese impuesto no es ganancia sino del fisco.
+// El ingreso que cuenta es la base: cada línea se lleva a su base con la alícuota con que se
+// vendió (sale_items.iva_rate; NULL = venta sin IVA, queda igual) y la factura entera se escala
+// por k = base / bruto, que reparte también el descuento. Lo que se resta sale aparte como `iva`.
+//
 // Líneas sin costo cargado: su ingreso se separa ("sin costo") y no entra en la utilidad. Con
 // costo 0 saldría como ganancia pura, y la mayoría de las veces es que nadie lo cargó. Los
 // servicios sí cuentan: no tener costo es lo normal en ellos.
@@ -92,7 +97,8 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     l AS (
       SELECT si.sale_id, si.product_id, si.name, p.category_id,
              si.quantity - COALESCE(dv.qty, 0) AS qty,
-             si.subtotal - COALESCE(dv.sub, 0) AS sub,
+             (si.subtotal - COALESCE(dv.sub, 0)) / (1 + COALESCE(si.iva_rate, 0) / 100.0) AS sub,
+             si.subtotal - COALESCE(dv.sub, 0) AS sub_bruto,
              (si.quantity - COALESCE(dv.qty, 0)) * u.uc AS cost,
              (u.uc > 0 OR COALESCE(p.is_service, FALSE)) AS con_costo
         FROM sale_items si
@@ -116,19 +122,20 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
              MAX(forgiven_at) AS forgiven_at, MAX(credit_applied) AS credit_applied,
              GREATEST(MAX(total) - COALESCE(SUM(devuelto), 0), 0) AS neto,
              COALESCE(SUM(sub), 0) AS sub,
+             COALESCE(SUM(sub) / NULLIF(SUM(sub_bruto), 0), 1) AS k,
              COALESCE(SUM(sin_sub), 0) AS sin_sub,
              COALESCE(SUM(cost), 0) AS costo
         FROM (
           SELECT id, created_at, total, fx_forgiven, forgiven_amount, forgiven_at, credit_applied,
-                 NULL::numeric AS devuelto, NULL::numeric AS sub, NULL::numeric AS sin_sub, NULL::numeric AS cost
+                 NULL::numeric AS devuelto, NULL::numeric AS sub, NULL::numeric AS sub_bruto, NULL::numeric AS sin_sub, NULL::numeric AS cost
             FROM v
           UNION ALL
           SELECT sale_id, NULL, NULL, NULL, NULL, NULL, NULL,
-                 NULL, sub, CASE WHEN con_costo THEN NULL ELSE sub END, cost
+                 NULL, sub, sub_bruto, CASE WHEN con_costo THEN NULL ELSE sub END, cost
             FROM l
           UNION ALL
           SELECT r.sale_id, NULL, NULL, NULL, NULL, NULL, NULL,
-                 r.total, NULL, NULL, NULL
+                 r.total, NULL, NULL, NULL, NULL
             FROM returns r
            WHERE r.status <> 'anulado' AND r.sale_id IN (SELECT id FROM v)
         ) x
@@ -167,19 +174,20 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
                MAX(x.r_sub)   OVER w AS sub,
                MAX(x.r_sin)   OVER w AS sin_sub,
                MAX(x.r_costo) OVER w AS costo,
+               MAX(x.r_k)     OVER w AS k,
                SUM(CASE WHEN x.kind = 'perdon' THEN 0 ELSE x.monto END) OVER (
                  PARTITION BY x.sale_id ORDER BY x.prio, x.created_at, x.ord ROWS UNBOUNDED PRECEDING
                ) AS hasta
           FROM (
             SELECT sale_id, created_at, prio, ord, kind, monto, bruto, vuelto,
                    NULL::numeric AS r_ref, NULL::numeric AS r_tope, NULL::numeric AS r_sub,
-                   NULL::numeric AS r_sin, NULL::numeric AS r_costo
+                   NULL::numeric AS r_sin, NULL::numeric AS r_costo, NULL::numeric AS r_k
               FROM mov
             UNION ALL
             SELECT id, created_at, -1, 0, 'factura', 0, 0, 0,
                    GREATEST(neto - fx_forgiven, 0),
                    GREATEST(neto - fx_forgiven - GREATEST(forgiven_amount - fx_forgiven, 0), 0),
-                   sub, sin_sub, costo
+                   sub, sin_sub, costo, k
               FROM vs
           ) x
         WINDOW w AS (PARTITION BY x.sale_id)
@@ -196,7 +204,9 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     ev AS (
       SELECT sale_id, created_at, kind = 'perdon' AS perdon, bruto, vuelto, ref, sub, sin_sub, costo,
              CASE WHEN kind = 'perdon' THEN 0
-                  ELSE GREATEST(LEAST(hasta, tope) - LEAST(hasta - monto, tope), 0) END AS ingreso,
+                  ELSE GREATEST(LEAST(hasta, tope) - LEAST(hasta - monto, tope), 0) * k END AS ingreso,
+             CASE WHEN kind = 'perdon' THEN 0
+                  ELSE GREATEST(LEAST(hasta, tope) - LEAST(hasta - monto, tope), 0) * (1 - k) END AS iva,
              CASE WHEN kind = 'perdon' THEN LEAST(monto, ref)
                   ELSE GREATEST(LEAST(hasta, tope) - LEAST(hasta - monto, tope), 0) END AS saldado
         FROM ac
@@ -204,7 +214,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     : `
     ev AS (
       SELECT id AS sale_id, created_at, FALSE AS perdon, 0::numeric AS bruto, 0::numeric AS vuelto,
-             neto AS ref, sub, sin_sub, costo, neto AS ingreso, neto AS saldado
+             neto AS ref, sub, sin_sub, costo, neto * k AS ingreso, neto * (1 - k) AS iva, neto AS saldado
         FROM vs
     )`;
 
@@ -241,6 +251,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
       SELECT ${dia} AS day,
              COUNT(DISTINCT e.sale_id)::int AS sales,
              COALESCE(SUM(e.ingreso), 0) AS revenue,
+             COALESCE(SUM(e.iva), 0) AS iva,
              COALESCE(SUM(e.ingreso * e.sin_sub / NULLIF(e.sub, 0)), 0) AS sin_costo,
              COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * e.costo), 0) AS cost,
              COALESCE(SUM(e.saldado / NULLIF(e.ref, 0) * e.costo) FILTER (WHERE e.perdon), 0) AS forgiven_cost,
@@ -295,18 +306,18 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
     ? q(`WITH ${base(`SELECT ${columnas} FROM sales s WHERE s.status IN ('pendiente', 'parcial') AND s.is_prior_debt IS NOT TRUE ${tcS} ${whS}`)},${mov}
          SELECT COUNT(*)::int AS count,
                 COALESCE(SUM(pend), 0)::float AS amount,
-                COALESCE(SUM(pend - pend * sin_sub / NULLIF(sub, 0) - pend / NULLIF(ref, 0) * costo), 0)::float AS profit
+                COALESCE(SUM(pend * k - pend * k * sin_sub / NULLIF(sub, 0) - pend / NULLIF(ref, 0) * costo), 0)::float AS profit
            FROM (
-             SELECT id, MAX(sub) AS sub, MAX(sin_sub) AS sin_sub, MAX(costo) AS costo, MAX(ref) AS ref,
+             SELECT id, MAX(sub) AS sub, MAX(k) AS k, MAX(sin_sub) AS sin_sub, MAX(costo) AS costo, MAX(ref) AS ref,
                     GREATEST(MAX(tope) - COALESCE(SUM(pagado), 0), 0) AS pend
                FROM (
-                 SELECT id, sub, sin_sub, costo,
+                 SELECT id, sub, k, sin_sub, costo,
                         GREATEST(neto - fx_forgiven, 0) AS ref,
                         GREATEST(neto - fx_forgiven - GREATEST(forgiven_amount - fx_forgiven, 0), 0) AS tope,
                         NULL::numeric AS pagado
                    FROM vs
                  UNION ALL
-                 SELECT sale_id, NULL, NULL, NULL, NULL, NULL, monto FROM mov WHERE kind <> 'perdon'
+                 SELECT sale_id, NULL, NULL, NULL, NULL, NULL, NULL, monto FROM mov WHERE kind <> 'perdon'
                ) u
               GROUP BY id
            ) x
@@ -357,6 +368,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
   const margin = revenue - sinCostoTotal - cost;
   const cobrado = parseFloat(total.cobrado || 0);
   const vuelto = parseFloat(total.vuelto || 0);
+  const iva = parseFloat(total.iva || 0);
 
   return {
     basis: porCobro ? "cobro" : "venta",
@@ -369,13 +381,15 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
       total_margin: r2(margin),
       avg_margin_pct: pct(margin, revenue - sinCostoTotal),
       products_with_cost: byProductAll.length,
+      // IVA incluido en lo vendido (o cobrado): se resta del ingreso porque es del fisco.
+      total_iva: r2(iva),
       sales_count: parseInt(total.sales || 0),
       // Solo en la base "cobro": cómo se llega de lo cobrado (la cifra de "Cobros por diario")
       // al ingreso que cuenta. `ajustes` es el saldo a favor aplicado menos lo que pasó del
       // tope de cada factura.
       cobrado: r2(cobrado),
       vuelto: r2(vuelto),
-      ajustes: porCobro ? r2(revenue - (cobrado - vuelto)) : 0,
+      ajustes: porCobro ? r2(revenue + iva - (cobrado - vuelto)) : 0,
       pending: pendiente ? {
         count: parseInt(pendiente[0]?.count || 0),
         amount: r2(pendiente[0]?.amount),

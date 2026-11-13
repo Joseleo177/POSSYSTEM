@@ -14,21 +14,34 @@
  * Retorna string, o null si los datos son inválidos.
  * @param {number|string} cost
  * @param {number|string} margin - Porcentaje (ej. 30 = 30%)
+ * @param {number} factor - IVA que lleva el precio encima (factorPrecio en helpers/iva.js); 1 sin IVA
  */
-export const calcSalePrice = (cost, margin) => {
+export const calcSalePrice = (cost, margin, factor = 1) => {
   const c = parseFloat(cost);
   const m = parseFloat(margin);
   if (!isNaN(c) && c > 0 && !isNaN(m) && m >= 0) {
-    return (c * (1 + m / 100)).toFixed(5).replace(/(\.\d{2}\d*?)0+$/, "$1");
+    return (c * (1 + m / 100) * factor).toFixed(5).replace(/(\.\d{2}\d*?)0+$/, "$1");
   }
   return null;
 };
 
 /**
+ * Margen que deja un precio sobre un costo, en porcentaje con 2 decimales. Con IVA, `factor`
+ * saca el impuesto del precio antes de compararlo (el IVA no es ganancia). Null si no se puede.
+ */
+export const calcMargin = (price, cost, factor = 1) => {
+  const p = parseFloat(price) / factor;
+  const c = parseFloat(cost);
+  if (isNaN(p) || isNaN(c) || c <= 0 || p < 0) return null;
+  return parseFloat((((p / c) - 1) * 100).toFixed(2));
+};
+
+/**
  * Calcula los valores derivados de un ítem de compra (precio unitario, precio venta, totales).
  * @param {object} item - { package_size, package_qty, package_price, profit_margin }
+ * @param {number} factor - IVA que lleva el precio de venta encima (factorPrecio); 1 sin IVA
  */
-export const calcPurchaseItem = (item) => {
+export const calcPurchaseItem = (item, factor = 1) => {
   const pkgSize  = parseFloat(item.package_size)  || 0;
   const pkgQty   = parseFloat(item.package_qty)   || 0;
   const pkgPrice = parseFloat(item.package_price) || 0;
@@ -45,7 +58,7 @@ export const calcPurchaseItem = (item) => {
   }
 
   const unit_cost   = pkgPrice / pkgSize;
-  const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
+  const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) * factor : null;
   const total_units = pkgQty * pkgSize;
   const subtotal    = pkgQty * pkgPrice;
 

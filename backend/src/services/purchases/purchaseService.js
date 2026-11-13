@@ -10,7 +10,7 @@ const { updateComboPricesForProduct } = require("../products/productService");
 const { propagateModelToVariants } = require("../products/variantService");
 const { purchaseLineSpec, numberPurchaseReceipt, releasePurchasePieces } = require("../factory/numbering");
 const { recalcularCompra, cargosDe, facturaDe } = require("./fiscalCompra");
-const { tasaDeTipo } = require("../fiscal/iva");
+const { tasaDeTipo, factorPrecio, ivaActivo } = require("../fiscal/iva");
 const { Op } = Sequelize;
 
 async function getAll({ limit = 50, offset = 0, search, status, order_status, date_from, date_to, warehouse_id }, req) {
@@ -393,6 +393,8 @@ async function createPurchase({ body, employee_id }) {
 
     let grandTotal = 0;
     const createdItems = [];
+    // Con IVA, el precio de venta que sale del margen lo lleva encima (ver factorPrecio).
+    const conIva = await ivaActivo(purchase.company_id, transaction);
 
     for (const item of items) {
       const {
@@ -420,7 +422,7 @@ async function createPurchase({ body, employee_id }) {
       const margin    = hasMargin ? marginNum : null;
 
       const unit_cost   = pkgPrice / pkgSize;
-      const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
+      const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) * factorPrecio(product.iva_tipo, conIva) : null;
       const total_units = pkgQty * pkgSize;
       const subtotal    = pkgQty * pkgPrice;
       grandTotal += subtotal;
@@ -717,6 +719,7 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
 
     let grandTotal = 0;
     if (items?.length) {
+      const conIva = await ivaActivo(purchase.company_id, transaction);
       for (const item of items) {
         const { product_id, package_unit, package_size, package_qty, package_price, profit_margin, lot_number, expiration_date, update_price } = item;
         if (!product_id || !package_qty)
@@ -737,7 +740,7 @@ async function updateDraft(id, { warehouse_id, supplier_id, supplier_name, notes
         const hasMargin = !isNaN(marginNum);
         const margin    = hasMargin ? marginNum : null;
         const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
-        const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) : null;
+        const sale_price  = hasMargin ? unit_cost * (1 + margin / 100) * factorPrecio(product.iva_tipo, conIva) : null;
         const total_units = pkgQty * pkgSize;
         const subtotal    = pkgQty * pkgPrice;
         grandTotal += subtotal;

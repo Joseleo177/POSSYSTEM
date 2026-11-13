@@ -2,12 +2,16 @@ import { fmtBase, resolveImageUrl, imgRetryOnError } from "../../helpers";
 import StockQty, { splitQty } from "../ui/StockQty";
 import { useApp } from "../../context/AppContext";
 
+// Con IVA, la alícuota se marca solo si no es la general: lo normal no hace ruido.
+const ETIQUETA_IVA = { E: "Exento", R: "IVA 8 %", A: "IVA 31 %" };
+
 export default function ProductTable({
     products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
     priceCurrency = "base", localCurrency = null, onToggleVisible, catalogEnabled = false
 }) {
-    const { baseCurrency } = useApp();
+    const { baseCurrency, company } = useApp();
+    const conIva = !!company?.iva_enabled;
     const fmtPrice = (n) => {
         if (priceCurrency === "local" && localCurrency) {
             return fmtBase(parseFloat(n) * parseFloat(localCurrency.exchange_rate), localCurrency);
@@ -74,6 +78,9 @@ export default function ProductTable({
                                     <span className="text-[10px] bg-blue-500/10 text-blue-500 border border-blue-500/20 px-1.5 py-0.5 rounded font-semibold whitespace-nowrap">
                                         Servicio
                                     </span>
+                                )}
+                                {conIva && ETIQUETA_IVA[p.iva_tipo] && (
+                                    <span className="text-[11px] text-content-subtle whitespace-nowrap">{ETIQUETA_IVA[p.iva_tipo]}</span>
                                 )}
                                 {p.is_variant_parent && (
                                     <span className="text-[11px] text-content-subtle whitespace-nowrap">

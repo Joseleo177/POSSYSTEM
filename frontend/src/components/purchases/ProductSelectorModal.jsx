@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { api } from "../../services/api";
 import { calcPurchaseItem } from "../../helpers";
+import { useFactorIva } from "../../hooks/useFactorIva";
 import { fmtQtyUnit, isIntegerUnit } from "../../helpers/unitFormatter";
 import { PKG_UNITS } from "../../constants/pkg";
 import CustomSelect from "../ui/CustomSelect";
@@ -86,6 +87,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const reqRef    = useRef(0);
     const listRef   = useRef(null);
     const [form, setForm]           = useState(EMPTY_FORM);
+    const factorIva = useFactorIva();
     const [stockFilter, setStockFilter]         = useState("todos");
     const [showProductModal, setShowProductModal] = useState(false);
     const [categories, setCategories]             = useState([]);
@@ -260,7 +262,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     };
 
     const pkgPriceBase = parseFloat(form.package_price) / invoiceRate;
-    const calc = selected ? calcPurchaseItem({ ...form, package_price: pkgPriceBase, product: selected }) : null;
+    const calc = selected ? calcPurchaseItem({ ...form, package_price: pkgPriceBase, product: selected }, factorIva(selected)) : null;
 
     // Cómo se nombra la presentación en los rótulos. "UNIDAD" no es una presentación sino la ausencia
     // de uno: ahí se compra suelto y los rótulos hablan de unidades, no de cajas.

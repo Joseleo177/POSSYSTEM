@@ -13,7 +13,7 @@ import ProductPhotos from "./ProductPhotos";
 import { PKG_UNITS } from "../constants/pkg";
 import { fmtQtyUnit } from "../helpers/unitFormatter";
 import Segmented from "./ui/Segmented";
-import { OPCIONES_IVA } from "../helpers/iva";
+import { OPCIONES_IVA, factorPrecio } from "../helpers/iva";
 import { MODES as PIECE_MODES, DimsInput, UnitSwitch, useMeasureUnit, toMm, fromMm } from "./fabrica/shared";
 import { monedaLocal } from "../helpers/currency";
 
@@ -235,7 +235,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             && parseFloat(next.price) > 0;
 
         if (precioFijoSinMargen) {
-            const m = deriveMargin(next.price, val);
+            const m = deriveMargin(next.price, val, next.iva_tipo);
             if (m !== null) next.profit_margin = m;
             setForm(next);
             return;
@@ -243,7 +243,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
         const suggested = calcSalePriceHelper(
             key === "cost_price" ? val : next.cost_price,
-            key === "profit_margin" ? val : next.profit_margin
+            key === "profit_margin" ? val : next.profit_margin,
+            factorPrecio(next.iva_tipo, ivaEnabled)
         );
         if (suggested !== null) {
             next.price = suggested;
@@ -258,18 +259,26 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     // Margen que se desprende de un precio puesto a mano. El usuario fija el precio y el
     // porcentaje sale solo, en vez de quedar en blanco: así la ficha no dice "0%" de algo
-    // que sí deja ganancia.
-    const deriveMargin = (price, cost) => {
-        const p = parseFloat(price);
+    // que sí deja ganancia. Con IVA, el impuesto sale del precio antes de comparar con el costo.
+    const deriveMargin = (price, cost, tipo) => {
+        const p = parseFloat(price) / factorPrecio(tipo, ivaEnabled);
         const c = parseFloat(cost);
         if (isNaN(p) || isNaN(c) || c <= 0 || p <= 0) return null;
         return (((p / c) - 1) * 100).toFixed(2);
     };
 
+    // La alícuota no mueve el precio (ya incluye el impuesto): cambia cuánto de él es ganancia.
+    const cambiarIva = (tipo) => setForm(prev => {
+        const next = { ...prev, iva_tipo: tipo };
+        const m = parseFloat(prev.price) > 0 ? deriveMargin(prev.price, prev.cost_price, tipo) : null;
+        if (m !== null) next.profit_margin = m;
+        return next;
+    });
+
     const handlePriceChange = (val) => {
         setForm(prev => {
             const next = { ...prev, price: val };
-            const m = deriveMargin(val, prev.cost_price);
+            const m = deriveMargin(val, prev.cost_price, prev.iva_tipo);
             if (m !== null) next.profit_margin = m;
             return next;
         });
@@ -300,13 +309,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             // Precio por caja con precio de venta ya fijado: el margen se deduce del costo
             // unitario que acaba de salir de esa caja.
             if (String(form.profit_margin ?? "").trim() === "" && parseFloat(form.price) > 0) {
-                const m = deriveMargin(form.price, unitCost);
+                const m = deriveMargin(form.price, unitCost, form.iva_tipo);
                 if (m !== null) updates.profit_margin = m;
                 setForm(prev => ({ ...prev, ...updates }));
                 return;
             }
 
-            const suggested = calcSalePriceHelper(unitCost, form.profit_margin);
+            const suggested = calcSalePriceHelper(unitCost, form.profit_margin, factorPrecio(form.iva_tipo, ivaEnabled));
             if (suggested !== null) {
                 updates.price = suggested;
                 if (exchangeRate > 0) {
@@ -481,7 +490,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
     const isEdit = !!editData;
 
-    const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin);
+    const factorIva = factorPrecio(form.iva_tipo, ivaEnabled);
+    const suggestedPrice = calcSalePriceHelper(form.cost_price, form.profit_margin, factorIva);
 
     const handleComboItemsChange = (items) => {
         const sumCost = items.reduce((acc, item) => {
@@ -498,7 +508,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         setForm(prev => {
             const next = { ...prev, ...updates };
             if (next.profit_margin && next.cost_price !== "") {
-                 const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin);
+                 const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin, factorPrecio(next.iva_tipo, ivaEnabled));
                  if (suggested !== null) {
                      next.price = suggested;
                      setTimeout(() => {
@@ -545,7 +555,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 next.cost_price = sumCost.toFixed(4);
 
                 if (next.profit_margin) {
-                    const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin);
+                    const suggested = calcSalePriceHelper(next.cost_price, next.profit_margin, factorPrecio(next.iva_tipo, ivaEnabled));
                     if (suggested !== null) {
                         next.price = suggested;
                         setTimeout(() => {
@@ -900,7 +910,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <Segmented
                                     className="w-full sm:w-auto shrink-0 [&>button]:flex-1 sm:[&>button]:flex-none [&>button]:justify-center"
                                     value={form.iva_tipo}
-                                    onChange={v => set("iva_tipo", v)}
+                                    onChange={cambiarIva}
                                     options={OPCIONES_IVA}
                                 />
                             </div>
@@ -1189,7 +1199,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                         <p className="text-[17px] font-semibold tracking-tight text-content dark:text-white tabular-nums">
                                             {suggestedPrice ? `Ref. ${suggestedPrice}` : "—"}
                                         </p>
-                                        <p className="text-[11px] text-content-subtle">{suggestedPrice ? "Costo más el margen" : "Carga costo y margen"}</p>
+                                        <p className="text-[11px] text-content-subtle">{suggestedPrice ? (factorIva > 1 ? `Costo más el margen y el IVA (${Math.round((factorIva - 1) * 100)} %)` : "Costo más el margen") : "Carga costo y margen"}</p>
                                     </div>
                                     {suggestedPrice && (
                                         <button type="button" onClick={() => handlePriceChange(suggestedPrice)}

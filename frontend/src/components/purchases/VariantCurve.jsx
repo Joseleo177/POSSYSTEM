@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { api } from "../../services/api";
 import { calcPurchaseItem } from "../../helpers";
+import { useFactorIva } from "../../hooks/useFactorIva";
 import { Spinner } from "../ui/Spinner";
 import { splitQty } from "../ui/StockQty";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
@@ -23,6 +24,7 @@ export default function VariantCurve({ model, warehouseId, invoiceRate = 1, invo
     const [qty, setQty] = useState({});          // id de variante -> cantidad (texto)
     const [cost, setCost] = useState("");        // costo por unidad, en la moneda de la factura
     const [margin, setMargin] = useState("30");
+    const factorIva = useFactorIva();
     const [error, setError] = useState(null);
 
     useEffect(() => {
@@ -48,7 +50,9 @@ export default function VariantCurve({ model, warehouseId, invoiceRate = 1, invo
     const costBase = (parseFloat(cost) || 0) / (invoiceRate || 1);
     const totalUnidades = variantes.reduce((a, v) => a + (parseInt(qty[v.id], 10) || 0), 0);
     const totalLinea = totalUnidades * (parseFloat(cost) || 0);
-    const muestra = calcPurchaseItem({ package_size: 1, package_qty: 1, package_price: costBase, profit_margin: vendible ? margin : "" });
+    // Las tallas heredan la alícuota del modelo.
+    const ivaTipo = data?.model?.iva_tipo || model.iva_tipo;
+    const muestra = calcPurchaseItem({ package_size: 1, package_qty: 1, package_price: costBase, profit_margin: vendible ? margin : "" }, factorIva({ iva_tipo: ivaTipo }));
 
     const buscar = (valores) => variantes.find(v => Object.entries(valores).every(([a, id]) => v.value_ids[a] === id));
     const cant = (v) => (v && !enOrden.has(v.id) ? parseInt(qty[v.id], 10) || 0 : 0);
@@ -97,8 +101,8 @@ export default function VariantCurve({ model, warehouseId, invoiceRate = 1, invo
                 package_price: String(costBase), profit_margin: vendible ? margin : "",
                 lot_number: "", expiration_date: "",
             };
-            const product = { id: v.id, name: v.name, unit: unidad, stock: v.qty, cost_price: v.cost_price || 0, price: v.price, sellable: vendible, parent_id: model.id };
-            const calc = calcPurchaseItem({ ...form, product });
+            const product = { id: v.id, name: v.name, unit: unidad, stock: v.qty, cost_price: v.cost_price || 0, price: v.price, sellable: vendible, parent_id: model.id, iva_tipo: ivaTipo };
+            const calc = calcPurchaseItem({ ...form, product }, factorIva(product));
             const item = { ...form, product, ...calc, key: base + i };
             if (!vendible) { item.profit_margin = ""; item.sale_price = null; item.keepsPrice = true; }
             item.update_price = !(item.keepsPrice);

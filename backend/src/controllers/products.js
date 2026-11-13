@@ -4,6 +4,8 @@ const { broadcast } = require("../services/sseService");
 const { assertWarehouseAccess, visibleWarehouseIds, isAdmin } = require("../middleware/auth");
 const { assertProductAccess, idsVisibles, noEncontrado } = require("../services/products/productAccess");
 const { ProductStock, Sequelize } = require("../models");
+const catalogoIva = require("../services/fiscal/catalogoIva");
+const preciosIva = require("../services/fiscal/preciosIva");
 
 const prohibido = (message) => Object.assign(new Error(message), { status: 403, isOperational: true });
 
@@ -198,6 +200,39 @@ module.exports = {
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
     return result;
   }),
+  // Alícuota de IVA en lote (services/fiscal/catalogoIva.js). Es de toda la empresa y fiscal,
+  // así que solo el administrador.
+  ivaTipo: {
+    resumen: wrap(async req => {
+      if (!isAdmin(req)) throw prohibido("Solo el administrador cambia el IVA del catálogo");
+      return catalogoIva.resumen({ ...req.body, company_id: req.employee?.company_id ?? null });
+    }),
+    aplicar: wrap(async req => {
+      if (!isAdmin(req)) throw prohibido("Solo el administrador cambia el IVA del catálogo");
+      const result = await catalogoIva.aplicar({ ...req.body, company_id: req.employee?.company_id ?? null });
+      if (result.data.cambiados) broadcast(req.employee?.company_id ?? 0, "products:updated", {});
+      return result;
+    }),
+  },
+  // Sumar o quitar el IVA a los precios de venta (services/fiscal/preciosIva.js). Solo el admin.
+  ivaPrecios: {
+    vista: wrap(async req => {
+      if (!isAdmin(req)) throw prohibido("Solo el administrador ajusta los precios con IVA");
+      return preciosIva.vistaPrevia({ ...req.body, company_id: req.employee?.company_id ?? null });
+    }),
+    aplicar: wrap(async req => {
+      if (!isAdmin(req)) throw prohibido("Solo el administrador ajusta los precios con IVA");
+      const result = await preciosIva.aplicar({ ...req.body, company_id: req.employee?.company_id ?? null, employee_id: req.employee?.id });
+      if (result.data.precios) broadcast(req.employee?.company_id ?? 0, "products:updated", {});
+      return result;
+    }),
+    deshacer: wrap(async req => {
+      if (!isAdmin(req)) throw prohibido("Solo el administrador ajusta los precios con IVA");
+      const result = await preciosIva.deshacer({ company_id: req.employee?.company_id ?? null, employee_id: req.employee?.id });
+      broadcast(req.employee?.company_id ?? 0, "products:updated", {});
+      return result;
+    }),
+  },
   remove:  wrap(async req => {
     // Borrar un producto lo borra de la EMPRESA. Si otra sucursal lo maneja, a quien no es
     // admin solo le corresponde sacarlo de la suya, desde Stock.

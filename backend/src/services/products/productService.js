@@ -9,6 +9,7 @@ const { condicionSucursal, existenciaEn, idsVisibles } = require("./productAcces
 const { pieceConfigChanges } = require("../factory/numbering");
 const { unitOfMode } = require("../factory/shared");
 const { marcarRecetaDesde } = require("./recipeStock");
+const { factorPrecio, ivaActivo } = require("../fiscal/iva");
 
 // ¿La empresa tiene el módulo Fábrica? El control por piezas solo se acepta ahí.
 async function fabricaActiva(companyId, transaction) {
@@ -283,7 +284,7 @@ async function anotarVariantes(rows, warehouseId) {
 
 // visible_ids: almacenes de quien consulta (null = admin, toda la empresa). Sin una sucursal
 // elegida, acota la lista a lo de esos almacenes y la existencia a lo que hay en ellos.
-async function getAll({ search, barcode, category_id, is_combo, is_service, is_addon, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
+async function getAll({ search, barcode, category_id, is_combo, is_service, is_addon, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, iva_tipo, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
   if (visible_ids && !visible_ids.length) return { data: [], total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
   const porVisibles = visible_ids && !warehouse_id;
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
@@ -307,6 +308,8 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
   // El buscador de venta pide sellable=true; compras, inventario y transferencias no filtran,
   // porque un insumo se compra y se mueve igual que cualquier otro producto.
   if (sellable !== undefined) where.sellable = sellable === 'true' || sellable === true;
+  // Filtro del catálogo de una empresa con IVA: ver qué quedó exento o en otra alícuota.
+  if (['G', 'R', 'A', 'E'].includes(iva_tipo)) where.iva_tipo = iva_tipo;
   const andClauses0 = [];
   // Variantes. El catálogo pide 'models': ve el modelo ("Franela Básica") y no sus doce
   // variantes sueltas, que se editan desde la ficha del modelo. Todo lo demás —compras,
@@ -451,6 +454,8 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
     });
   }
 
+  // Con IVA, el margen se lee sobre el precio sin el impuesto (ver factorPrecio).
+  const conIva = company_id ? await ivaActivo(company_id) : false;
   const data = rows.map(p => {
     const prod = p.toJSON();
     prod.category_name = prod.Category?.name ?? null;
@@ -499,10 +504,10 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
       const costoNum  = parseFloat(prod.cost_price);
       const precioNum = parseFloat(prod.price);
       const explicaElPrecio = !isNaN(guardado) && costoNum > 0 && precioNum > 0
-        && Math.abs(costoNum * (1 + guardado / 100) - precioNum) <= 0.005 + 1e-9;
+        && Math.abs(costoNum * (1 + guardado / 100) * factorPrecio(prod.iva_tipo, conIva) - precioNum) <= 0.005 + 1e-9;
 
       if (!prod.margin_own && !explicaElPrecio) {
-        const margenSucursal = derivarMargen(prod.price, prod.cost_price, "");
+        const margenSucursal = derivarMargen(prod.price, prod.cost_price, "", factorPrecio(prod.iva_tipo, conIva));
         if (margenSucursal != null) prod.profit_margin = margenSucursal;
       }
 
@@ -594,10 +599,11 @@ async function getOne(id, company_id, visible_ids = null) {
 
 // Margen que se desprende de un precio puesto a mano. Hay productos cuyo precio no sale de
 // aplicarle un porcentaje al costo sino que se fija directo; dejar el margen vacío hacía que
-// la ficha mostrara 0% de algo que sí deja ganancia.
-function derivarMargen(price, cost_price, profit_margin) {
+// la ficha mostrara 0% de algo que sí deja ganancia. Con IVA, `factor` saca el impuesto del
+// precio antes de compararlo con el costo (ver factorPrecio en services/fiscal/iva.js).
+function derivarMargen(price, cost_price, profit_margin, factor = 1) {
   if (String(profit_margin ?? '').trim() !== '') return profit_margin;
-  const p = parseFloat(price);
+  const p = parseFloat(price) / factor;
   const c = parseFloat(cost_price);
   if (isNaN(p) || isNaN(c) || c <= 0 || p <= 0) return null;
   return parseFloat((((p / c) - 1) * 100).toFixed(2));
@@ -680,7 +686,8 @@ async function createProduct({ body, file, company_id }) {
       unit: unit || "unidad",
       qty_step: qty_step || 1,
       cost_price: isComboBool ? null : (cost_price || null),
-      profit_margin: derivarMargen(price, cost_price, profit_margin),
+      profit_margin: derivarMargen(price, cost_price, profit_margin,
+        factorPrecio(ivaTipo(body.iva_tipo) || 'G', await ivaActivo(company_id, t))),
       package_size: package_size || null,
       package_unit: package_unit || null,
       bulk_price: bulk_price || null,
@@ -840,7 +847,8 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
     const margenExplicito = profit_margin !== undefined && String(profit_margin).trim() !== "";
     const margenFinal = margenExplicito
       ? parseFloat(profit_margin)
-      : derivarMargen(precioFinal, costoFinal, "");
+      : derivarMargen(precioFinal, costoFinal, "",
+        factorPrecio(ivaTipo(body.iva_tipo) || product.iva_tipo, await ivaActivo(company_id || product.company_id, t)));
 
     // ── Qué le toca a la ficha de la sucursal ───────────────────────────────────────
     // Se calcula ANTES de escribir el producto porque de esto depende una decisión del
@@ -1274,7 +1282,7 @@ async function calculateComboCost(comboId, t, warehouseId = null, path = new Set
   return totalCost;
 }
 
-const precioPorMargen = (costo, margen) => parseFloat((costo * (1 + parseFloat(margen) / 100)).toFixed(2));
+const precioPorMargen = (costo, margen, factor = 1) => parseFloat((costo * (1 + parseFloat(margen) / 100) * factor).toFixed(2));
 
 // Cuando cambia el costo de un producto, los combos que lo usan y tienen margen guardado
 // recalculan su precio: costo de los componentes × (1 + margen). Sin margen, el precio del
@@ -1296,11 +1304,12 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
   for (const comboId of comboIds) {
     const combo = await Product.findByPk(comboId, { transaction: t });
     if (!combo) continue;
+    const factor = factorPrecio(combo.iva_tipo, await ivaActivo(combo.company_id, t));
 
     if (combo.profit_margin != null) {
       const costo = await calculateComboCost(comboId, t);
       if (costo != null && costo > 0) {
-        const nuevo = precioPorMargen(costo, combo.profit_margin);
+        const nuevo = precioPorMargen(costo, combo.profit_margin, factor);
         if (Math.abs(parseFloat(combo.price) - nuevo) > 1e-9) {
           await combo.update({ price: nuevo }, { transaction: t });
         }
@@ -1314,7 +1323,7 @@ async function updateComboPricesForProduct(productId, t, visited = new Set()) {
     for (const ficha of fichas) {
       const costo = await calculateComboCost(comboId, t, ficha.warehouse_id);
       if (costo == null || costo <= 0) continue;
-      const nuevo = precioPorMargen(costo, ficha.profit_margin);
+      const nuevo = precioPorMargen(costo, ficha.profit_margin, factor);
       if (Math.abs(parseFloat(ficha.price) - nuevo) > 1e-9) {
         await ficha.update({ price: nuevo }, { transaction: t });
       }

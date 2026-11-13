@@ -20,6 +20,12 @@
 const ALICUOTAS = { G: 16, R: 8, A: 31, E: 0 };
 const tasaDeTipo = (tipo) => ALICUOTAS[tipo] ?? ALICUOTAS.G;
 
+// Margen y precio en una empresa con IVA: precio (IVA incluido) = costo × (1 + margen) × factor.
+// El margen es la ganancia sobre el costo ANTES del impuesto, porque el IVA no es del comercio:
+// lo cobra para el fisco. Factor 1 si la empresa no factura con IVA o el producto es exento, y
+// entonces todo queda como siempre. Espejo en frontend/src/helpers/iva.js.
+const factorPrecio = (tipo, conIva) => (conIva && tipo !== "E" ? 1 + tasaDeTipo(tipo) / 100 : 1);
+
 // Redondeo de HKA (tfhka/dinero.redondear2): mitad hacia arriba sobre el decimal que se ve, no sobre
 // el binario. 0.5 × 31 / 100 es 0,155 y tiene que dar 0,16; Math.round(15.4999…) daría 0,15.
 function R(valor) {
@@ -229,4 +235,4 @@ function installIvaHooks(db) {
   if (db.SaleItem) db.SaleItem.addHook("beforeCreate", "fotoIva", fotoIva);
 }
 
-module.exports = { ALICUOTAS, tasaDeTipo, desglose, facturaProveedor, redondeoFiscal: R, ivaActivo, invalidarIva, installIvaHooks };
+module.exports = { ALICUOTAS, tasaDeTipo, factorPrecio, desglose, facturaProveedor, redondeoFiscal: R, ivaActivo, invalidarIva, installIvaHooks };

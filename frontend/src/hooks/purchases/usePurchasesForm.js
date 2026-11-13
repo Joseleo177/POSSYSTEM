@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { calcPurchaseItem } from "../../helpers";
+import { useFactorIva } from "../useFactorIva";
 
 export function usePurchasesForm({
     // estados del formulario
@@ -15,6 +16,7 @@ export function usePurchasesForm({
     // utilidades
     notify,
 }) {
+    const factorIva = useFactorIva();
 
     // ───────────────────────────────────────────────
     // CALCULOS EN TIEMPO REAL
@@ -37,7 +39,7 @@ export function usePurchasesForm({
         }
 
         // Calcular usando tu helper original
-        const result = calcPurchaseItem(itemForm);
+        const result = calcPurchaseItem(itemForm, factorIva(itemForm.product));
 
         setCalc({
             unit_cost: result.unit_cost,
@@ -45,7 +47,7 @@ export function usePurchasesForm({
             total_units: result.total_units,
         });
 
-    }, [itemForm]);
+    }, [itemForm, factorIva]);
 
     // ───────────────────────────────────────────────
     // SETEAR CAMPOS DEL ITEM
@@ -104,7 +106,7 @@ export function usePurchasesForm({
         if (!itemForm.package_qty || parseFloat(itemForm.package_qty) <= 0)
             return notify("Cantidad de empaques debe ser mayor a 0", "err");
 
-        const calc = calcPurchaseItem(itemForm);
+        const calc = calcPurchaseItem(itemForm, factorIva(itemForm.product));
 
         setItems(prev => [
             ...prev,
@@ -124,7 +126,7 @@ export function usePurchasesForm({
             update_price: true,
             profit_margin: prev.profit_margin,
         }));
-    }, [itemForm, notify, setItems, setItemForm]);
+    }, [itemForm, notify, setItems, setItemForm, factorIva]);
 
     // ───────────────────────────────────────────────
     // ELIMINAR ITEM
@@ -149,12 +151,12 @@ export function usePurchasesForm({
             const marginRaw   = String(next.profit_margin ?? "").trim();
             const hasMargin   = marginRaw !== "" && !isNaN(parseFloat(marginRaw));
             const unit_cost   = pkgPrice > 0 ? pkgPrice / pkgSize : 0;
-            const sale_price  = hasMargin ? unit_cost * (1 + parseFloat(marginRaw) / 100) : (parseFloat(next.sale_price) || 0);
+            const sale_price  = hasMargin ? unit_cost * (1 + parseFloat(marginRaw) / 100) * factorIva(next) : (parseFloat(next.sale_price) || 0);
             const total_units = pkgQty * pkgSize;
             const subtotal    = pkgQty * pkgPrice;
             return { ...next, unit_cost, sale_price, total_units, subtotal };
         }));
-    }, [setItems]);
+    }, [setItems, factorIva]);
 
     // ───────────────────────────────────────────────
     // RESET COMPLETO DEL FORMULARIO

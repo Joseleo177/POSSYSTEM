@@ -29,12 +29,16 @@ function IconBtn({ d, title, onClick, className = "" }) {
 // Vista en cuadrícula del catálogo. Misma información y acciones que ProductTable
 // (selección múltiple, editar, eliminar) para que cambiar de vista no cambie lo que
 // se puede hacer, solo cómo se ve.
+// Con IVA, la alícuota se marca solo si no es la general: lo normal no hace ruido.
+const ETIQUETA_IVA = { E: "Exento", R: "IVA 8 %", A: "IVA 31 %" };
+
 export default function ProductCards({
     products, canEditProducts, canDeleteProducts, openEditProduct, setDeleteProductDialog,
     selectedProducts = [], onToggleSelect, isSelectionMode = false,
     priceCurrency = "base", localCurrency = null, onToggleVisible, catalogEnabled = false
 }) {
-    const { baseCurrency } = useApp();
+    const { baseCurrency, company } = useApp();
+    const conIva = !!company?.iva_enabled;
     const fmtPrice = (n) => {
         if (priceCurrency === "local" && localCurrency) {
             return fmtBase(parseFloat(n) * parseFloat(localCurrency.exchange_rate), localCurrency);
@@ -124,6 +128,7 @@ export default function ProductCards({
                                     {toNameCase(p.category_name || "General")}
                                     {p.is_combo && " · Combo"}
                                     {p.is_service && " · Servicio"}
+                                    {conIva && ETIQUETA_IVA[p.iva_tipo] && ` · ${ETIQUETA_IVA[p.iva_tipo]}`}
                                     {p.is_variant_parent && ` · ${p.variant_count ?? 0} ${p.variant_count === 1 ? "variante" : "variantes"}`}
                                 </span>
                                 {(puedePublicar || puedeBorrar) && (

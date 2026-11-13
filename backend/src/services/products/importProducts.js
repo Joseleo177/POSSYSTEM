@@ -3,6 +3,7 @@
 const { Product, Category, ProductStock, StockSessionLine, sequelize, Sequelize } = require("../../models");
 const { ensureOpenSession } = require("../warehouses/sessionService");
 const { inheritImageByBarcode } = require("./productService");
+const { factorPrecio, ivaActivo } = require("../fiscal/iva");
 const Op = Sequelize.Op;
 
 // Unidades que maneja el sistema. Las contables no admiten decimales, así que el paso de
@@ -19,9 +20,10 @@ const numero = (v) => {
   return isNaN(n) ? null : n;
 };
 
-// Margen que se desprende del precio y el costo, mismo criterio que el alta manual.
-function derivarMargen(price, cost) {
-  const p = parseFloat(price), c = parseFloat(cost);
+// Margen que se desprende del precio y el costo, mismo criterio que el alta manual. Con IVA,
+// `factor` saca el impuesto del precio (ver factorPrecio en services/fiscal/iva.js).
+function derivarMargen(price, cost, factor = 1) {
+  const p = parseFloat(price) / factor, c = parseFloat(cost);
   if (isNaN(p) || isNaN(c) || c <= 0 || p <= 0) return null;
   return parseFloat((((p / c) - 1) * 100).toFixed(2));
 }
@@ -103,7 +105,11 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
 
     // El precio se escribe, o sale del costo más el margen. Una de las dos.
     let price = numero(row.price);
-    if (price == null && cost != null && margen != null) {
+    // Salido del margen (vacío en el Excel; el navegador lo manda ya calculado y marcado con
+    // precio_calculado): con IVA se vuelve a calcular al escribir, cuando ya se sabe si el
+    // producto existente es exento.
+    const porMargen = (price == null || row.precio_calculado === true) && cost != null && margen != null;
+    if (porMargen) {
       price = parseFloat((cost * (1 + margen / 100)).toFixed(2));
     }
     if (price == null) {
@@ -140,6 +146,7 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
       barcode: texto(row.barcode) || null,
       category: texto(row.category) || null,
       profit_margin: margen,
+      por_margen: porMargen,
       package_unit: pkgUnit,
       package_size: pkgSize,
       bulk_price: bulk,
@@ -170,6 +177,7 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
   }
 
   // ── Escritura ───────────────────────────────────────────────────────────────
+  const conIva = company_id ? await ivaActivo(company_id) : false;
   const t = await sequelize.transaction();
   try {
     // Categorías existentes, indexadas sin distinguir mayúsculas ni acentos de más.
@@ -245,6 +253,10 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
         ...(r.bulk_price != null ? { bulk_price: r.bulk_price } : {}),
       };
       // Lo que puede diferir por sucursal.
+      // Con IVA, el precio que sale del margen lo lleva encima (16 % salvo que el producto
+      // que ya existe sea exento o de otra alícuota).
+      const factor = factorPrecio(existente?.iva_tipo || "G", conIva);
+      if (r.por_margen && factor !== 1) r.price = parseFloat((r.cost_price * (1 + r.profit_margin / 100) * factor).toFixed(2));
       const camposPrecio = {
         price: r.price,
         ...(r.cost_price != null ? { cost_price: r.cost_price } : {}),
@@ -257,7 +269,9 @@ async function importProducts({ rows, warehouse_id, company_id, employee_id = nu
       // contradecir a las otras dos. El escrito solo se guarda cuando no hay costo con qué
       // hacer la cuenta —y en ese caso el precio ya salió de él, así que cuadra igual—.
       const costoVigente = r.cost_price ?? existente?.cost_price;
-      const margen = derivarMargen(r.price, costoVigente) ?? r.profit_margin;
+      // Si el precio salió del margen escrito, se guarda ese margen: despejarlo del precio ya
+      // redondeado a céntimos daría 30,17 % donde se escribió 30 %.
+      const margen = (r.por_margen ? r.profit_margin : null) ?? derivarMargen(r.price, costoVigente, factor) ?? r.profit_margin;
 
       let producto;
       if (existente) {

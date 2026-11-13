@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import { descargarPlantilla, leerArchivo } from "../../helpers/productImport";
+import { factorPrecio } from "../../helpers/iva";
 import { api } from "../../services/api";
 import { Spinner } from "../ui/Spinner";
 import { useApp } from "../../context/AppContext";
@@ -30,7 +31,7 @@ export default function ImportProductsModal({ open, onClose, warehouseName, ware
         setArchivo(file);
         setLeyendo(true);
         try {
-            setAnalisis(await leerArchivo(file));
+            setAnalisis(await leerArchivo(file, { factorIva: factorPrecio("G", !!company?.iva_enabled) }));
         } catch (e) {
             notify(`No se pudo leer el archivo: ${e.message}`, "err");
             setArchivo(null);

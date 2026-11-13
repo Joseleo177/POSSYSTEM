@@ -6,6 +6,10 @@
 
 export const ALICUOTAS = { G: 16, R: 8, A: 31, E: 0 };
 
+// Margen y precio en una empresa con IVA: precio (IVA incluido) = costo × (1 + margen) × factor.
+// El margen es la ganancia sobre el costo antes del impuesto. Factor 1 sin IVA o si es exento.
+export const factorPrecio = (tipo, conIva) => (conIva && tipo !== "E" ? 1 + (ALICUOTAS[tipo] ?? ALICUOTAS.G) / 100 : 1);
+
 // Opciones de la ficha del producto, en el orden en que se eligen más.
 export const OPCIONES_IVA = [
     { key: "G", label: "16 %" },

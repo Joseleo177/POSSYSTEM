@@ -269,7 +269,7 @@ async function getVariants(modelId, { warehouse_id, company_id, visible_ids = nu
 
   return { data: { model: {
     id: modelo.id, name: modelo.name, price: parseFloat(modelo.price), image_url: fotoUrl(modelo.image_filename),
-    unit: modelo.unit, sellable: modelo.sellable,
+    unit: modelo.unit, sellable: modelo.sellable, iva_tipo: modelo.iva_tipo,
     profit_margin: modelo.profit_margin != null ? parseFloat(modelo.profit_margin) : null,
   }, attributes, variants: data } };
 }

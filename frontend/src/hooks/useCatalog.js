@@ -21,14 +21,16 @@ export function useCatalog() {
     const [filterType, setFilterType] = useState("");      // "" | "service" | "combo" | "normal"
     const [filterStock, setFilterStock] = useState("");   // "" | "with" | "no"
     const [filterVisible, setFilterVisible] = useState(""); // "" | "yes" | "no"
+    const [filterIva, setFilterIva] = useState("");         // "" | G | E | R | A (empresas con IVA)
 
-    const activeFilterCount = [filterCategory, filterType, filterStock, filterVisible].filter(Boolean).length;
+    const activeFilterCount = [filterCategory, filterType, filterStock, filterVisible, filterIva].filter(Boolean).length;
 
     const clearFilters = () => {
         setFilterCategory("");
         setFilterType("");
         setFilterStock("");
         setFilterVisible("");
+        setFilterIva("");
     };
 
     const loadProducts = useCallback(async (p = 1, warehouseId = null) => {
@@ -47,6 +49,7 @@ export function useCatalog() {
             else if (filterType === "normal") { q.is_service = false; q.is_combo = false; }
             if (filterStock) q.stock_filter = filterStock;
             if (filterVisible) q.visible_in_catalog = filterVisible === "yes";
+            if (filterIva) q.iva_tipo = filterIva;
 
             const r = await api.products.getAll(q);
             setProducts(r.data || []);
@@ -56,7 +59,7 @@ export function useCatalog() {
         } finally {
             setLoading(false);
         }
-    }, [notify, debouncedSearch, limit, filterCategory, filterType, filterStock, filterVisible]);
+    }, [notify, debouncedSearch, limit, filterCategory, filterType, filterStock, filterVisible, filterIva]);
 
     return {
         products, setProducts, loading, search, setSearch, debouncedSearch, loadProducts,
@@ -66,6 +69,7 @@ export function useCatalog() {
         filterType, setFilterType,
         filterStock, setFilterStock,
         filterVisible, setFilterVisible,
+        filterIva, setFilterIva,
         activeFilterCount, clearFilters,
     };
 }

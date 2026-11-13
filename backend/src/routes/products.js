@@ -6,6 +6,13 @@ const { upload } = require("../middleware/upload");
 router.get("/",       auth, permit("products.view"), ctrl.getAll);
 // Antes de "/:id" para que la ruta literal no quede tapada por el parámetro.
 router.patch("/catalog-visibility", auth, permit("products.edit"), ctrl.setCatalogVisibility);
+// Alícuota de IVA en lote: cuántos hay en cada una y aplicarla (solo el administrador).
+router.post("/iva-tipo/resumen", auth, permit("products.edit"), ctrl.ivaTipo.resumen);
+router.patch("/iva-tipo", auth, permit("products.edit"), ctrl.ivaTipo.aplicar);
+// Sumar o quitar el IVA a los precios: vista previa, aplicar y deshacer el último (solo el admin).
+router.post("/iva-precios/vista", auth, permit("products.edit"), ctrl.ivaPrecios.vista);
+router.post("/iva-precios", auth, permit("products.edit"), ctrl.ivaPrecios.aplicar);
+router.post("/iva-precios/deshacer", auth, permit("products.edit"), ctrl.ivaPrecios.deshacer);
 // Hereda en lote la imagen de otra tienda para los productos sin foto (por código de barras).
 router.post("/backfill-images", auth, permit("products.edit"), ctrl.backfillImages);
 // Importar crea productos y además pisa los que ya existen, así que exige las dos cosas.

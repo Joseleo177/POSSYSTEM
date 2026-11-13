@@ -52,7 +52,7 @@ const tenantModels = [
   'PaymentReport', 'ProductImage', 'Seller', 'CommissionPayout',
   'CasheaSettlement', 'CurrencyRate', 'CobranzaSector',
   'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
-  'IvaDeclaration',
+  'IvaDeclaration', 'IvaPriceAdjustment',
 ];
 
 const applyTenantFilter = (modelName, options) => {
