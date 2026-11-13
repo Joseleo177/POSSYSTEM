@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useCatalog } from "../hooks/useCatalog";
-import { useDebounce } from "../hooks/useDebounce";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
 import Page from "../components/ui/Page";
@@ -32,7 +31,7 @@ const TABS = [
 export default function CatalogPage() {
     const { employee, activeCurrencies, company, refreshEmployee, loadCategories } = useApp();
     const {
-        products, setProducts, search, setSearch, loadProducts, can,
+        products, setProducts, search, setSearch, debouncedSearch, loadProducts, can,
         categories, notify, loading,
         page, totalProducts, limit,
         filterCategory, setFilterCategory,
@@ -41,7 +40,6 @@ export default function CatalogPage() {
         filterVisible, setFilterVisible,
         activeFilterCount, clearFilters,
     } = useCatalog();
-    const debouncedSearch = useDebounce(search, 400);
 
     const [activeTab, setActiveTab] = useState("products");
     const [productModal, setProductModal] = useState(false);

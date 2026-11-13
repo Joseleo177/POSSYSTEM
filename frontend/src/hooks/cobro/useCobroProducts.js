@@ -4,19 +4,22 @@ import { onSSE } from "../../services/sse";
 import { useDebounce } from "../useDebounce";
 import { isOffline, onNetworkChange, esSinServidor } from "../../services/offline/network";
 import { buscarEnCatalogo, refrescarDatosLocales } from "../../services/offline/catalog";
+import { alCambiar } from "../../services/huellaCaja";
 
 // En una pantalla ancha caben 8 columnas: con 30 la página no llenaba ni dos pantallas y
 // el scroll se detenía a esperar la siguiente a cada rato.
 const LIMIT = 60;
 
-// Cada cuánto se vuelve a pedir el stock por si el aviso en vivo no llegó.
+// REFRESH_MS — por qué la grilla se vuelve a pedir aunque no llegue ningún aviso:
 //
 // El SSE del backend guarda los clientes conectados en memoria del proceso, así que solo
 // funciona con un servidor persistente (el contenedor Docker). En un despliegue serverless
 // —Vercel— cada petición cae en una instancia distinta: quien emite el evento no ve a quien
-// está escuchando y el aviso se pierde siempre. Sin este refresco, un cajero puede pasar
+// está escuchando y el aviso se pierde siempre. Sin un refresco, un cajero puede pasar
 // horas viendo existencias de hace rato.
-const REFRESH_MS = 25_000;
+//
+// Ese refresco ya no es un reloj propio: services/huellaCaja.js pregunta cada 25 s si la
+// huella de productos de la sucursal cambió, y solo entonces se pide la grilla.
 
 export function useCobroProducts(activeWarehouse, notify) {
     const [products, setProducts]       = useState([]);
@@ -84,16 +87,13 @@ export function useCobroProducts(activeWarehouse, notify) {
         // Fallback: refrescar al volver al tab (por si SSE se reconecta tarde)
         const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
         document.addEventListener('visibilitychange', onVisible);
-        // Red de seguridad para cuando el aviso en vivo no llega (ver REFRESH_MS). Solo con
-        // la pestaña a la vista: una caja minimizada no necesita datos frescos y cada
-        // consulta cuesta en un backend serverless.
-        const timer = setInterval(() => {
-            if (document.visibilityState === 'visible') refresh();
-        }, REFRESH_MS);
+        // Para cuando el aviso en vivo no llega (ver REFRESH_MS): la grilla se pide de nuevo
+        // solo si la huella de productos de la sucursal cambió (services/huellaCaja.js).
+        const dejar = alCambiar("productos", activeWarehouse.id, refresh);
         return () => {
             unsubSSE();
             unsubRed();
-            clearInterval(timer);
+            dejar();
             document.removeEventListener('visibilitychange', onVisible);
         };
     }, [activeWarehouse, debouncedSearch, debouncedCat, loadProducts]);

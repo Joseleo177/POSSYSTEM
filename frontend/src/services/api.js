@@ -911,6 +911,11 @@ export const api = {
     remove:   (id)        => request(`/quotations/${id}`,       { method: "DELETE" }),
   },
 
+  // ── Huellas de la caja ("¿cambió algo?", ver services/huellaCaja.js) ──
+  huellas: {
+    get: (params = {}) => request("/huellas?" + new URLSearchParams(params), { timeout: 10_000 }),
+  },
+
   // ── Promociones ───────────────────────────────────────────────
   promotions: {
     getAll:    ()         => request("/promotions"),

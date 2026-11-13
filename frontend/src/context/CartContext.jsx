@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, useRef, useEffect, us
 import { netoLineaEnTasa, descuentoDivisas, totalBsEnTasa, monedaLocal } from "../helpers/currency";
 import { api } from "../services/api";
 import { onSSE } from "../services/sse";
+import { alCambiar } from "../services/huellaCaja";
 import { useApp } from "./AppContext";
 import { isOffline, esSinServidor } from "../services/offline/network";
 import { guardarVenta, descartarSinCobro, siguienteNumeroProvisional } from "../services/offline/outbox";
@@ -262,20 +263,19 @@ export function CartProvider({ children }) {
   // a una caja abierta todo el día descontando con una promo ya vencida —o sin aplicar una que
   // acababa de empezar—, mientras el servidor, que las revalida al facturar, cobraba otra cosa:
   // el carrito mostraba un total y la factura salía con otro. Se refrescan con el mismo ritmo
-  // que los productos: aviso en vivo, al volver a la pestaña y cada minuto como red de
-  // seguridad (el vencimiento no dispara ningún aviso).
+  // que los productos: aviso en vivo, al volver a la pestaña y cuando cambia la huella de las
+  // promos VIGENTES (services/huellaCaja.js). Esa huella se calcula con la hora del servidor,
+  // así que una promo que vence o empieza la mueve sin que nadie la toque.
   useEffect(() => {
     if (!activeWarehouse?.id) return;
     const refrescar = () => loadActivePromos(activeWarehouse.id);
     const unsubSSE = onSSE('products:updated', refrescar);
     const onVisible = () => { if (document.visibilityState === 'visible') refrescar(); };
     document.addEventListener('visibilitychange', onVisible);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') refrescar();
-    }, 60_000);
+    const dejar = alCambiar('promos', activeWarehouse.id, refrescar);
     return () => {
       unsubSSE();
-      clearInterval(timer);
+      dejar();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [activeWarehouse?.id, loadActivePromos]);
@@ -951,24 +951,27 @@ export function CartProvider({ children }) {
   // CartProvider envuelve toda la app, así que sin esta guarda la petición saldría
   // también en la pantalla de login: un 401 dispararía el refresh de token y la recarga.
   //
-  // Se repite cada tanto por lo mismo que la grilla de productos (ver REFRESH_MS en
+  // Se vuelve a pedir por lo mismo que la grilla de productos (ver REFRESH_MS en
   // useCobroProducts): con el backend en serverless los avisos en vivo no llegan, y aquí
   // además hay que ver las cuentas que abren las otras cajas y cuáles quedaron bloqueadas.
+  // El aviso de "pedido listo" de la cocina también sale de aquí: cambia la huella y se
+  // recarga, así que llega igual de rápido que antes.
   useEffect(() => {
     if (!employee) return;
     // El orden importa: primero se sueltan los restos de la sesión anterior, y recién
     // entonces se pide la lista, para que no aparezcan bloqueadas por uno mismo.
     releaseOwnStaleLocks().finally(loadHeldCarts);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadHeldCarts();
-    }, 25_000);
+    // La lista solo se pide de nuevo cuando cambia la huella de las cuentas de la sucursal
+    // (services/huellaCaja.js): una cuenta nueva, tomada, soltada, con otra ronda o lista en
+    // cocina. Sin sucursal, la huella no aplica y se recarga en cada vuelta, como antes.
+    const dejar = alCambiar('cuentas', activeWarehouse?.id, loadHeldCarts);
     const onVisible = () => { if (document.visibilityState === 'visible') loadHeldCarts(); };
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(timer);
+      dejar();
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [employee, loadHeldCarts, releaseOwnStaleLocks]);
+  }, [employee, loadHeldCarts, releaseOwnStaleLocks, activeWarehouse?.id]);
 
   // Suelta la cuenta al cerrar o recargar la pestaña, para que otra caja pueda tomarla en
   // el acto en vez de esperar a que este cajero vuelva a entrar. `keepalive` permite que la

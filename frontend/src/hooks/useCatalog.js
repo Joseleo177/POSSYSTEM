@@ -1,12 +1,17 @@
 import { useState, useCallback } from "react";
 import { useApp } from "../context/AppContext";
 import { api } from "../services/api";
+import { useDebounce } from "./useDebounce";
 
 export function useCatalog() {
     const { notify, can, categories } = useApp();
     const [products, setProducts] = useState([]);
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
+    // loadProducts busca con el texto YA asentado. Con `search` directo la función cambiaba
+    // con cada tecla, y como CatalogPage recarga cuando ella cambia, el retardo no servía de
+    // nada: escribir "harina" eran seis consultas (hasta 100 por minuto en producción).
+    const debouncedSearch = useDebounce(search, 400);
     const [page, setPage] = useState(1);
     const [totalProducts, setTotalProducts] = useState(0);
     const limit = 50;
@@ -33,7 +38,7 @@ export function useCatalog() {
             // El catálogo muestra el modelo ("Franela Básica") y no cada talla suelta: las
             // variantes se editan desde la ficha del modelo.
             const q = { limit, offset: (p - 1) * limit, variant_view: "models", is_addon: false };   // los adicionales van en su pestaña
-            if (search?.trim()) q.search = search.trim();
+            if (debouncedSearch?.trim()) q.search = debouncedSearch.trim();
             if (warehouseId) q.warehouse_id = warehouseId;
 
             if (filterCategory) q.category_id = filterCategory;
@@ -51,10 +56,10 @@ export function useCatalog() {
         } finally {
             setLoading(false);
         }
-    }, [notify, search, limit, filterCategory, filterType, filterStock, filterVisible]);
+    }, [notify, debouncedSearch, limit, filterCategory, filterType, filterStock, filterVisible]);
 
     return {
-        products, setProducts, loading, search, setSearch, loadProducts,
+        products, setProducts, loading, search, setSearch, debouncedSearch, loadProducts,
         can, categories, notify,
         page, setPage, totalProducts, limit,
         filterCategory, setFilterCategory,

@@ -144,6 +144,7 @@ app.use("/api/payment-reports",  require("./routes/paymentReports"));       // a
 app.use("/api/web-orders",       require("./routes/webOrders"));            // auth+permit+módulo dentro
 app.use("/api/benefit-tags",     require("./routes/benefitTags"));          // auth dentro
 app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
+app.use("/api/huellas",          require("./routes/huellas"));             // auth dentro; "¿cambió algo?" de la caja
 
 app.use("/api/events",           require("./routes/events"));             // SSE stream
 

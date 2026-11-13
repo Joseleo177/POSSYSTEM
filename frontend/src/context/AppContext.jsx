@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useMemo } 
 import { api, recordarSesion, setSucursalesFiltro } from "../services/api";
 import { hasPermission } from "../constants/permissions";
 import { initSSE, closeSSE, onSSE } from "../services/sse";
+import { alCambiar } from "../services/huellaCaja";
 import { applyBrandColor, clearBrandColor, rememberBrandColor, applyRememberedBrandColor } from "../helpers/brandColor";
 import { pedirAlmacenamientoPersistente } from "../services/offline/store";
 import { iniciarSincronizacion } from "../services/offline/sync";
@@ -9,9 +10,6 @@ import { esSinServidor } from "../services/offline/network";
 import { monedaLocal } from "../helpers/currency";
 
 const AppContext = createContext(null);
-
-// La tasa del día cambia una vez al día; un minuto de retraso como mucho sobra de sobra.
-const CURRENCIES_REFRESH_MS = 60_000;
 
 // El color de marca llega con los ajustes, es decir tras una ida al servidor. Pintarlo desde
 // localStorage antes del primer render evita que la interfaz aparezca en teal y cambie de
@@ -284,13 +282,12 @@ export function AppProvider({ children }) {
     // Red de seguridad, igual que la grilla de productos (ver REFRESH_MS en useCobroProducts).
     // El aviso por visibilitychange no basta: una caja pasa el turno entero en la misma
     // pantalla sin cambiar de pestaña, y ahí la tasa del día se quedaba vieja cuando el
-    // evento en vivo no llegaba. Un minuto sobra: la tasa se carga una vez al día.
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') loadCurrencies();
-    }, CURRENCIES_REFRESH_MS);
+    // evento en vivo no llegaba. Las monedas se piden solo si cambia su huella, que viaja en
+    // la misma consulta que las demás de la caja (services/huellaCaja.js).
+    const dejar = alCambiar('monedas', null, loadCurrencies);
     return () => {
       unsubSSE();
-      clearInterval(timer);
+      dejar();
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [employee, loadCurrencies, setCurrencies]);
