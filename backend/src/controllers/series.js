@@ -41,6 +41,17 @@ const resolveNcSerie = async (ncSerieId, { serieId = null, type, warehouseId }) 
   return id;
 };
 
+// El número impreso es prefijo + correlativo, y la base exige que sea único por empresa. Dos
+// series con el mismo prefijo (una por sucursal, las dos "A") terminan emitiendo el mismo
+// A-0000123 y el cobro de la segunda se cae. El prefijo se reserva para una sola serie.
+const assertPrefixLibre = async (prefix, exceptId = null) => {
+  const dup = await Serie.findOne({
+    where: { prefix: prefix.toUpperCase(), ...(exceptId ? { id: { [Op.ne]: exceptId } } : {}) },
+    attributes: ["name"],
+  });
+  if (dup) throw new Error(`El prefijo "${prefix.toUpperCase()}" ya lo usa la serie "${dup.name}". Cada serie necesita un prefijo propio.`);
+};
+
 // GET /api/series  — con rangos y usuarios. Un admin ve las de toda la empresa; un empleado
 // solo las de sus propios almacenes, igual que en reportes: sin esto, cualquiera con
 // series.view (necesario para el filtro de Contabilidad > Ventas) veía y hasta podía
@@ -102,6 +113,7 @@ const create = async (req, res) => {
     await assertWarehouseAccess(req, warehouse_id);
     const warehouse = await Warehouse.findByPk(warehouse_id);
     if (!warehouse) throw new Error("Almacén no encontrado");
+    await assertPrefixLibre(prefix);
     const validTypes = ['factura', 'nc'];
     const serieType = validTypes.includes(type) ? type : 'factura';
     const ncSerieId = await resolveNcSerie(nc_serie_id, {
@@ -131,6 +143,8 @@ const update = async (req, res) => {
     // serie de una sucursal ajena con solo conocer su id.
     await assertWarehouseAccess(req, serie.warehouse_id);
     const { name, prefix, padding, active, type, warehouse_id, nc_serie_id } = req.body;
+    // Solo si cambia: series viejas que ya comparten prefijo se pueden seguir editando.
+    if (prefix && prefix.toUpperCase() !== serie.prefix) await assertPrefixLibre(prefix, serie.id);
     const validTypes = ['factura', 'nc'];
 
     // Mover una serie de sucursal solo se permite mientras no haya facturado nada: si ya
@@ -280,6 +294,11 @@ const removeRange = async (req, res) => {
     if (!range) throw new Error("Rango no encontrado");
     const serie = await Serie.findByPk(range.serie_id);
     if (serie) await assertWarehouseAccess(req, serie.warehouse_id);
+    // Un rango que ya emitió es el registro de qué números salieron. Borrarlo permitía crearlo
+    // de nuevo desde el inicio y la serie volvía a dar números ya facturados.
+    if (range.current_number > range.start_number) {
+      throw new Error("No se puede eliminar un rango que ya emitió correlativos. Agrega un rango nuevo a continuación.");
+    }
     await range.destroy();
     res.json({ ok: true });
   } catch (err) {
