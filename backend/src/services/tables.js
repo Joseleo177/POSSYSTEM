@@ -258,7 +258,8 @@ async function accounts(req, tableId) {
   const ids = ventas.map(v => v.id);
   const [lineas, rondas] = await Promise.all([
     sequelize.query(`
-      SELECT si.sale_id, si.id, si.product_id, si.name, si.quantity, si.price, si.subtotal, si.note, si.seat,
+      SELECT si.sale_id, si.id, si.product_id, si.name, si.quantity, si.price, si.discount, si.subtotal, si.note, si.seat,
+             si.line_discount_mode, si.line_discount_value,
              p.unit, COALESCE(p.is_addon, false) AS is_addon
         FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
        WHERE si.sale_id IN (:ids) ORDER BY si.id`, { replacements: { ids }, type: QT.SELECT }),
@@ -287,6 +288,9 @@ async function accounts(req, tableId) {
         id: v.id,
         status: v.status,
         total: v.total,
+        // Para convertir a Bs como la factura (saleTotalAtRate en CobroMesa).
+        discount_amount: v.discount_amount,
+        service_charge: v.service_charge,
         created_at: v.created_at,
         kitchen_status: v.kitchen_status,
         bill_requested_at: v.bill_requested_at,

@@ -3,7 +3,7 @@ import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
 import { useCart } from "../../context/CartContext";
 import { fmtMoney, toNameCase } from "../../helpers";
-import { monedaLocal } from "../../helpers/currency";
+import { monedaLocal, saleTotalAtRate } from "../../helpers/currency";
 import { Spinner } from "../ui/Spinner";
 import ClienteMesa from "./ClienteMesa";
 import SaleConfirmModal from "../cobro/SaleConfirmModal";
@@ -67,12 +67,14 @@ export default function CobroMesa({
     const { activeCurrencies, baseCurrency, currentCurrency, settings, company, activeWarehouse, mySeries, selectedSerieId, loadMySeries } = useApp();
     const {
         cart,
+        heldSaleId,
         takeHeldCart,
         holdCart,
         selectedCustomer,
         setSelectedCustomer,
         setChargeEnabled,
         setChargeLabel,
+        setChargeMode,
         setChargeFromPct,
         checkout,
         receipt,
@@ -86,12 +88,27 @@ export default function CobroMesa({
     const [servicePct, setServicePct] = useState(0);
     const [procesando, setProcesando] = useState(false);
     const [saleBalance, setSaleBalance] = useState(null);
+    // El cobro va en pasos porque cada uno necesita el carrito ya actualizado por el anterior:
+    // las funciones del contexto que se tienen en este render ven el carrito de ANTES de
+    // takeHeldCart (vacío), y llamar a checkout ahí mismo daba "El carrito está vacío".
+    //   recargo  → con la cuenta ya en el carrito, el % se calcula sobre su consumo real.
+    //   facturar → con el recargo ya puesto, se factura.
+    const [fase, setFase] = useState(null); // { id, paso: "recargo" | "facturar" }
 
     // Moneda local y tasa del día
     const local = monedaLocal(activeCurrencies);
     const tasaLocal = parseFloat(local?.exchange_rate) || 0;
     const localSym = local?.symbol || "Bs.";
-    const enBs = (n) => (local && tasaLocal > 0 ? fmtMoney((parseFloat(n) || 0) * tasaLocal, localSym) : null);
+    // En Bs se convierte como la factura (saleTotalAtRate, espejo del servidor): línea por
+    // línea y el recargo aparte, cada uno redondeado. Convertir el total de una vez daba un
+    // céntimo distinto del que luego pedía el cobro (3021,97 aquí, 3021,96 en la botonera).
+    const enBs = (n, items, recargo = 0, descuento = 0) => {
+        if (!local || !(tasaLocal > 0)) return null;
+        const bs = items?.length
+            ? saleTotalAtRate({ items, total: n, service_charge: recargo, discount_amount: descuento }, tasaLocal)
+            : (parseFloat(n) || 0) * tasaLocal;
+        return fmtMoney(bs, localSym);
+    };
 
     // Asegurar series para facturar
     useEffect(() => {
@@ -153,7 +170,10 @@ export default function CobroMesa({
 
     const totalFactura = subtotalConsumo + montoServicio;
 
-    // Ejecutar el cobro
+    // Las líneas tal como las guarda la factura (plato y sus adicionales), para convertir a Bs.
+    const lineasAPagar = useMemo(() => platosAPagar.flatMap(p => [p, ...p.extras]), [platosAPagar]);
+
+    // Ejecutar el cobro (paso 1): separar si hace falta, traer la cuenta al carrito, el cliente.
     const procederAlCobro = async () => {
         if (procesando) return;
         if (!platosAPagar.length) return notify("No hay platos seleccionados para cobrar", "err");
@@ -178,8 +198,10 @@ export default function CobroMesa({
                 saleIdCobro = nuevoId;
             }
 
-            // Tomar la cuenta en el carrito de la caja
-            await takeHeldCart(saleIdCobro);
+            // Tomar la cuenta en el carrito de la caja. Si no llega (otra caja la tiene, es de
+            // otra sucursal), takeHeldCart ya avisó.
+            const ok = await takeHeldCart(saleIdCobro);
+            if (ok !== true) { setProcesando(false); return; }
 
             // Asignar cliente (o general)
             if (cliente) {
@@ -193,27 +215,55 @@ export default function CobroMesa({
                 } catch { /* ignora */ }
             }
 
-            // Servicio / propina
+            // El recargo va como monto (el % se convierte a monto en el paso siguiente, ya con
+            // el consumo de esta cuenta en el carrito).
+            setChargeMode("amount");
             if (servicePct > 0) {
                 setChargeEnabled(true);
                 setChargeLabel("Servicio");
-                setChargeFromPct(servicePct);
             } else {
                 setChargeEnabled(false);
             }
-
-            // Facturar para abrir la botonera de cobro
-            checkout(() => {
-                // checkout sets receipt automatically in CartContext
-            });
+            setFase({ id: saleIdCobro, paso: "recargo" });
         } catch (err) {
             notify(err.message || "Error al iniciar el cobro", "err");
-        } finally {
             setProcesando(false);
         }
     };
 
-    // Si ya hay receipt, mostramos la botonera de pago estándar (SaleConfirmModal)
+    // Pasos 2 y 3: corren cuando el carrito ya tiene la cuenta (render siguiente al anterior).
+    useEffect(() => {
+        if (!fase || heldSaleId !== fase.id) return;
+        if (!cart.length) {
+            setFase(null);
+            setProcesando(false);
+            notify("La cuenta no trajo productos para cobrar", "err");
+            return;
+        }
+        if (fase.paso === "recargo") {
+            if (servicePct > 0) setChargeFromPct(servicePct);
+            setFase({ id: fase.id, paso: "facturar" });
+            return;
+        }
+        // facturar: si falta algo (serie, turno), checkout avisa y la hoja sigue abierta.
+        setFase(null);
+        Promise.resolve(checkout()).finally(() => setProcesando(false));
+    }, [fase, heldSaleId, cart, servicePct, setChargeFromPct, checkout, notify]);
+
+    // Salir sin cobrar: si la cuenta ya se trajo al carrito (un cobro que no llegó a facturar),
+    // vuelve a quedar en espera. Si no, la caja se quedaría con la mesa tomada.
+    const cerrar = async () => {
+        if (procesando) return;
+        if (heldSaleId && cart.length > 0) {
+            try { await holdCart(); } catch { /* ignora */ }
+        }
+        onClose();
+    };
+
+    // Si ya hay receipt, mostramos la botonera de pago estándar (SaleConfirmModal), con los
+    // mismos manejadores que la caja (CobroPage). Antes onPay no hacía nada: el modal seguía
+    // diciendo "Borrador · Sin cobrar" con la factura ya pagada, y al salir intentaba
+    // emitirla a crédito.
     if (receipt) {
         return (
             <SaleConfirmModal
@@ -223,17 +273,30 @@ export default function CobroMesa({
                 currentCurrency={currentCurrency}
                 onNext={() => {
                     setReceipt(null);
+                    setSaleBalance(null);
                     onDone(true);
                 }}
-                onPay={() => {}}
+                onPay={(res) => {
+                    // Los pagos se acumulan: un cobro mixto son varias llamadas y el ticket
+                    // tiene que listarlos todos (igual que CobroPage).
+                    setSaleBalance(prev => ({
+                        amount_paid: res.amount_paid,
+                        balance: res.balance,
+                        status: res.sale_status,
+                        payments: [
+                            ...(prev?.payments || []),
+                            ...(res.payments?.length ? res.payments : [res.data]),
+                        ].filter(Boolean),
+                        credit_applied: (prev?.credit_applied || 0) + parseFloat(res.credit_applied || 0),
+                    }));
+                    if (res.invoice_number) setReceipt(prev => ({ ...prev, invoice_number: res.invoice_number }));
+                }}
                 onUndo={async () => {
                     setReceipt(null);
-                    try {
-                        if (cart.length > 0) await holdCart();
-                    } catch { /* ignora */ }
-                    onDone(false);
+                    setSaleBalance(null);
+                    onDone(true);
                 }}
-                onRefresh={() => {}}
+                onRefresh={(data) => setReceipt(prev => (prev ? { ...prev, ...data } : prev))}
             />
         );
     }
@@ -243,7 +306,7 @@ export default function CobroMesa({
             {/* Cabecera */}
             <header className="shrink-0 h-16 px-4 flex items-center justify-between bg-white dark:bg-surface-dark-2 border-b border-border/40 dark:border-white/[0.06]">
                 <div className="flex items-center gap-3 min-w-0">
-                    <button type="button" onClick={onClose} disabled={procesando} aria-label="Volver a la mesa"
+                    <button type="button" onClick={cerrar} disabled={procesando} aria-label="Volver a la mesa"
                         className="w-11 h-11 shrink-0 rounded-xl btn-outline flex items-center justify-center">
                         <Svg d={Icono.atras} />
                     </button>
@@ -253,11 +316,11 @@ export default function CobroMesa({
                         </h2>
                         <p className="text-[12px] text-content-subtle truncate tabular-nums">
                             Cuenta de {fmtMoney(cuenta.total, sym)}
-                            {enBs(cuenta.total) && ` · ${enBs(cuenta.total)}`}
+                            {enBs(cuenta.total, cuenta.items, cuenta.service_charge, cuenta.discount_amount) && ` · ${enBs(cuenta.total, cuenta.items, cuenta.service_charge, cuenta.discount_amount)}`}
                         </p>
                     </div>
                 </div>
-                <button type="button" onClick={onClose} aria-label="Cerrar"
+                <button type="button" onClick={cerrar} aria-label="Cerrar"
                     className="w-10 h-10 rounded-lg btn-outline flex items-center justify-center">
                     <Svg d={Icono.x} />
                 </button>
@@ -388,9 +451,9 @@ export default function CobroMesa({
                             <span className="text-[26px] font-extrabold tracking-tight tabular-nums text-content dark:text-white leading-none block">
                                 {fmtMoney(totalFactura, sym)}
                             </span>
-                            {enBs(totalFactura) && (
+                            {enBs(totalFactura, lineasAPagar, montoServicio) && (
                                 <span className="text-[13px] text-content-subtle tabular-nums mt-0.5 block">
-                                    {enBs(totalFactura)}
+                                    {enBs(totalFactura, lineasAPagar, montoServicio)}
                                 </span>
                             )}
                         </div>
@@ -400,7 +463,7 @@ export default function CobroMesa({
 
             {/* Barra inferior de acción */}
             <div className="shrink-0 p-4 bg-white dark:bg-surface-dark-2 border-t border-border/40 dark:border-white/[0.06] flex items-center justify-end gap-3 max-w-2xl mx-auto w-full">
-                <button type="button" onClick={onClose} disabled={procesando}
+                <button type="button" onClick={cerrar} disabled={procesando}
                     className="btn-outline h-12 px-5 rounded-xl text-[14px] font-semibold">
                     Cancelar
                 </button>

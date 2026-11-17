@@ -1271,6 +1271,8 @@ export function CartProvider({ children }) {
       // se abandona sin cobrarla ni volver a pausarla, reaparece en la próxima carga.
       setHeldCarts(prev => prev.filter(h => h.id !== held.id));
       notify("Cuenta recuperada");
+      // Quien encadena pasos detrás (el cobro de la mesa) necesita saber si la cuenta llegó.
+      return true;
     } catch (e) {
       notify(e.message || "No se pudo recuperar la cuenta", "err");
     }
