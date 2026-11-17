@@ -33,6 +33,9 @@ export default function PrecuentaModal({
 }) {
     const { companyInfo, printerWidth, activeCurrencies } = useApp();
     const [imprimiendo, setImprimiendo] = useState(false);
+    const [servicePct, setServicePct] = useState(0);
+    const [customTip, setCustomTip] = useState("");
+    const [tipCurrency, setTipCurrency] = useState("base"); // "base" | "local"
 
     // Moneda local y tasa del día
     const local = monedaLocal(activeCurrencies);
@@ -81,6 +84,20 @@ export default function PrecuentaModal({
         return parseFloat(cuenta?.total) || grupos.reduce((acc, g) => acc + g.total, 0);
     }, [cuenta?.total, grupos]);
 
+    const montoServicio = useMemo(() => {
+        if (customTip !== "") {
+            const raw = Math.max(0, parseFloat(String(customTip).replace(",", ".")) || 0);
+            if (!(raw > 0)) return 0;
+            if (tipCurrency === "local" && tasaLocal > 0) {
+                return round2(raw / tasaLocal);
+            }
+            return round2(raw);
+        }
+        return servicePct > 0 ? round2(totalConsumo * (servicePct / 100)) : 0;
+    }, [totalConsumo, servicePct, customTip, tipCurrency, tasaLocal]);
+
+    const totalConServicio = round2(totalConsumo + montoServicio);
+
     if (!open || !cuenta) return null;
 
     const customer = cuenta.customer?.name || cuenta.customer_name || "Cliente General";
@@ -97,6 +114,10 @@ export default function PrecuentaModal({
                 printerWidth,
                 sym,
                 local: local && tasaLocal > 0 ? { symbol: localSym, rate: tasaLocal } : null,
+                servicio: montoServicio > 0 ? {
+                    monto: montoServicio,
+                    pct: customTip === "" && servicePct > 0 ? servicePct : null,
+                } : null,
             });
             notify?.("Precuenta enviada a la impresora");
         } catch (err) {
@@ -187,19 +208,95 @@ export default function PrecuentaModal({
                 ))}
             </div>
 
+            {/* Propina / Servicio opcional en la precuenta */}
+            <div className="rounded-2xl border border-border/60 dark:border-white/[0.06] bg-white dark:bg-surface-dark-2 p-3.5 mb-3 space-y-2.5">
+                <div className="flex items-center justify-between">
+                    <span className="text-[13px] font-bold text-content dark:text-white">Propina / Servicio</span>
+                    <span className="text-[12px] font-semibold tabular-nums text-content-subtle">
+                        {montoServicio > 0
+                            ? `${fmtMoney(montoServicio, sym)}${customTip === "" && servicePct > 0 ? ` (${servicePct}%)` : ""}`
+                            : "Sin propina"}
+                    </span>
+                </div>
+                <div className="grid grid-cols-4 gap-1.5">
+                    {[0, 10, 15, 20].map(pct => {
+                        const on = customTip === "" && servicePct === pct;
+                        return (
+                            <button key={pct} type="button" onClick={() => { setCustomTip(""); setServicePct(pct); }}
+                                className={`h-9 rounded-lg text-[12px] font-semibold border transition-all ${on
+                                    ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+                                    : "border-border dark:border-white/10 text-content dark:text-white"}`}>
+                                {pct === 0 ? "0%" : `${pct}%`}
+                            </button>
+                        );
+                    })}
+                </div>
+                <div className="flex items-center gap-1.5">
+                    <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        inputMode="decimal"
+                        value={customTip}
+                        onChange={e => {
+                            const v = e.target.value;
+                            setCustomTip(v);
+                            if (v !== "") setServicePct(null);
+                            else setServicePct(0);
+                        }}
+                        placeholder={`Colocar monto de propina (${tipCurrency === "local" && tasaLocal > 0 ? localSym : sym})`}
+                        className={`flex-1 min-w-0 h-9 px-3 rounded-lg border bg-surface-2/60 dark:bg-white/[0.04] text-[13px] font-semibold text-content dark:text-white placeholder:text-content-subtle/60 placeholder:font-normal focus:outline-none tabular-nums ${customTip !== ""
+                            ? "border-brand-500 ring-2 ring-brand-500/20"
+                            : "border-border dark:border-white/10 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"}`}
+                    />
+                    {tasaLocal > 0 ? (
+                        <div className="flex rounded-lg overflow-hidden border border-border dark:border-white/10 shrink-0 h-9">
+                            {[["base", sym], ["local", localSym]].map(([k, label]) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() => setTipCurrency(k)}
+                                    className={`px-2.5 text-[12px] font-bold transition-all ${tipCurrency === k
+                                        ? "bg-brand-500/15 text-brand-700 dark:text-brand-300"
+                                        : "bg-white dark:bg-white/[0.04] text-content-subtle"}`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="h-9 px-2.5 rounded-lg border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.04] text-[12px] font-bold text-content-subtle flex items-center shrink-0">
+                            {sym}
+                        </span>
+                    )}
+                </div>
+            </div>
+
             {/* Resumen de totales */}
             <div className="bg-surface-2/60 dark:bg-white/[0.03] rounded-2xl p-4 mb-4 border border-border/40 dark:border-white/[0.06] space-y-2">
+                {montoServicio > 0 && (
+                    <div className="space-y-1 pb-2 border-b border-border/40 dark:border-white/[0.04] text-[13px]">
+                        <div className="flex justify-between items-center text-content-subtle">
+                            <span>Consumo:</span>
+                            <span className="font-semibold tabular-nums text-content dark:text-white">{fmtMoney(totalConsumo, sym)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-content-subtle">
+                            <span>{customTip === "" && servicePct > 0 ? `Propina / Servicio (${servicePct}%):` : "Propina / Servicio:"}</span>
+                            <span className="font-semibold tabular-nums text-content dark:text-white">{fmtMoney(montoServicio, sym)}</span>
+                        </div>
+                    </div>
+                )}
                 <div className="flex justify-between items-baseline">
                     <span className="text-[15px] font-bold text-content dark:text-white">
                         Total a pagar:
                     </span>
                     <div className="text-right">
                         <span className="text-[24px] font-extrabold tracking-tight tabular-nums text-content dark:text-white block leading-none">
-                            {fmtMoney(totalConsumo, sym)}
+                            {fmtMoney(totalConServicio, sym)}
                         </span>
                         {tasaLocal > 0 && (
                             <span className="text-[14px] font-semibold text-content-subtle tabular-nums mt-1 block">
-                                ≈ {fmtMoney(totalConsumo * tasaLocal, localSym)}
+                                ≈ {fmtMoney(totalConServicio * tasaLocal, localSym)}
                             </span>
                         )}
                     </div>

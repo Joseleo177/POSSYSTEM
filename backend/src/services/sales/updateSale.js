@@ -363,6 +363,7 @@ module.exports = async function updateSale(saleId, body, req) {
     // la cuenta sin nombrarlas (la vista BARRA, una caja vieja) no las toca.
     Object.assign(headerPatch, await propinaDeVenta(body, {
       companyId: sale.company_id, sale,
+      waiterId: sale.waiter_id || req?.employee?.id || sale.employee_id || null,
       cobrando: sale.status === "espera" && body.status === "borrador",
       transaction,
     }));

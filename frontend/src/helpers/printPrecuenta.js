@@ -28,6 +28,7 @@ export function printPrecuenta({
     printerWidth = 80,
     sym = "Ref.",
     local = null,
+    servicio = null,
 }) {
     if (!cuenta) return;
     const w58 = printerWidth === 58;
@@ -63,6 +64,8 @@ export function printPrecuenta({
     const tieneVariosPuestos = grupos.length > 1 || grupos.some(g => g.seat !== null);
 
     const totalMesa = parseFloat(cuenta.total) || platos.reduce((s, p) => s + p.monto, 0);
+    const montoServicio = round2(servicio?.monto || 0);
+    const totalConServicio = round2(totalMesa + montoServicio);
     const tasa = local?.rate ? parseFloat(local.rate) : 0;
     const localSym = local?.symbol || "Bs.";
 
@@ -205,9 +208,19 @@ export function printPrecuenta({
     </table>
 
     <div class="totals">
+        ${montoServicio > 0 ? `
+            <div class="totals-row">
+                <span>Consumo:</span>
+                <span>${fmtMoney(totalMesa, sym)}</span>
+            </div>
+            <div class="totals-row service">
+                <span>${servicio?.pct ? `Propina / Servicio (${esc(servicio.pct)}%):` : "Propina / Servicio:"}</span>
+                <span>${fmtMoney(montoServicio, sym)}</span>
+            </div>
+        ` : ""}
         <div class="totals-row main">
             <span>Total a pagar:</span>
-            <span>${fmtMoney(totalMesa, sym)}</span>
+            <span>${fmtMoney(totalConServicio, sym)}</span>
         </div>
 
         ${tasa > 0 ? `
@@ -218,7 +231,7 @@ export function printPrecuenta({
                 </div>
                 <div class="totals-row bs">
                     <span>Total en ${esc(localSym)}:</span>
-                    <span>${fmtMoney(totalMesa * tasa, localSym)}</span>
+                    <span>${fmtMoney(totalConServicio * tasa, localSym)}</span>
                 </div>
             </div>
         ` : ""}

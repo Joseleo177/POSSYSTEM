@@ -103,6 +103,7 @@ async function mover(req, saleId, body = {}) {
       await destino.update({
         customer_id: destino.customer_id || origen.customer_id,
         waiter_id: destino.waiter_id || origen.waiter_id,
+        tip_seller_id: destino.tip_seller_id || origen.tip_seller_id,
         bill_requested_at: pidio.length ? new Date(Math.min(...pidio)) : null,
       }, { transaction });
       await origen.destroy({ transaction });
@@ -194,6 +195,8 @@ async function dividir(req, saleId, body = {}) {
       status: "espera",
       table_id: origen.table_id,
       waiter_id: origen.waiter_id,
+      tip_seller_id: origen.tip_seller_id,
+      service_charge_is_tip: origen.service_charge_is_tip,
       company_id: origen.company_id,
     }, { transaction });
 

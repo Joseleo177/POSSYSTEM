@@ -75,6 +75,7 @@ export default function CobroMesa({
         setChargeEnabled,
         setChargeLabel,
         setChargeMode,
+        setChargeInput,
         setChargeFromPct,
         checkout,
         receipt,
@@ -86,6 +87,8 @@ export default function CobroMesa({
     const [cliente, setCliente] = useState(() => cuenta?.customer || selectedCustomer || null);
     const [showPickerCliente, setShowPickerCliente] = useState(false);
     const [servicePct, setServicePct] = useState(0);
+    const [customTip, setCustomTip] = useState("");
+    const [tipCurrency, setTipCurrency] = useState("base"); // "base" | "local"
     const [procesando, setProcesando] = useState(false);
     const [saleBalance, setSaleBalance] = useState(null);
     // El cobro va en pasos porque cada uno necesita el carrito ya actualizado por el anterior:
@@ -163,10 +166,18 @@ export default function CobroMesa({
         return platosAPagar.reduce((sum, p) => sum + p.montoTotal, 0);
     }, [platosAPagar]);
 
-    // Servicio / Propina
+    // Servicio / Propina (porcentaje rápido o monto colocado manualmente)
     const montoServicio = useMemo(() => {
+        if (customTip !== "") {
+            const raw = Math.max(0, parseFloat(String(customTip).replace(",", ".")) || 0);
+            if (!(raw > 0)) return 0;
+            if (tipCurrency === "local" && tasaLocal > 0) {
+                return Math.round((raw / tasaLocal) * 100) / 100;
+            }
+            return Math.round(raw * 100) / 100;
+        }
         return servicePct > 0 ? Math.round(subtotalConsumo * (servicePct / 100) * 100) / 100 : 0;
-    }, [subtotalConsumo, servicePct]);
+    }, [subtotalConsumo, servicePct, customTip, tipCurrency, tasaLocal]);
 
     const totalFactura = subtotalConsumo + montoServicio;
 
@@ -218,11 +229,12 @@ export default function CobroMesa({
             // El recargo va como monto (el % se convierte a monto en el paso siguiente, ya con
             // el consumo de esta cuenta en el carrito).
             setChargeMode("amount");
-            if (servicePct > 0) {
+            if (montoServicio > 0) {
                 setChargeEnabled(true);
-                setChargeLabel("Servicio");
+                setChargeLabel(company?.propinas_enabled ? "Propina" : "Servicio");
             } else {
                 setChargeEnabled(false);
+                setChargeInput("");
             }
             setFase({ id: saleIdCobro, paso: "recargo" });
         } catch (err) {
@@ -241,14 +253,26 @@ export default function CobroMesa({
             return;
         }
         if (fase.paso === "recargo") {
-            if (servicePct > 0) setChargeFromPct(servicePct);
+            if (montoServicio > 0) {
+                if (customTip === "" && servicePct > 0) {
+                    setChargeFromPct(servicePct);
+                } else {
+                    const isVesPrimary = !!currentCurrency && !currentCurrency.is_base;
+                    const raw = Math.max(0, parseFloat(String(customTip).replace(",", ".")) || 0);
+                    const val = isVesPrimary && tasaLocal > 0
+                        ? (tipCurrency === "local" ? raw : Math.round(montoServicio * tasaLocal * 100) / 100)
+                        : montoServicio;
+                    setChargeEnabled(true);
+                    setChargeInput(String(val));
+                }
+            }
             setFase({ id: fase.id, paso: "facturar" });
             return;
         }
         // facturar: si falta algo (serie, turno), checkout avisa y la hoja sigue abierta.
         setFase(null);
         Promise.resolve(checkout()).finally(() => setProcesando(false));
-    }, [fase, heldSaleId, cart, servicePct, setChargeFromPct, checkout, notify]);
+    }, [fase, heldSaleId, cart, montoServicio, customTip, tipCurrency, tasaLocal, currentCurrency, servicePct, setChargeEnabled, setChargeInput, setChargeFromPct, checkout, notify]);
 
     // Salir sin cobrar: si la cuenta ya se trajo al carrito (un cobro que no llegó a facturar),
     // vuelve a quedar en espera. Si no, la caja se quedaría con la mesa tomada.
@@ -410,17 +434,19 @@ export default function CobroMesa({
                 {/* 3. Servicio sugerido / Propina */}
                 <section className="bg-white dark:bg-surface-dark-2 rounded-2xl p-4 sm:p-5 border border-border/60 dark:border-white/[0.06] shadow-card">
                     <div className="flex items-center justify-between mb-3">
-                        <h3 className="text-[15px] font-bold text-content dark:text-white">Servicio sugerido</h3>
+                        <h3 className="text-[15px] font-bold text-content dark:text-white">Propina / Servicio</h3>
                         <span className="text-[13px] font-semibold tabular-nums text-content dark:text-white">
-                            {servicePct > 0 ? `${fmtMoney(montoServicio, sym)} (${servicePct}%)` : "Sin servicio"}
+                            {montoServicio > 0
+                                ? `${fmtMoney(montoServicio, sym)}${customTip === "" && servicePct > 0 ? ` (${servicePct}%)` : ""}`
+                                : "Sin propina"}
                         </span>
                     </div>
 
                     <div className="grid grid-cols-4 gap-2">
                         {[0, 10, 15, 20].map(pct => {
-                            const on = servicePct === pct;
+                            const on = customTip === "" && servicePct === pct;
                             return (
-                                <button key={pct} type="button" onClick={() => setServicePct(pct)}
+                                <button key={pct} type="button" onClick={() => { setCustomTip(""); setServicePct(pct); }}
                                     className={`h-11 rounded-xl text-[13px] font-semibold border transition-all ${on
                                         ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-2 ring-brand-500/20"
                                         : "border-border dark:border-white/10 text-content dark:text-white"}`}>
@@ -429,6 +455,55 @@ export default function CobroMesa({
                             );
                         })}
                     </div>
+
+                    <div className="mt-3 flex items-center gap-2">
+                        <div className="relative flex-1">
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                inputMode="decimal"
+                                value={customTip}
+                                onChange={e => {
+                                    const v = e.target.value;
+                                    setCustomTip(v);
+                                    if (v !== "") setServicePct(null);
+                                    else setServicePct(0);
+                                }}
+                                placeholder={`Colocar monto de propina (${tipCurrency === "local" && tasaLocal > 0 ? localSym : sym})`}
+                                className={`w-full h-11 px-3.5 rounded-xl border bg-surface-2/60 dark:bg-white/[0.04] text-[14px] font-semibold text-content dark:text-white placeholder:text-content-subtle/60 placeholder:font-normal focus:outline-none transition-all tabular-nums ${customTip !== ""
+                                    ? "border-brand-500 ring-2 ring-brand-500/20"
+                                    : "border-border dark:border-white/10 focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"}`}
+                            />
+                        </div>
+                        {tasaLocal > 0 ? (
+                            <div className="flex rounded-xl overflow-hidden border border-border dark:border-white/10 shrink-0 h-11">
+                                {[["base", sym], ["local", localSym]].map(([k, label]) => (
+                                    <button
+                                        key={k}
+                                        type="button"
+                                        onClick={() => setTipCurrency(k)}
+                                        className={`px-3.5 text-[13px] font-bold transition-all ${tipCurrency === k
+                                            ? "bg-brand-500/15 text-brand-700 dark:text-brand-300"
+                                            : "bg-white dark:bg-white/[0.04] text-content-subtle"}`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <span className="h-11 px-3.5 rounded-xl border border-border dark:border-white/10 bg-surface-2 dark:bg-white/[0.04] text-[13px] font-bold text-content-subtle flex items-center shrink-0">
+                                {sym}
+                            </span>
+                        )}
+                    </div>
+                    {customTip !== "" && montoServicio > 0 && tasaLocal > 0 && (
+                        <div className="mt-1.5 text-[12px] text-content-subtle text-right tabular-nums">
+                            {tipCurrency === "local"
+                                ? `Equivale a ${fmtMoney(montoServicio, sym)}`
+                                : `Equivale a ${fmtMoney(montoServicio * tasaLocal, localSym)}`}
+                        </div>
+                    )}
                 </section>
 
                 {/* 4. Resumen y Total */}
@@ -438,9 +513,9 @@ export default function CobroMesa({
                         <span className="font-semibold tabular-nums text-content dark:text-white">{fmtMoney(subtotalConsumo, sym)}</span>
                     </div>
 
-                    {servicePct > 0 && (
+                    {montoServicio > 0 && (
                         <div className="flex justify-between items-center text-[13px] text-content-subtle">
-                            <span>Servicio ({servicePct}%):</span>
+                            <span>{customTip === "" && servicePct > 0 ? `Propina / Servicio (${servicePct}%):` : "Propina / Servicio:"}</span>
                             <span className="font-semibold tabular-nums text-content dark:text-white">{fmtMoney(montoServicio, sym)}</span>
                         </div>
                     )}

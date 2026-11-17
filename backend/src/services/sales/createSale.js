@@ -156,7 +156,8 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
     // le toca —el mesonero de la tablet si no vino otro— y, si se factura ya, persona o pozo.
     const propina = await propinaDeVenta(body, {
       companyId: req?.company_id ?? req?.employee?.company_id ?? null,
-      waiterId, cobrando: !hold, offline: !!offline, transaction,
+      waiterId: waiterId || req?.employee?.id || employee_id || null,
+      cobrando: !hold, offline: !!offline, transaction,
     });
     const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || (propina.service_charge_is_tip ? "Propina" : "Servicio")) : null;
     const rate = parseFloat(exchange_rate) || 1;

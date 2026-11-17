@@ -46,11 +46,62 @@ async function modoReparto(companyId, transaction) {
   return s?.value === "pozo" ? "pozo" : "mesonero";
 }
 
-// Persona de la lista ligada al usuario del mesonero (sellers.employee_id), activa.
+// Persona de la lista ligada al usuario del mesonero o cajero (sellers.employee_id).
+// Si el empleado aún no estaba en la lista de Personal de propinas, lo enlaza por nombre o lo
+// crea automáticamente para que su propina nunca quede huérfana ("Sin persona").
 async function personaDeUsuario(employeeId, transaction) {
   if (!employeeId) return null;
-  const s = await Seller.findOne({ where: { employee_id: employeeId, active: true }, attributes: ["id"], order: [["id", "ASC"]], transaction });
-  return s?.id || null;
+  const existente = await Seller.findOne({
+    where: { employee_id: employeeId },
+    attributes: ["id", "active"],
+    order: [["active", "DESC"], ["id", "ASC"]],
+    transaction,
+  });
+  if (existente) return existente.active ? existente.id : null;
+
+  const { Employee } = require("../../models");
+  const emp = await Employee.findByPk(employeeId, {
+    attributes: ["id", "full_name", "username", "company_id"],
+    transaction,
+  });
+  if (!emp) return null;
+
+  const nombre = String(emp.full_name || emp.username || `Empleado ${emp.id}`).trim().slice(0, 120);
+  // Si ya lo habían creado a mano con el mismo nombre sin enlazar el usuario, se enlaza.
+  const porNombre = await Seller.findOne({
+    where: {
+      employee_id: null,
+      [Sequelize.Op.and]: [
+        Sequelize.where(Sequelize.fn("lower", Sequelize.col("name")), nombre.toLowerCase()),
+      ],
+    },
+    order: [["active", "DESC"], ["id", "ASC"]],
+    transaction,
+  });
+  if (porNombre) {
+    await porNombre.update({ employee_id: emp.id }, { transaction });
+    return porNombre.active ? porNombre.id : null;
+  }
+
+  // Generar un código corto libre ("01", "02"...) para registrarlo en Personal de propinas.
+  const todos = await Seller.findAll({ attributes: ["code"], transaction });
+  const usados = new Set(todos.map(s => String(s.code).toLowerCase()));
+  let n = todos.length + 1;
+  let code = String(n).padStart(2, "0");
+  while (usados.has(code.toLowerCase())) {
+    n += 1;
+    code = String(n).padStart(2, "0");
+  }
+
+  const creado = await Seller.create({
+    company_id: emp.company_id,
+    code: code.slice(0, 10),
+    name: nombre,
+    commission_pct: 0,
+    employee_id: emp.id,
+    active: true,
+  }, { transaction });
+  return creado.id;
 }
 
 /**
@@ -75,6 +126,10 @@ async function propinaDeVenta(body, { companyId, sale = null, waiterId = null, c
       if (!s && !offline) throw fail("Esa persona ya no está en la lista de propinas");
       if (s && !s.active && !offline && id !== sale?.tip_seller_id) throw fail(`${s.name} está inactivo: elige a otra persona`);
       patch.tip_seller_id = s ? s.id : null;
+    } else if (sale?.tip_seller_id) {
+      patch.tip_seller_id = sale.tip_seller_id;
+    } else if (waiterId) {
+      patch.tip_seller_id = await personaDeUsuario(waiterId, transaction);
     } else {
       patch.tip_seller_id = null;
     }
