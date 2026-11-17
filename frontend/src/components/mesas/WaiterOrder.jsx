@@ -325,7 +325,7 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
             const r = await api.tables.accounts(table.id);
             const lista = r.data?.accounts || [];
             setCuentas(lista);
-            setCuentaSel(sel => (sel && (sel === "new" || lista.some(c => c.id === sel)) ? sel : (lista[0]?.id ?? "new")));
+            setCuentaSel(sel => (sel && lista.some(c => c.id === sel) ? sel : (lista[0]?.id ?? null)));
             // Si ya se usaron más puestos de los que tiene la mesa (se arrimó una silla), se muestran.
             const usados = lista.flatMap(c => (c.items || []).map(i => parseInt(i.seat, 10) || 0));
             if (usados.length) setNPuestos(n => Math.min(20, Math.max(n, ...usados)));
@@ -410,7 +410,15 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
                 })),
             });
             notify(`${table.name}: ronda ${r.data?.round_no || ""} enviada a cocina`);
-            onClose(true);
+            setRonda([]);
+            setNotaCocina("");
+            setEditNota(null);
+            setEditPuesto(null);
+            setClientePendiente(null);
+            setTocada(true);
+            if (r.data?.sale_id) setCuentaSel(r.data.sale_id);
+            await cargarCuentas();
+            setPanel("mesa");
         } catch (e) {
             notify(e.message || "No se pudo enviar la ronda", "err");
             // La mesa pudo cambiar (otra cuenta, la caja la tomó): se vuelve a leer sin perder la ronda.
