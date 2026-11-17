@@ -43,6 +43,8 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
         employeeId, setEmployeeId, employees,
+        waiterId, setWaiterId,
+        tableId, setTableId, tables,
         warehouseId, setWarehouseId, warehouses,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
@@ -154,8 +156,44 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input type="text" placeholder="Buscar por factura, cliente o RIF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
+                <input type="text" placeholder="Buscar por factura, mesa, mesonero, cliente o RIF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
             </div>
+
+            {tables.length > 0 && (
+                <CustomSelect
+                    value={tableId}
+                    onChange={setTableId}
+                    height="h-9"
+                    className="w-full sm:w-[190px]"
+                    boxClassName="rounded-lg"
+                    placeholder="Todas las mesas"
+                    options={[
+                        { value: "", label: "Todas las mesas" },
+                        { value: "any", label: "Solo ventas en mesa" },
+                        ...tables.map(t => ({
+                            value: String(t.id),
+                            label: tables.some(o => o.id !== t.id && o.area_name !== t.area_name) && t.area_name
+                                ? `${t.name} (${t.area_name})`
+                                : t.name,
+                        })),
+                    ]}
+                />
+            )}
+
+            {visibleEmployees.length > 0 && (
+                <CustomSelect
+                    value={waiterId}
+                    onChange={setWaiterId}
+                    height="h-9"
+                    className="w-full sm:w-[200px]"
+                    boxClassName="rounded-lg"
+                    placeholder="Atendió: Todos"
+                    options={[
+                        { value: "", label: "Atendió: Todos" },
+                        ...visibleEmployees.map(e => ({ value: String(e.id), label: `Atendió: ${toNameCase(e.full_name || e.username)}` })),
+                    ]}
+                />
+            )}
 
             <div className="relative">
                 <button
@@ -168,14 +206,14 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     Filtros
                     {hasFilters && (
                         <span className="bg-content text-white dark:bg-white dark:text-black min-w-4 h-4 px-1 rounded-full flex items-center justify-center text-[9px]">
-                            {activeFilters.length + activeSeries.length + (employeeId ? 1 : 0) + (warehouseId ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0)}
+                            {activeFilters.length + activeSeries.length + (employeeId ? 1 : 0) + (waiterId ? 1 : 0) + (tableId ? 1 : 0) + (warehouseId ? 1 : 0) + (histDateFrom || histDateTo ? 1 : 0)}
                         </span>
                     )}
                 </button>
                 {showFilterDrop && (
                     <>
                         <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in">
+                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in max-h-[80vh] overflow-y-auto">
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[12px] font-medium text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
@@ -201,13 +239,40 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                     </div>
                                 </div>
                             )}
-                            {/* Empleado: un desplegable y no botones como estado y serie, porque
-                                la lista crece con la nómina y en una plantilla de diez no
-                                entrarían en el panel. Sin permiso para ver empleados la lista
-                                llega vacía y la sección no se dibuja. */}
+                            {tables.length > 0 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Mesa</div>
+                                    <CustomSelect
+                                        value={tableId}
+                                        onChange={setTableId}
+                                        height="h-8"
+                                        placeholder="Todas"
+                                        options={[
+                                            { value: "", label: "Todas" },
+                                            { value: "any", label: "Solo ventas en mesa" },
+                                            ...tables.map(t => ({ value: String(t.id), label: t.name })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
                             {visibleEmployees.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
-                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Empleado</div>
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Atendió (Mesonero)</div>
+                                    <CustomSelect
+                                        value={waiterId}
+                                        onChange={setWaiterId}
+                                        height="h-8"
+                                        placeholder="Todos"
+                                        options={[
+                                            { value: "", label: "Todos" },
+                                            ...visibleEmployees.map(e => ({ value: String(e.id), label: e.full_name || e.username })),
+                                        ]}
+                                    />
+                                </div>
+                            )}
+                            {visibleEmployees.length > 0 && (
+                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                    <div className="text-[12px] font-medium text-content-subtle mb-2">Cajero (Facturó)</div>
                                     <CustomSelect
                                         value={employeeId}
                                         onChange={setEmployeeId}
@@ -348,10 +413,18 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                             <span className={`block truncate font-semibold ${anulada ? "text-content-subtle" : "text-content dark:text-white"}`}>
                                                 {toNameCase(sale.customer_name) || "Consumidor final"}
                                             </span>
-                                            {sale.journal_name && (
+                                            {(sale.table_name || sale.waiter_name || sale.journal_name) && (
                                                 <span className="flex items-center gap-1.5 text-[12px] font-medium text-content-subtle truncate">
-                                                    <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-content-subtle/40" style={sale.journal_color ? { backgroundColor: sale.journal_color } : undefined} />
-                                                    {toNameCase(sale.journal_name)}
+                                                    {sale.table_name && <span className="font-semibold text-content dark:text-white/80">{sale.table_name}</span>}
+                                                    {sale.table_name && (sale.waiter_name || sale.journal_name) && <span>·</span>}
+                                                    {sale.waiter_name && <span>Atendió {toNameCase(sale.waiter_name)}</span>}
+                                                    {sale.waiter_name && sale.journal_name && <span>·</span>}
+                                                    {sale.journal_name && (
+                                                        <span className="inline-flex items-center gap-1.5 truncate">
+                                                            <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-content-subtle/40" style={sale.journal_color ? { backgroundColor: sale.journal_color } : undefined} />
+                                                            {toNameCase(sale.journal_name)}
+                                                        </span>
+                                                    )}
                                                 </span>
                                             )}
                                         </td>
@@ -441,6 +514,8 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                 const tone = statusTone(sale.status);
                                 const extra = [
                                     fmtTime(sale.created_at),
+                                    sale.table_name || null,
+                                    sale.waiter_name ? `Atendió ${toNameCase(sale.waiter_name)}` : null,
                                     warehouses.length > 1 && sale.warehouse_name ? toNameCase(sale.warehouse_name) : null,
                                     sale.journal_name ? toNameCase(sale.journal_name) : null,
                                 ].filter(Boolean).join(" · ");

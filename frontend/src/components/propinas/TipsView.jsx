@@ -17,6 +17,7 @@ export default function TipsView({ version, onOpen, onPay, onPool, onGoSales }) 
     const { notify, can, baseCurrency, seleccionKey } = useApp();
     const [from, setFrom] = useState(primeroDelMes);
     const [to, setTo] = useState(todayISO);
+    const [q, setQ] = useState("");
     const [data, setData] = useState(null);
     const sym = baseCurrency?.symbol || "Ref.";
     const fmt = (n) => `${sym} ${Number(n || 0).toFixed(2)}`;
@@ -31,7 +32,9 @@ export default function TipsView({ version, onOpen, onPay, onPool, onGoSales }) 
 
     useEffect(() => { cargar(); }, [cargar, version, seleccionKey]);
 
-    const filas = data?.data || [];
+    const todasFilas = data?.data || [];
+    const term = q.trim().toLowerCase();
+    const filas = todasFilas.filter(s => !term || [s.name, s.code].some(c => c && String(c).toLowerCase().includes(term)));
     const t = data?.totals || {};
     const pozo = data?.pool || {};
     const sinPersona = data?.sin_persona || {};
@@ -40,7 +43,20 @@ export default function TipsView({ version, onOpen, onPay, onPool, onGoSales }) 
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden">
-            <div className="px-4 pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+            <div className="px-4 pt-3 flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                <div className="relative w-full sm:w-[260px]">
+                    <svg className="w-4 h-4 text-content-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                        type="search"
+                        value={q}
+                        onChange={e => setQ(e.target.value)}
+                        autoComplete="off"
+                        placeholder="Buscar persona o código…"
+                        className="w-full h-9 pl-9 pr-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    />
+                </div>
                 <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} className="w-full sm:w-[260px]" />
                 <p className="text-[12px] text-content-subtle sm:ml-auto">
                     {data?.modo === "pozo" ? "Reparto: pozo para todos" : "Reparto: al mesonero de la cuenta"} · se gana al cobrar
@@ -68,7 +84,7 @@ export default function TipsView({ version, onOpen, onPay, onPool, onGoSales }) 
                         <div className="flex items-center gap-3 sm:justify-end">
                             <Money value={fmt(pozo.saldo)} className="text-[20px] font-bold tracking-tight text-content dark:text-white" />
                             {canPay && pozo.saldo > 0.005 && (
-                                <button onClick={() => onPool?.({ saldo: pozo.saldo, from, to, personas: filas })}
+                                <button onClick={() => onPool?.({ saldo: pozo.saldo, from, to, personas: todasFilas })}
                                     className="btn-accent h-12 sm:h-10 px-4 rounded-lg text-[13px] font-semibold shrink-0">
                                     Repartir el pozo
                                 </button>

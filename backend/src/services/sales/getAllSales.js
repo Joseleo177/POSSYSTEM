@@ -3,7 +3,7 @@ const { DiningTable, Seller } = require("../../models");
 const { FX_PAGO_DIVISAS_SQL } = require("./fxRate");
 
 module.exports = async function getAllSales(query, tenant = {}) {
-  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id, employee_id } = query;
+  const { limit = 50, offset = 0, date_from, date_to, payment_method, status, serie_id, search, warehouse_id, employee_id, waiter_id, table_id } = query;
   const { company_id, isSuperuser, allowedWarehouses } = tenant;
 
   const andClauses = [];
@@ -62,6 +62,20 @@ module.exports = async function getAllSales(query, tenant = {}) {
   if (employee_id && !isNaN(parseInt(employee_id, 10))) {
     andClauses.push({ employee_id: parseInt(employee_id, 10) });
   }
+  if (waiter_id && !isNaN(parseInt(waiter_id, 10))) {
+    const wid = parseInt(waiter_id, 10);
+    andClauses.push({
+      [Op.or]: [
+        { waiter_id: wid },
+        { waiter_id: null, employee_id: wid },
+      ],
+    });
+  }
+  if (table_id === "any") {
+    andClauses.push({ table_id: { [Op.ne]: null } });
+  } else if (table_id && !isNaN(parseInt(table_id, 10))) {
+    andClauses.push({ table_id: parseInt(table_id, 10) });
+  }
 
   if (search) {
     const safe = search.slice(0, 100).replace(/[\x00-\x1f\\]/g, '');
@@ -76,6 +90,8 @@ module.exports = async function getAllSales(query, tenant = {}) {
       [Op.or]: [
         { invoice_number: { [Op.iLike]: `%${safe}%` } },
         Sequelize.literal(`"Sale"."customer_id" IN (SELECT id FROM customers WHERE name ILIKE '%${esc}%' OR rif ILIKE '%${esc}%'${porCedula})`),
+        Sequelize.literal(`"Sale"."table_id" IN (SELECT id FROM dining_tables WHERE name ILIKE '%${esc}%')`),
+        Sequelize.literal(`"Sale"."waiter_id" IN (SELECT id FROM employees WHERE full_name ILIKE '%${esc}%' OR username ILIKE '%${esc}%')`),
       ],
     });
   }

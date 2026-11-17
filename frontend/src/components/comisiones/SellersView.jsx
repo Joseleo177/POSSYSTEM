@@ -17,6 +17,7 @@ export default function SellersView({ version, onEdit, onNew, fuente = "commissi
     const quien = propinas ? "personal" : "vendedores";
     const { notify, sucursales = [] } = useApp();
     const [rows, setRows] = useState(null);
+    const [q, setQ] = useState("");
 
     useEffect(() => {
         setRows(null);
@@ -28,10 +29,29 @@ export default function SellersView({ version, onEdit, onNew, fuente = "commissi
     }, [version, notify, propinas]);
 
     const sucursal = (id) => (id ? toNameCase(sucursales.find(w => w.id === id)?.name) || "—" : "Todas");
-    const lista = rows || [];
+    const term = q.trim().toLowerCase();
+    const lista = (rows || []).filter(s => !term || [s.name, s.code, s.doc_id, s.phone, sucursal(s.warehouse_id)].some(c => c && String(c).toLowerCase().includes(term)));
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden">
+            <div className="px-4 pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                <div className="relative w-full sm:w-[280px]">
+                    <svg className="w-4 h-4 text-content-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                        type="search"
+                        value={q}
+                        onChange={e => setQ(e.target.value)}
+                        autoComplete="off"
+                        placeholder={propinas ? "Buscar persona, código o cédula…" : "Buscar vendedor, código o cédula…"}
+                        className="w-full h-9 pl-9 pr-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    />
+                </div>
+                <p className="text-[12px] text-content-subtle sm:ml-auto tabular-nums">
+                    {lista.length} {lista.length === 1 ? "persona" : "personas"}
+                </p>
+            </div>
             <div className="hidden md:flex flex-1 min-h-0 flex-col py-3 px-4">
                 <div className="card-premium overflow-auto flex-1">
                     <table className="table-ledger min-w-[720px]">

@@ -27,6 +27,9 @@ export default function TipSalesView({ version, onChanged }) {
     const [from, setFrom] = useState(primeroDelMes);
     const [to, setTo] = useState(todayISO);
     const [persona, setPersona] = useState("");
+    const [mesaFiltro, setMesaFiltro] = useState("");
+    const [atendioFiltro, setAtendioFiltro] = useState("");
+    const [q, setQ] = useState("");
     const [personas, setPersonas] = useState([]);
     const [rows, setRows] = useState(null);
     const [cambiando, setCambiando] = useState(null);
@@ -48,15 +51,60 @@ export default function TipSalesView({ version, onChanged }) {
 
     useEffect(() => { cargar(); }, [cargar, version, seleccionKey]);
 
-    const lista = rows || [];
+    const todas = rows || [];
+    const mesasDisponibles = [...new Set(todas.map(f => f.table_name).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+    const atendieronDisponibles = [...new Set(todas.map(f => f.waiter_name || "Caja").filter(Boolean))].sort((a, b) => a.localeCompare(b, "es"));
+
+    const term = q.trim().toLowerCase();
+    const lista = todas.filter(f => {
+        if (mesaFiltro === "__mesa__" && !f.table_name) return false;
+        if (mesaFiltro && mesaFiltro !== "__mesa__" && f.table_name !== mesaFiltro) return false;
+        if (atendioFiltro && (f.waiter_name || "Caja") !== atendioFiltro) return false;
+        if (!term) return true;
+        const campos = [
+            f.invoice_number,
+            `#${f.id}`,
+            String(f.id),
+            f.table_name,
+            f.customer_name,
+            f.waiter_name,
+            f.seller_name,
+            f.tip_pool ? "pozo" : "",
+        ];
+        return campos.some(c => c && String(c).toLowerCase().includes(term));
+    });
     const total = lista.reduce((a, f) => a + f.tip, 0);
 
     return (
         <div className="flex-1 min-h-0 flex flex-col overflow-y-auto lg:overflow-hidden">
-            <div className="px-4 pt-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} className="w-full sm:w-[260px]" />
-                <CustomSelect value={persona} onChange={setPersona} className="w-full sm:w-[220px]" boxClassName="rounded-lg"
-                    options={[{ value: "", label: "Todo el personal" }, ...personas.map(p => ({ value: String(p.id), label: toNameCase(p.name) }))]} />
+            <div className="px-4 pt-3 flex flex-col sm:flex-row sm:items-center gap-2 flex-wrap">
+                <div className="relative w-full sm:w-[240px]">
+                    <svg className="w-4 h-4 text-content-subtle absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z" />
+                    </svg>
+                    <input
+                        type="search"
+                        value={q}
+                        onChange={e => setQ(e.target.value)}
+                        autoComplete="off"
+                        placeholder="Buscar factura, mesa, cliente…"
+                        className="w-full h-9 pl-9 pr-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
+                    />
+                </div>
+                <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} className="w-full sm:w-[240px]" />
+                <CustomSelect value={mesaFiltro} onChange={setMesaFiltro} className="w-full sm:w-[180px]" boxClassName="rounded-lg"
+                    options={[
+                        { value: "", label: "Todas las mesas" },
+                        { value: "__mesa__", label: "Solo con mesa" },
+                        ...mesasDisponibles.map(m => ({ value: m, label: m })),
+                    ]} />
+                <CustomSelect value={atendioFiltro} onChange={setAtendioFiltro} className="w-full sm:w-[190px]" boxClassName="rounded-lg"
+                    options={[
+                        { value: "", label: "Atendió: Todos" },
+                        ...atendieronDisponibles.map(w => ({ value: w, label: `Atendió: ${toNameCase(w)}` })),
+                    ]} />
+                <CustomSelect value={persona} onChange={setPersona} className="w-full sm:w-[200px]" boxClassName="rounded-lg"
+                    options={[{ value: "", label: "Propina: Todos" }, ...personas.map(p => ({ value: String(p.id), label: `Propina: ${toNameCase(p.name)}` }))]} />
                 <p className="text-[12px] text-content-subtle sm:ml-auto tabular-nums">{lista.length} {lista.length === 1 ? "factura" : "facturas"} · {fmt(total)}</p>
             </div>
 

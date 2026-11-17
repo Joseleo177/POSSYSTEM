@@ -24,13 +24,17 @@ export function useTransacciones({ notify }) {
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [activeFilters, setActiveFilters] = useState([]);
     const [activeSeries, setActiveSeries] = useState([]);
-    // Filtro por quién hizo la venta. "" = todos.
+    // Filtro por quién hizo la venta (cajero). "" = todos.
     const [employeeId, setEmployeeId] = useState("");
+    // Filtro por mesonero que atendió la mesa y por mesa.
+    const [waiterId, setWaiterId] = useState("");
+    const [tableId, setTableId] = useState("");
+    const [tables, setTables] = useState([]);
     const [employees, setEmployees] = useState([]);
     // Sucursal, entre las marcadas en la barra de arriba. "" = todas ellas (el servidor ya
     // responde recortado). Un depósito no vende ni factura: no aporta nada al filtro.
     const [warehouseId, setWarehouseId] = useState("");
-    const { sucursalesMarcadas } = useApp();
+    const { sucursalesMarcadas, company } = useApp();
     const warehouses = sucursalesMarcadas.filter(w => w.sells !== false);
     const [showFilterDrop, setShowFilterDrop] = useState(false);
     const [saleDetail, setSaleDetail] = useState(null);
@@ -42,7 +46,7 @@ export function useTransacciones({ notify }) {
         return () => clearTimeout(timer);
     }, [searchTerm]);
 
-    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId, warehouseId]);
+    useEffect(() => { setPage(1); }, [debouncedSearch, histDateFrom, histDateTo, activeFilters, activeSeries, employeeId, waiterId, tableId, warehouseId]);
 
     // Serie y empleado dependen de la sucursal: la serie A no existe en la B, y un empleado
     // de la B no tiene nada que hacer filtrando ventas de la A. Al cambiar de sucursal, una
@@ -52,7 +56,23 @@ export function useTransacciones({ notify }) {
         if (firstWarehouseRender.current) { firstWarehouseRender.current = false; return; }
         setActiveSeries([]);
         setEmployeeId("");
+        setWaiterId("");
+        setTableId("");
     }, [warehouseId]);
+
+    // Mesas activas para filtrar ventas por mesa (cuando el módulo de restaurante/cocina está activo).
+    useEffect(() => {
+        if (!company?.cocina_enabled) { setTables([]); return; }
+        let vivo = true;
+        api.tables.areas(warehouseId ? { warehouse_id: warehouseId } : {})
+            .then(r => {
+                if (!vivo) return;
+                const todas = (r.data || []).flatMap(a => (a.tables || []).map(t => ({ ...t, area_name: a.name })));
+                setTables(todas);
+            })
+            .catch(() => { if (vivo) setTables([]); });
+        return () => { vivo = false; };
+    }, [company?.cocina_enabled, warehouseId]);
 
     // La lista para el desplegable. Si el empleado no tiene permiso para verla (employees.view)
     // se queda vacía y el filtro simplemente no se ofrece, en vez de saltar un error al abrir
@@ -75,6 +95,8 @@ export function useTransacciones({ notify }) {
             if (activeFilters.length) params.status    = activeFilters[0];
             if (activeSeries.length)  params.serie_id  = activeSeries[0];
             if (employeeId)           params.employee_id = employeeId;
+            if (waiterId)             params.waiter_id = waiterId;
+            if (tableId)              params.table_id  = tableId;
             if (warehouseId)          params.warehouse_id = warehouseId;
             const r = await api.sales.getAll(params);
             setSales(r.data);
@@ -85,7 +107,7 @@ export function useTransacciones({ notify }) {
             setSumForgiven(parseFloat(r.sum_forgiven || 0));
         } catch (e) { notify(e.message, "err"); }
         finally { setLoading(false); }
-    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, employeeId, warehouseId, page, notify]);
+    }, [histDateFrom, histDateTo, debouncedSearch, activeFilters, activeSeries, employeeId, waiterId, tableId, warehouseId, page, notify]);
 
     useEffect(() => { loadSales(); }, [loadSales]);
 
@@ -96,6 +118,8 @@ export function useTransacciones({ notify }) {
         setActiveFilters([]);
         setActiveSeries([]);
         setEmployeeId("");
+        setWaiterId("");
+        setTableId("");
         setWarehouseId("");
         setHistDateFrom("");
         setHistDateTo("");
@@ -109,7 +133,7 @@ export function useTransacciones({ notify }) {
     };
 
     const totalPages = Math.ceil(total / LIMIT);
-    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!employeeId || !!warehouseId || !!histDateFrom || !!histDateTo;
+    const hasFilters = activeFilters.length > 0 || activeSeries.length > 0 || !!employeeId || !!waiterId || !!tableId || !!warehouseId || !!histDateFrom || !!histDateTo;
 
     return {
         sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
@@ -118,6 +142,8 @@ export function useTransacciones({ notify }) {
         searchTerm, setSearchTerm,
         activeFilters, activeSeries,
         employeeId, setEmployeeId, employees,
+        waiterId, setWaiterId,
+        tableId, setTableId, tables,
         warehouseId, setWarehouseId, warehouses,
         showFilterDrop, setShowFilterDrop,
         saleDetail, setSaleDetail,
