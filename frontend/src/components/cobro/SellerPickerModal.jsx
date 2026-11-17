@@ -3,37 +3,55 @@ import Modal from "../ui/Modal";
 import { api } from "../../services/api";
 import { toNameCase } from "../../helpers";
 
-// Vendedores activos, guardados un rato: la caja abre esta lista en cada venta y cambian poco.
-// Se vuelven a pedir pasados 5 minutos (un vendedor nuevo aparece sin recargar la página).
-let cache = { at: 0, data: null };
+// Personas activas, guardadas un rato: la caja abre esta lista en cada venta y cambian poco.
+// Se vuelven a pedir pasados 5 minutos (una persona nueva aparece sin recargar la página). Hay una
+// memoria por lista: la de Comisiones (vendedores) y la de Propinas (mesoneros) son la misma
+// tabla, pero cada una se pide por su ruta y con su permiso.
+const caches = { commissions: { at: 0, data: null }, tips: { at: 0, data: null } };
 const VIDA_MS = 5 * 60 * 1000;
-export const olvidarVendedores = () => { cache = { at: 0, data: null }; };
+export const olvidarVendedores = () => { caches.commissions = { at: 0, data: null }; caches.tips = { at: 0, data: null }; };
+const pedir = { commissions: () => api.commissions.sellers(), tips: () => api.tips.staff() };
+
+// Textos de cada uso: elegir quién vendió (comisiones) o a quién le toca la propina.
+const TEXTOS = {
+    commissions: {
+        titulo: "¿Quién vendió?", buscar: "Código o nombre del vendedor", sinNombre: "Ningún vendedor con ese código o nombre",
+        vacio: "Todavía no hay vendedores", vacioHint: "Se cargan en la app Comisiones → Vendedores.", ninguno: "Venta sin vendedor",
+    },
+    tips: {
+        titulo: "¿A quién le toca la propina?", buscar: "Código o nombre del mesonero", sinNombre: "Nadie con ese código o nombre",
+        vacio: "Todavía no hay personal", vacioHint: "Se carga en la app Propinas → Personal.", ninguno: "Sin mesonero",
+    },
+};
 
 const sinAcentos = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 /**
- * Quién vendió (comisiones). Se teclea el código corto ("07") o parte del nombre: con un código
- * exacto, Enter lo elige en el acto. Los de la sucursal de la caja van primero.
+ * Quién vendió (comisiones) o a quién le toca la propina (`source="tips"`). Se teclea el código
+ * corto ("07") o parte del nombre: con un código exacto, Enter lo elige en el acto. Los de la
+ * sucursal de la caja van primero.
  */
-export default function SellerPickerModal({ open, onClose, onPick, selected, warehouseId, notify }) {
-    const [sellers, setSellers] = useState(cache.data || []);
+export default function SellerPickerModal({ open, onClose, onPick, selected, warehouseId, notify, source = "commissions" }) {
+    const t = TEXTOS[source] || TEXTOS.commissions;
+    const [sellers, setSellers] = useState(caches[source]?.data || []);
     const [q, setQ] = useState("");
     const [idx, setIdx] = useState(0);
 
     useEffect(() => {
         if (!open) return;
         setQ(""); setIdx(0);
+        const cache = caches[source];
         if (cache.data && Date.now() - cache.at < VIDA_MS) { setSellers(cache.data); return; }
-        api.commissions.sellers()
-            .then(r => { cache = { at: Date.now(), data: r.data || [] }; setSellers(cache.data); })
-            .catch(e => notify?.(e.message || "No se pudo cargar la lista de vendedores", "err"));
-    }, [open, notify]);
+        pedir[source]()
+            .then(r => { caches[source] = { at: Date.now(), data: r.data || [] }; setSellers(caches[source].data); })
+            .catch(e => notify?.(e.message || "No se pudo cargar la lista", "err"));
+    }, [open, notify, source]);
 
     const lista = useMemo(() => {
-        const t = sinAcentos(q.trim());
+        const texto = sinAcentos(q.trim());
         const propios = (s) => (warehouseId && s.warehouse_id === warehouseId ? 0 : s.warehouse_id ? 2 : 1);
         return sellers
-            .filter(s => !t || sinAcentos(s.code).startsWith(t) || sinAcentos(s.name).includes(t))
+            .filter(s => !texto || sinAcentos(s.code).startsWith(texto) || sinAcentos(s.name).includes(texto))
             .sort((a, b) => propios(a) - propios(b) || String(a.code).localeCompare(String(b.code), "es", { numeric: true }));
     }, [sellers, q, warehouseId]);
 
@@ -51,7 +69,7 @@ export default function SellerPickerModal({ open, onClose, onPick, selected, war
     };
 
     return (
-        <Modal open={open} onClose={onClose} title="¿Quién vendió?" width={440}>
+        <Modal open={open} onClose={onClose} title={t.titulo} width={440}>
             <div className="relative">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                 <input
@@ -61,7 +79,7 @@ export default function SellerPickerModal({ open, onClose, onPick, selected, war
                     value={q}
                     onChange={e => { setQ(e.target.value); setIdx(0); }}
                     onKeyDown={onKeyDown}
-                    placeholder="Código o nombre del vendedor"
+                    placeholder={t.buscar}
                     className="w-full h-12 sm:h-11 pl-9 pr-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[14px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20"
                 />
             </div>
@@ -71,10 +89,10 @@ export default function SellerPickerModal({ open, onClose, onPick, selected, war
                     {lista.length === 0 ? (
                         <div className="px-4 py-8 text-center">
                             <p className="text-[13px] font-medium text-content dark:text-white">
-                                {sellers.length ? "Ningún vendedor con ese código o nombre" : "Todavía no hay vendedores"}
+                                {sellers.length ? t.sinNombre : t.vacio}
                             </p>
                             <p className="text-[12px] text-content-subtle mt-1">
-                                {sellers.length ? "Revisa el código que te dio el vendedor." : "Se cargan en la app Comisiones → Vendedores."}
+                                {sellers.length ? "Revisa el código." : t.vacioHint}
                             </p>
                         </div>
                     ) : lista.map((s, i) => {
@@ -101,7 +119,7 @@ export default function SellerPickerModal({ open, onClose, onPick, selected, war
                 <p className="hidden sm:block text-[12px] text-content-subtle">Enter elige · Esc cierra</p>
                 {selected && (
                     <button onClick={() => elegir(null)} className="btn-outline h-12 sm:h-10 px-4 rounded-lg text-[13px] font-medium">
-                        Venta sin vendedor
+                        {t.ninguno}
                     </button>
                 )}
             </div>

@@ -124,6 +124,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
       { model: DiningTable, as: "DiningTable", attributes: ["name"], required: false },
       { model: Employee, as: "Waiter", attributes: ["full_name"], required: false },
       { model: Seller, as: "Seller", attributes: ["name"], required: false },
+      { model: Seller, as: "TipSeller", attributes: ["name", "code"], required: false },
       // Opcional: el filtro del where ya exige líneas salvo en la deuda anterior.
       { model: SaleItem, required: false },
     ],
@@ -145,6 +146,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     item.table_name = item.DiningTable?.name ?? null;
     item.waiter_name = item.Waiter?.full_name ?? null;
     item.seller_name = item.Seller?.name ?? null;
+    item.tip_seller_name = item.TipSeller?.name ?? null;
     item.items = item.SaleItems ?? [];
     item.amount_paid = parseFloat(item.amount_paid || 0);
     item.total_precise = parseFloat(item.total_precise || item.total || 0);
@@ -158,7 +160,7 @@ module.exports = async function getAllSales(query, tenant = {}) {
     // Igual que en getOneSale: una venta 'pagado' o 'exonerado' no arrastra saldo. Con divisas
     // recibidas a tasa de efectivo la resta deja centavos que el cliente no debe.
     if (item.status === 'pagado' || item.status === 'exonerado' || item.balance < 0) item.balance = 0;
-    ["Customer", "Employee", "Currency", "Warehouse", "RequestedWarehouse", "Serie", "DiningTable", "Waiter", "Seller", "SaleItems"].forEach((k) => delete item[k]);
+    ["Customer", "Employee", "Currency", "Warehouse", "RequestedWarehouse", "Serie", "DiningTable", "Waiter", "Seller", "TipSeller", "SaleItems"].forEach((k) => delete item[k]);
     return item;
   });
 

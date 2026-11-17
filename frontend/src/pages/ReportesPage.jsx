@@ -14,6 +14,7 @@ import CashSessionsReport from "./reportes/CashSessionsReport";
 import PaymentJournalsReport from "./reportes/PaymentJournalsReport";
 import FinanceReport from "./reportes/FinanceReport";
 import ExpiryReport from "./reportes/ExpiryReport";
+import MermasReport from "./reportes/MermasReport";
 import LibroVentasReport from "./reportes/LibroVentasReport";
 import DeclaracionIvaReport from "./reportes/DeclaracionIvaReport";
 
@@ -29,6 +30,7 @@ const TABS = [
   { key: "diarios",      label: "Diarios de Pago" },
   { key: "finanzas",     label: "Ingresos y egresos" },
   { key: "vencimientos", label: "Vencimientos" },
+  { key: "mermas",       label: "Mermas" },
   { key: "libro_ventas", label: "Libro de ventas" },
   { key: "libro_compras", label: "Libro de compras" },
   { key: "declaracion_iva", label: "Declaración de IVA" },
@@ -36,7 +38,7 @@ const TABS = [
 
 const NAV_GROUPS = [
   { label: "Comercial",   items: ["ventas", "margenes", "cobrar", "clientes"] },
-  { label: "Inventario",  items: ["inventario", "vencimientos", "compras"] },
+  { label: "Inventario",  items: ["inventario", "mermas", "vencimientos", "compras"] },
   { label: "Operaciones", items: ["finanzas", "sesiones", "diarios", "auditoria"] },
 ];
 
@@ -115,6 +117,7 @@ export default function ReportesPage() {
         {tab === "diarios"      && <PaymentJournalsReport />}
         {tab === "finanzas"     && <FinanceReport />}
         {tab === "vencimientos" && <ExpiryReport />}
+        {tab === "mermas"       && <MermasReport />}
         {tab === "libro_ventas" && company?.iva_enabled && <LibroVentasReport key="ventas" tipo="ventas" />}
         {tab === "libro_compras" && company?.iva_enabled && <LibroVentasReport key="compras" tipo="compras" />}
         {tab === "declaracion_iva" && company?.iva_enabled && <DeclaracionIvaReport />}

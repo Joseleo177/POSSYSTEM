@@ -623,6 +623,94 @@ export function buildFinanceExcel(data, range) {
   ]), `IngresosEgresos_${range.from}_${range.to}${sufijoSucursal(range)}`);
 }
 
+// Mermas del período: resumen por motivo, por producto y el detalle de cada pérdida.
+export const MOTIVOS_MERMA = {
+  merma:         "Merma o rotura",
+  vencimiento:   "Vencidos",
+  robo:          "Robo o pérdida",
+  conteo:        "Faltante de conteo",
+  ajuste:        "Ajuste sin motivo",
+  transferencia: "Perdido en transferencia",
+  consumo:       "Consumo interno",
+};
+
+export function buildMermasExcel(data, range) {
+  const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
+  const r3 = (n) => Math.round((parseFloat(n) || 0) * 1000) / 1000;
+  const s = data.summary || {};
+  const fecha = (iso) => {
+    const d = new Date(iso);
+    return isNaN(d) ? "" : d.toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  };
+
+  const resumen = [
+    { concepto: "Pérdidas (sin consumo interno)", registros: s.loss_count, costo: r2(s.loss_value) },
+    ...(data.groups || []).filter(g => g.key !== "consumo").map(g => ({ concepto: `   ${MOTIVOS_MERMA[g.key]}`, registros: g.count, costo: r2(g.value) })),
+    { concepto: "Consumo interno", registros: s.consumo_count, costo: r2(s.consumo_value) },
+    ...(s.estimated_value > 0 ? [{ concepto: "De las pérdidas, valorado al costo de hoy (ajustes antiguos)", registros: "", costo: r2(s.estimated_value) }] : []),
+  ];
+
+  const productos = (data.by_product || []).map(p => ({
+    producto: p.product_name,
+    categoria: p.category_name || "",
+    unidad: p.unit || "",
+    cantidad: r3(p.qty),
+    motivos: Object.entries(p.by_group || {}).map(([k, q]) => `${MOTIVOS_MERMA[k]}: ${r3(q)}`).join(" · "),
+    costo: r2(p.value),
+    consumo_cantidad: p.consumo_qty ? r3(p.consumo_qty) : "",
+    consumo_costo: p.consumo_value ? r2(p.consumo_value) : "",
+    estimado: p.estimated ? "Sí" : "",
+  }));
+
+  const detalle = (data.rows || []).map(r => ({
+    fecha: fecha(r.at),
+    sucursal: r.warehouse_name || "",
+    producto: r.product_name,
+    motivo: MOTIVOS_MERMA[r.grupo] || r.grupo,
+    cantidad: r3(r.qty),
+    unidad: r.unit || "",
+    costo_unitario: r2(r.unit_cost),
+    costo: r2(r.value),
+    estimado: r.estimated ? "Sí" : "",
+    responsable: r.employee_name || "",
+    documento: r.doc || (r.doc_id ? `Sesión ${r.doc_id}` : ""),
+    nota: r.notes || "",
+  }));
+
+  download(buildWb([
+    { name: "Resumen", rows: resumen, headers: [
+      { key: "concepto", label: "Motivo" },
+      { key: "registros", label: "Registros" },
+      { key: "costo", label: "Costo (Ref.)" },
+    ] },
+    { name: "Por producto", rows: productos, headers: [
+      { key: "producto", label: "Producto" },
+      { key: "categoria", label: "Categoría" },
+      { key: "unidad", label: "Unidad" },
+      { key: "cantidad", label: "Cantidad perdida" },
+      { key: "motivos", label: "Motivos" },
+      { key: "costo", label: "Costo (Ref.)" },
+      { key: "consumo_cantidad", label: "Consumo interno" },
+      { key: "consumo_costo", label: "Costo consumo (Ref.)" },
+      { key: "estimado", label: "Costo estimado" },
+    ] },
+    { name: "Detalle", rows: detalle, headers: [
+      { key: "fecha", label: "Fecha" },
+      { key: "sucursal", label: "Sucursal" },
+      { key: "producto", label: "Producto" },
+      { key: "motivo", label: "Motivo" },
+      { key: "cantidad", label: "Cantidad" },
+      { key: "unidad", label: "Unidad" },
+      { key: "costo_unitario", label: "Costo unitario (Ref.)" },
+      { key: "costo", label: "Costo (Ref.)" },
+      { key: "estimado", label: "Costo estimado" },
+      { key: "responsable", label: "Responsable" },
+      { key: "documento", label: "Documento" },
+      { key: "nota", label: "Nota" },
+    ] },
+  ]), `Mermas_${range.from}_${range.to}${sufijoSucursal(range)}`);
+}
+
 // Libro de ventas o de compras: una fila por documento, en la moneda local y con las columnas que
 // pide el contador. Las N/C van en negativo y las anuladas en cero, como en el libro impreso.
 export function buildLibroVentasExcel(data, range, { titulo = "Libro de ventas", compras = false } = {}) {

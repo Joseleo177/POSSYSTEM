@@ -487,6 +487,27 @@ export default function SettingsTab({ notify }) {
                             </div>
                         </Seccion>
 
+                        {/* Propinas (extra de la empresa, ver services/tips): a quién le toca la propina
+                            de cada factura. Se copia en la venta al cobrarla: cambiarlo no mueve lo ya
+                            cobrado. Sin la clave guardada es "Al mesonero", igual que en el servidor. */}
+                        {company?.propinas_enabled && (
+                            <Seccion titulo="Propinas" detalle="El recargo de la caja marcado como propina." className="h-full">
+                                <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <span className="min-w-0">
+                                        <span className="block text-[13px] font-medium text-content dark:text-white">A quién le toca la propina</span>
+                                        <span className="block text-[12px] text-content-subtle mt-0.5 leading-snug">
+                                            {(settings.propinas_reparto || "mesonero") === "pozo"
+                                                ? "Todas las propinas van a un pozo. Al pagarlo se eligen las personas y se reparte en partes iguales, ajustable."
+                                                : "Cada propina es del mesonero de la cuenta: el de la tablet, o el que elige la caja al cobrar."}
+                                        </span>
+                                    </span>
+                                    <Segmented className="shrink-0" value={settings.propinas_reparto || "mesonero"}
+                                        onChange={v => setSettings(p => ({ ...p, propinas_reparto: v }))}
+                                        options={[{ key: "mesonero", label: "Al mesonero" }, { key: "pozo", label: "Pozo" }]} />
+                                </div>
+                            </Seccion>
+                        )}
+
                         {/* Restaurante donde se cobra antes de pedir (comida rápida, para llevar): lo
                             que la caja cobra sale a la pantalla de cocina. Apagado por defecto: con
                             mesoneros, lo que va a cocina son sus rondas. */}
@@ -537,6 +558,14 @@ export default function SettingsTab({ notify }) {
                                             onChange={v => setSettings(p => ({ ...p, mesa_qr_pedidos: v }))}
                                             options={[{ key: "confirmar", label: "Confirmar" }, { key: "directo", label: "Directo" }, { key: "apagado", label: "Apagado" }]} />
                                     </div>
+                                    <div className="border-t border-border/60 dark:border-white/[0.06]" />
+                                    {/* Pedido por puesto (sale_items.seat). Apagado por defecto. */}
+                                    <Interruptor
+                                        titulo="Pedir por puesto"
+                                        detalle="El mesonero marca a qué puesto de la mesa va cada plato. La comanda dice «P2 · Pasta» para llevarlo a quien lo pidió, y la cuenta se puede dividir por puesto. Lo que no lleva puesto queda para la mesa."
+                                        checked={settings.mesa_por_puesto === "true"}
+                                        onChange={() => setSettings(p => ({ ...p, mesa_por_puesto: p.mesa_por_puesto === "true" ? "false" : "true" }))}
+                                    />
                                     <div className="border-t border-border/60 dark:border-white/[0.06]" />
                                     {/* Reconocer al cliente en el QR (services/mesaClientes.js). Apagado por defecto. */}
                                     <Interruptor

@@ -139,6 +139,17 @@ export const TAB_ICONS = {
             />
         </svg>
     ),
+    // Una mano que recibe una moneda: la propina.
+    Propinas: (cls = "w-5 h-5") => (
+        <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.8}
+                d="M15 8.5a3 3 0 11-6 0 3 3 0 016 0zM3 15.5h3l3.5 1.5h4.5a1.5 1.5 0 000-3H11m-8 6h3l5 1.5 9-4.5a1.5 1.5 0 00-1.5-2.6L15.5 16"
+            />
+        </svg>
+    ),
     // Un libro de recetas abierto.
     Recetas: (cls = "w-5 h-5") => (
         <svg className={cls} fill="none" stroke="currentColor" viewBox="0 0 24 24">

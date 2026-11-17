@@ -258,13 +258,13 @@ async function accounts(req, tableId) {
   const ids = ventas.map(v => v.id);
   const [lineas, rondas] = await Promise.all([
     sequelize.query(`
-      SELECT si.sale_id, si.id, si.product_id, si.name, si.quantity, si.price, si.subtotal, si.note,
+      SELECT si.sale_id, si.id, si.product_id, si.name, si.quantity, si.price, si.subtotal, si.note, si.seat,
              p.unit, COALESCE(p.is_addon, false) AS is_addon
         FROM sale_items si LEFT JOIN products p ON p.id = si.product_id
        WHERE si.sale_id IN (:ids) ORDER BY si.id`, { replacements: { ids }, type: QT.SELECT }),
     sequelize.query(`
       SELECT k.id, k.sale_id, k.round_no, k.status, k.created_at, k.note, e.full_name AS waiter_name,
-             (SELECT json_agg(json_build_object('name', i.name, 'quantity', i.quantity, 'note', i.note, 'modifiers', i.modifiers) ORDER BY i.id)
+             (SELECT json_agg(json_build_object('name', i.name, 'quantity', i.quantity, 'note', i.note, 'modifiers', i.modifiers, 'seat', i.seat) ORDER BY i.seat NULLS FIRST, i.id)
                 FROM kitchen_ticket_items i WHERE i.ticket_id = k.id) AS items
         FROM kitchen_tickets k
         LEFT JOIN employees e ON e.id = k.waiter_id
@@ -273,8 +273,8 @@ async function accounts(req, tableId) {
   const { Employee, Customer } = require("../models");
   const clientes = new Map((await Customer.findAll({
     where: { id: { [Op.in]: [...new Set(ventas.map(v => v.customer_id).filter(Boolean))] } },
-    attributes: ["id", "name"],
-  })).map(c => [c.id, c.name]));
+    attributes: ["id", "name", "rif", "phone"],
+  })).map(c => [c.id, c]));
   const nombres = new Map((await Employee.findAll({
     where: { id: { [Op.in]: [...new Set(ventas.flatMap(v => [v.waiter_id, v.employee_id, v.held_by_employee_id]).filter(Boolean))] } },
     attributes: ["id", "full_name"],
@@ -290,7 +290,10 @@ async function accounts(req, tableId) {
         created_at: v.created_at,
         kitchen_status: v.kitchen_status,
         bill_requested_at: v.bill_requested_at,
-        customer_name: clientes.get(v.customer_id) || null,
+        customer_name: clientes.get(v.customer_id)?.name || null,
+        customer: clientes.has(v.customer_id)
+          ? (({ id, name, rif, phone }) => ({ id, name, rif: rif || null, phone: phone || null }))(clientes.get(v.customer_id))
+          : null,
         waiter_name: nombres.get(v.waiter_id) || nombres.get(v.employee_id) || null,
         // Una caja la tiene en su carrito: el mesonero no puede sumarle hasta que la suelte.
         held_by_name: v.held_by_employee_id && v.held_by_employee_id !== req.employee?.id ? nombres.get(v.held_by_employee_id) || "otra caja" : null,
@@ -338,7 +341,10 @@ async function sendRound(req, tableId, body = {}) {
       throw fail(`"${p.name}" se pide por unidades enteras`);
     }
     const note = String(l.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
-    return { product_id: p.id, name: p.name, qty, note, options: l.options };
+    // Puesto de la mesa (pedido por puesto): 1 a 99, o null = "Mesa" (lo compartido).
+    const s = parseInt(l.seat, 10);
+    const seat = s >= 1 && s <= 99 ? s : null;
+    return { product_id: p.id, name: p.name, qty, note, seat, options: l.options };
   });
 
   // Adicionales: lo que no cuesta va como texto en la línea del plato y en la comanda; lo que
@@ -350,11 +356,19 @@ async function sendRound(req, tableId, body = {}) {
     l.extras = r.extras;
     l.notaLinea = [r.texto, l.note].filter(Boolean).join(" · ").slice(0, 200) || null;
   }
-  // Líneas de la venta: el plato y, detrás, sus extras.
+  // Líneas de la venta: el plato y, detrás, sus extras (con el puesto del plato).
   const lineasVenta = limpias.flatMap(l => [
-    { product_id: l.product_id, qty: l.qty, note: l.notaLinea },
-    ...l.extras.map(e => ({ product_id: e.product_id, qty: l.qty, note: null })),
+    { product_id: l.product_id, qty: l.qty, note: l.notaLinea, seat: l.seat },
+    ...l.extras.map(e => ({ product_id: e.product_id, qty: l.qty, note: null, seat: l.seat })),
   ]);
+
+  // Cliente para la cuenta nueva (el que el mesonero eligió antes de la primera ronda).
+  let clienteNuevo = null;
+  if (body.customer_id) {
+    const { Customer } = require("../models");
+    clienteNuevo = await Customer.findOne({ where: { id: int(body.customer_id) }, attributes: ["id"] });
+    if (!clienteNuevo) throw fail("Ese cliente ya no existe", 404);
+  }
 
   // ¿A qué cuenta va? La que se eligió, la única de la mesa, o una nueva.
   const abiertas = await cuentasDeMesa(mesa.id);
@@ -376,6 +390,8 @@ async function sendRound(req, tableId, body = {}) {
     }
     await updateSale(venta.id, { append: lineasVenta }, req);
     if (!venta.waiter_id && req.employee?.id) await Sale.update({ waiter_id: req.employee.id }, { where: { id: venta.id } });
+    // Propinas: si la cuenta todavía no tiene a quién darle la propina, queda quien la atiende.
+    await require("./tips").asignarMesonero(venta, req.employee?.id);
   } else {
     // Cuenta nueva. El mesonero no elige serie: se toma la suya en esta sucursal, o la primera
     // activa de la sucursal. La caja factura con la que tenga al cobrar.
@@ -387,7 +403,8 @@ async function sendRound(req, tableId, body = {}) {
     if (!serie) throw fail("La sucursal no tiene una serie activa para abrir cuentas");
 
     const creada = await createSale({
-      items: lineasVenta.map(l => ({ product_id: l.product_id, quantity: l.qty, note: l.note })),
+      items: lineasVenta.map(l => ({ product_id: l.product_id, quantity: l.qty, note: l.note, seat: l.seat })),
+      customer_id: clienteNuevo?.id || null,
       paid: 0,
       employee_id: req.employee?.id || null,
       serie_id: serie.id,
@@ -401,7 +418,7 @@ async function sendRound(req, tableId, body = {}) {
 
   const ticket = await sequelize.transaction(t => crearComanda({
     sale: venta,
-    items: limpias.map(l => ({ product_id: l.product_id, name: l.name, quantity: l.qty, note: l.note, modifiers: l.cocina })),
+    items: limpias.map(l => ({ product_id: l.product_id, name: l.name, quantity: l.qty, note: l.note, modifiers: l.cocina, seat: l.seat })),
     label: mesa.name,
     note: body.note,
     waiterId: req.employee?.id || null,

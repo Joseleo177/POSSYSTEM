@@ -14,6 +14,7 @@ const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = r
 const { leerTasaDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
 const { sellerForSale } = require("../commissions");
+const { propinaDeVenta } = require("../tips");
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { vendeSinInsumo, fichaEnCero, fotoConsumo, consumoDeLinea } = require("../products/recipeStock");
 
@@ -72,7 +73,7 @@ module.exports = async function updateSale(saleId, body, req) {
     // la cuenta completa (sin append), así que el total final se recalcula como siempre.
     const previousItems = append ? [] : await SaleItem.findAll({ where: { sale_id: saleId }, transaction, order: [["id", "ASC"]] });
     if (append) {
-      items = append.map(it => ({ product_id: it.product_id, qty: it.qty, note: it.note, line_discount: null }));
+      items = append.map(it => ({ product_id: it.product_id, qty: it.qty, note: it.note, seat: it.seat ?? null, line_discount: null }));
     }
 
     // ── Devolver al inventario lo que la venta tenía apartado ──
@@ -153,6 +154,19 @@ module.exports = async function updateSale(saleId, body, req) {
     const notaDe = (item) => (item.note !== undefined
       ? (String(item.note || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null)
       : (notasPrevias.get(parseInt(item.product_id, 10))?.shift() ?? null));
+    // Puesto de la mesa (pedido por puesto), con el mismo criterio que la nota: quien reescribe
+    // la cuenta sin mandarlo (una caja vieja, la vista BARRA) no lo borra.
+    const puestosPrevios = new Map();
+    for (const it of previousItems) {
+      if (!it.product_id) continue;
+      if (!puestosPrevios.has(it.product_id)) puestosPrevios.set(it.product_id, []);
+      puestosPrevios.get(it.product_id).push(it.seat ?? null);
+    }
+    const puestoDe = (item) => {
+      if (item.seat === undefined) return puestosPrevios.get(parseInt(item.product_id, 10))?.shift() ?? null;
+      const n = parseInt(item.seat, 10);
+      return n >= 1 && n <= 99 ? n : null;
+    };
 
     let subtotalBruto = 0;
     const descuentosNuevos = [];
@@ -309,6 +323,7 @@ module.exports = async function updateSale(saleId, body, req) {
           wholesale: !!alMayor,
           list_price: listPrice,
           note: notaDe(item),
+          seat: puestoDe(item),
           components,
         },
         { transaction }
@@ -343,6 +358,14 @@ module.exports = async function updateSale(saleId, body, req) {
     if (body.seller_id !== undefined && (parseInt(body.seller_id) || null) !== (sale.seller_id || null)) {
       Object.assign(headerPatch, await sellerForSale(body.seller_id, transaction));
     }
+
+    // Propina (ver services/tips): marca, persona y, al cobrar, persona o pozo. Quien reescribe
+    // la cuenta sin nombrarlas (la vista BARRA, una caja vieja) no las toca.
+    Object.assign(headerPatch, await propinaDeVenta(body, {
+      companyId: sale.company_id, sale,
+      cobrando: sale.status === "espera" && body.status === "borrador",
+      transaction,
+    }));
 
     // Cambiar de serie no puede saltar de sucursal: la serie pertenece a un almacén.
     if (headerPatch.serie_id && parseInt(headerPatch.serie_id) !== parseInt(sale.serie_id)) {
@@ -388,7 +411,8 @@ module.exports = async function updateSale(saleId, body, req) {
       req, { lineas: descuentosNuevos, subtotal: subtotalBruto, global: globalCambio ? discManual : 0 }, transaction
     );
     const chargeLabel = chargeAmt > 0
-      ? ((service_charge_label ?? sale.service_charge_label)?.trim().slice(0, 40) || "Servicio")
+      ? ((service_charge_label ?? sale.service_charge_label)?.trim().slice(0, 40)
+        || ((headerPatch.service_charge_is_tip ?? sale.service_charge_is_tip) ? "Propina" : "Servicio"))
       : null;
     // 2 decimales: sale.total es el monto "oficial" de la factura en $.
     // La precisión completa vive en sale_items (price/discount/subtotal).

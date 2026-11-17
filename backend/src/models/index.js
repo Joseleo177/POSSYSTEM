@@ -53,6 +53,7 @@ const tenantModels = [
   'CasheaSettlement', 'CurrencyRate', 'CobranzaSector',
   'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
   'IvaDeclaration', 'IvaPriceAdjustment',
+  'TipPayout', 'TipReassignment',
 ];
 
 const applyTenantFilter = (modelName, options) => {
@@ -345,6 +346,8 @@ if (Warehouse) {
   // Vendedor que gana la comisión, aparte del cajero (employee_id) y del mesonero (waiter_id).
   const { Seller } = db;
   if (Seller) Sale.belongsTo(Seller, { foreignKey: 'seller_id', as: 'Seller' });
+  // Persona a la que le toca la propina (ver services/tips).
+  if (Seller) Sale.belongsTo(Seller, { foreignKey: 'tip_seller_id', as: 'TipSeller' });
 }
 
 if (Sale && Serie && SerieRange) {

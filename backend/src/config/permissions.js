@@ -171,6 +171,19 @@ const MODULES = [
     ],
   },
   {
+    // Propinas: solo en empresas con companies.propinas_enabled (ver routes/tips.js). Nuevo,
+    // fuera de todo LEGACY_MAP: de entrada solo el admin. Marcar el recargo como propina y elegir
+    // el mesonero en la caja va con sales.create.
+    key: 'tips',
+    label: 'Propinas',
+    actions: [
+      { key: 'view',     label: 'Ver propinas y estados de cuenta' },
+      { key: 'manage',   label: 'Crear y editar el personal' },
+      { key: 'reassign', label: 'Cambiar a quién le toca una propina (aun con la factura cerrada)' },
+      { key: 'pay',      label: 'Pagar propinas y repartir el pozo' },
+    ],
+  },
+  {
     // Cobranza por sectores: solo en empresas con companies.cobranza_enabled (ver
     // routes/cobranza.js). Nuevo, fuera de todo LEGACY_MAP: de entrada solo el admin. Quien no
     // tiene 'all' ve solo los sectores donde está asignado.

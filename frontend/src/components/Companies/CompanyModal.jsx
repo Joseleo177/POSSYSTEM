@@ -14,7 +14,7 @@ const vacio = () => ({
     name: "", tax_id: "", address: "", phone: "", email: "",
     plan_name: "Básico", subscription_status: "Demo",
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, seo_enabled: true,
+    max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, propinas_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, seo_enabled: true,
     admin_username: "", admin_password: "",
 });
 
@@ -161,6 +161,9 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                             {/* Vendedores con su %, el vendedor en cada venta y la liquidación. */}
                             <Interruptor titulo="Comisiones por vendedor" detalle="El vendedor en cada venta, su comisión sobre lo cobrado y la liquidación."
                                 checked={!!form.comisiones_enabled} onChange={v => set("comisiones_enabled", v)} />
+                            {/* La propina del recargo, al mesonero de la cuenta o a un pozo, y su pago. */}
+                            <Interruptor titulo="Propinas" detalle="La propina de cada factura al mesonero o a un pozo, correcciones y pago al personal."
+                                checked={!!form.propinas_enabled} onChange={v => set("propinas_enabled", v)} />
                             {/* Cobradores de calle que abonan y dejan mercancía a crédito: todo queda
                                 como ventas y cobros normales. */}
                             <Interruptor titulo="Cobranza por sectores" detalle="Ruta del cobrador por pueblo o zona, abonos y mercancía a crédito."

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import CustomSelect from "../ui/CustomSelect";
+import SellerPickerModal from "./SellerPickerModal";
+import { useCart } from "../../context/CartContext";
 import CustomerModal from "../Customers/CustomerModal";
 import { fmtQtyUnit } from "../../helpers/unitFormatter";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
@@ -42,6 +44,9 @@ export default function CartSidebar({
     // tipo V- o J-), lo llevamos al campo cédula/RIF del alta en vez de al nombre.
     // Edición del cliente ya elegido, sin abandonar la venta.
     const { can, notify, company } = useApp();
+    // Propinas (extra de la empresa): el estado vive en el carrito, igual que el recargo.
+    const { propinas, chargeIsTip, setChargeIsTip, selectedTipSeller, setSelectedTipSeller } = useCart();
+    const [showTipPicker, setShowTipPicker] = useState(false);
     // IVA que ya va dentro del total (los precios lo incluyen), con el mismo reparto que la
     // factura. En la barra va compacto: solo el impuesto de cada alícuota y el exento.
     const iva = company?.iva_enabled && cart.length
@@ -578,8 +583,10 @@ export default function CartSidebar({
                                         })()}
                                     </div>
                                     {/* Adicionales del plato y la nota para la cocina. */}
-                                    {(i.addon_text || i.note) && (
+                                    {(i.addon_text || i.note || (i.seat && !i.parentKey)) && (
                                         <div className="text-[11px] text-content dark:text-white/80 leading-snug mt-0.5 break-words">
+                                            {/* Pedido por puesto: de quién es el plato en la mesa. */}
+                                            {i.seat && !i.parentKey && <span className="font-semibold text-content-subtle">Puesto {i.seat}{(i.addon_text || i.note) ? " · " : ""}</span>}
                                             {i.addon_text || ""}
                                             {i.addon_options && i.kitchen_note && <span className="text-amber-700 dark:text-amber-400">{i.addon_text ? " · " : ""}{i.kitchen_note}</span>}
                                             {!i.addon_options && i.note && <span className="text-amber-700 dark:text-amber-400">{i.note}</span>}
@@ -755,7 +762,41 @@ export default function CartSidebar({
                                 ))}
                             </div>
                         )}
+                        {/* Propinas (extra de la empresa): el recargo es propina o es otra cosa
+                            (delivery, servicio), y a quién le toca. */}
+                        {chargeEnabled && propinas && (
+                            <div className="flex items-center gap-1.5">
+                                <div className="flex rounded-lg overflow-hidden border border-black/10 dark:border-white/10 shrink-0">
+                                    {[[true, "Propina"], [false, "Otro recargo"]].map(([es, etiqueta]) => (
+                                        <button key={etiqueta} type="button"
+                                            onClick={() => {
+                                                setChargeIsTip(es);
+                                                // El nombre por defecto sigue a la marca, sin pisar uno escrito a mano.
+                                                if (es && (!chargeLabel || chargeLabel === "Servicio")) setChargeLabel("Propina");
+                                                if (!es && chargeLabel === "Propina") setChargeLabel("Servicio");
+                                            }}
+                                            className={`h-7 lg:h-8 px-2 text-[11px] font-bold transition-all ${chargeIsTip === es
+                                                ? "bg-brand-500/10 text-brand-700 dark:text-brand-300 ring-1 ring-inset ring-brand-500/40"
+                                                : "bg-surface-2 dark:bg-white/10 text-content-subtle dark:text-white/40"}`}>
+                                            {etiqueta}
+                                        </button>
+                                    ))}
+                                </div>
+                                {chargeIsTip && (
+                                    <button type="button" onClick={() => setShowTipPicker(true)}
+                                        className="flex-1 min-w-0 h-7 lg:h-8 px-2 rounded-lg bg-surface-2 dark:bg-white/10 text-[11px] text-left truncate">
+                                        {selectedTipSeller
+                                            ? <><span className="text-content-subtle">Para </span><span className="font-bold text-content dark:text-white">{toNameCase(selectedTipSeller.name)}</span></>
+                                            : <span className="font-bold text-content-subtle">Elegir mesonero</span>}
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
+                    {propinas && (
+                        <SellerPickerModal source="tips" open={showTipPicker} onClose={() => setShowTipPicker(false)}
+                            onPick={setSelectedTipSeller} selected={selectedTipSeller} warehouseId={activeWarehouse?.id} />
+                    )}
                     <div className="bg-surface-2 dark:bg-white/5 p-3 rounded-xl border border-black/5 dark:border-white/10">
                         <div className={`${(promoDiscount > 0 || lineManualDiscountDisplay > 0 || (discountEnabled && discountAmount > 0) || chargeAmountDisplay > 0) ? "" : "hidden lg:block"} space-y-1 mb-2`}>
                             <div className="flex justify-between items-center opacity-60 dark:text-content-dark-muted">

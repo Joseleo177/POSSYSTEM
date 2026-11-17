@@ -220,6 +220,7 @@ async function dividir(req, saleId, body = {}) {
         discount_by: l.discount_by,
         cost_price: l.cost_price,
         note: l.note,
+        seat: l.seat,
         // La foto va por unidad: la parte que se separa repone lo mismo por plato.
         components: l.components,
         company_id: l.company_id,
@@ -247,4 +248,96 @@ async function pedirCuenta(req, saleId, { requested = true } = {}) {
   return { data: { sale_id: sale.id, bill_requested_at: valor } };
 }
 
-module.exports = { mover, dividir, pedirCuenta };
+// ── Cliente de la cuenta ────────────────────────────────────────────────────────────────
+// El mesonero busca al cliente o lo registra en la mesa, y queda en la cuenta: la caja (o quien
+// cobre) factura a su nombre. El mesonero no tiene permisos de Clientes, así que van por aquí y
+// solo con lo necesario: nombre, cédula y teléfono. Nunca saldos ni deudas.
+
+const datosCliente = (c) => ({ id: c.id, name: c.name, rif: c.rif || null, phone: c.phone || null });
+
+/** Clientes por nombre, cédula o teléfono, para elegirlo en la mesa. */
+async function buscarClientes(req, { q } = {}) {
+  const { Customer } = require("../models");
+  const t = String(q || "").trim().replace(/\s+/g, " ").slice(0, 60);
+  if (t.length < 2) return { data: [] };
+  const doc = t.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const filas = await Customer.findAll({
+    where: {
+      type: "cliente",
+      [Op.or]: [
+        { name: { [Op.iLike]: `%${t}%` } },
+        { phone: { [Op.iLike]: `%${t}%` } },
+        // La cédula sin importar cómo se escribió o se guardó (V-123, v123, 123).
+        ...(doc.length >= 3 ? [Sequelize.where(
+          Sequelize.fn("regexp_replace", Sequelize.fn("upper", Sequelize.col("rif")), "[^A-Z0-9]", "", "g"),
+          { [Op.like]: `%${doc}%` },
+        )] : []),
+      ],
+    },
+    attributes: ["id", "name", "rif", "phone"],
+    order: [["name", "ASC"]],
+    limit: 8,
+  });
+  return { data: filas.map(datosCliente) };
+}
+
+/**
+ * Registra un cliente desde la mesa. Si ya hay uno con esa cédula se devuelve ese, sin tocar sus
+ * datos (mismo criterio que el QR de la mesa y el catálogo).
+ *
+ * body: { document, name, phone? }
+ */
+async function crearCliente(req, { document, name, phone } = {}) {
+  const { parseDocument } = require("./publicCatalogService");
+  const doc = parseDocument(document);
+  if (!doc) throw fail("Escribe la cédula o el RIF completo, por ejemplo V-12345678");
+  const nombre = String(name || "").trim().replace(/\s+/g, " ").slice(0, 200);
+  if (nombre.length < 3) throw fail("Escribe el nombre del cliente");
+  const telefono = String(phone || "").replace(/[^\d+]/g, "").slice(0, 20) || null;
+
+  const { Customer } = require("../models");
+  const buscar = () => Customer.findOne({
+    where: {
+      [Op.and]: [Sequelize.where(
+        Sequelize.fn("regexp_replace", Sequelize.fn("upper", Sequelize.col("rif")), "[^A-Z0-9]", "", "g"),
+        doc.normalized,
+      )],
+    },
+  });
+  const existe = await buscar();
+  if (existe) return { data: datosCliente(existe), existing: true };
+
+  const { createCustomer } = require("./customers");
+  try {
+    const r = await createCustomer({ type: "cliente", name: nombre, rif: doc.canonical, phone: telefono });
+    return { data: datosCliente(r.data) };
+  } catch (err) {
+    // Otro aparato lo registró en el mismo instante.
+    const otro = await buscar();
+    if (otro) return { data: datosCliente(otro), existing: true };
+    throw err;
+  }
+}
+
+/**
+ * Pone (o quita, con null) el cliente de una cuenta abierta de la mesa. No toca líneas ni
+ * totales: el precio al mayor del cliente, si lo hay, lo vuelve a decidir la caja al cobrar.
+ *
+ * body: { customer_id: number | null }
+ */
+async function asignarCliente(req, saleId, { customer_id } = {}) {
+  const { Customer } = require("../models");
+  const minutos = await timeoutMinutes();
+  return sequelize.transaction(async (transaction) => {
+    const sale = await cuentaEditable(req, saleId, transaction, { minutos });
+    let cliente = null;
+    if (customer_id !== null && customer_id !== undefined && customer_id !== "") {
+      cliente = await Customer.findOne({ where: { id: int(customer_id) }, attributes: ["id", "name", "rif", "phone"], transaction });
+      if (!cliente) throw fail("Ese cliente ya no existe", 404);
+    }
+    await sale.update({ customer_id: cliente ? cliente.id : null }, { transaction });
+    return { data: { sale_id: sale.id, customer: cliente ? datosCliente(cliente) : null } };
+  });
+}
+
+module.exports = { mover, dividir, pedirCuenta, buscarClientes, crearCliente, asignarCliente };

@@ -60,7 +60,7 @@ export default function AuditReport() {
  <Card className="!p-0 min-h-0 flex flex-col overflow-hidden">
  <div className="px-4 pt-4">
  <SectionHeader
- title={view === "employees" ? "Rendimiento" : view === "returns" ? "Control Merma" : "Supervisión"}
+ title={view === "employees" ? "Rendimiento" : view === "returns" ? "Control de devoluciones" : "Supervisión"}
  sub="Trazabilidad operacional completa" />
  </div>
 

@@ -14,6 +14,8 @@ module.exports = (sequelize, DataTypes) => {
     note:       { type: DataTypes.STRING(200), allowNull: true },
     // Adicionales elegidos, para la cocina: "Término medio · Sin cebolla · + Queso extra".
     modifiers:  { type: DataTypes.STRING(400), allowNull: true },
+    // Puesto de la mesa (la cocina rotula "P2"); null = para la mesa.
+    seat:       { type: DataTypes.SMALLINT, allowNull: true },
   }, {
     sequelize,
     tableName: 'kitchen_ticket_items',

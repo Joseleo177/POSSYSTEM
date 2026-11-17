@@ -13,6 +13,7 @@ const {
   financeReport,
   libroVentasReport,
   libroComprasReport,
+  mermasReport,
 } = require("../services/reports");
 
 const wrap = (fn, errMsg) => async (req, res) => {
@@ -104,7 +105,19 @@ const getLibroComprasReport = async (req, res) => {
   }
 };
 
+const getMermasReport = async (req, res) => {
+  try {
+    const data = await mermasReport({ ...req.query, ...(await buildTenantContext(req)) });
+    res.json({ ok: true, data });
+  } catch (err) {
+    if (!err.isOperational) console.error(err);
+    res.status(err.isOperational ? err.status || 400 : 500)
+      .json({ ok: false, message: err.isOperational ? err.message : "Error al generar el reporte de mermas" });
+  }
+};
+
 module.exports = {
+  getMermasReport,
   getFinanceReport,
   getLibroVentasReport,
   getLibroComprasReport,

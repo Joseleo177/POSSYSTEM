@@ -283,7 +283,11 @@ export default function CocinaPage() {
                         <li key={idx} className="py-1.5 flex gap-2.5">
                             <span className="text-[15px] font-bold text-content dark:text-white tabular-nums w-7 shrink-0 text-right">{fmtQty(i.quantity)}</span>
                             <span className="min-w-0">
-                                <span className="block text-[15px] text-content dark:text-white leading-snug">{i.name}</span>
+                                <span className="block text-[15px] text-content dark:text-white leading-snug">
+                                    {/* Pedido por puesto: a quién se le lleva el plato. */}
+                                    {i.seat && <span className="inline-flex items-center justify-center min-w-[26px] h-5 px-1.5 mr-1.5 rounded-md bg-content text-white dark:bg-white dark:text-surface-dark text-[12px] font-bold tabular-nums align-[2px]">P{i.seat}</span>}
+                                    {i.name}
+                                </span>
                                 {i.modifiers && <span className="block text-[13px] text-content dark:text-white/85 leading-snug">{i.modifiers}</span>}
                                 {i.note && <span className="block text-[13px] text-amber-700 dark:text-amber-400 leading-snug">{i.note}</span>}
                             </span>

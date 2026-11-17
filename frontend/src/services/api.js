@@ -680,6 +680,8 @@ export const api = {
     customersAnalysis:  (params = {}) => request("/reports/customers-analysis?" + new URLSearchParams(params)),
     audit:              (params = {}) => request("/reports/audit?"              + new URLSearchParams(params)),
     expiry:             (params = {}) => request("/reports/expiry?"             + new URLSearchParams(params)),
+    // Pérdidas de inventario (merma, vencidos, robo, faltantes, transferencias) con su costo.
+    mermas:             (params = {}) => request("/reports/mermas?"             + new URLSearchParams(params)),
     paymentJournals:    (params = {}) => request("/reports/payment-journals?"   + new URLSearchParams(params)),
     finance:            (params = {}) => request("/reports/finance?"            + new URLSearchParams(params)),
     libroVentas:        (params = {}) => request("/reports/libro-ventas?"       + new URLSearchParams(params)),
@@ -821,6 +823,22 @@ export const api = {
     pay:          (id, body)      => request(`/commissions/sellers/${id}/payouts`, { method: "POST", body: JSON.stringify(body) }),
     voidPayout:   (id)            => request(`/commissions/payouts/${id}`, { method: "DELETE" }),
   },
+  // Propinas (extra por empresa, ver services/tips en el backend). El personal es el mismo de
+  // Comisiones (tabla sellers), con su propia ruta y permisos.
+  tips: {
+    staff:        (all = false)   => request(`/tips/staff${all ? "?all=1" : ""}`),
+    users:        ()              => request("/tips/users"),
+    createStaff:  (body)          => request("/tips/staff", { method: "POST", body: JSON.stringify(body) }),
+    updateStaff:  (id, body)      => request(`/tips/staff/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+    report:       (params = {})   => request("/tips/report?" + new URLSearchParams(params)),
+    statement:    (id, params={}) => request(`/tips/staff/${id}/statement?` + new URLSearchParams(params)),
+    sales:        (params = {})   => request("/tips/sales?" + new URLSearchParams(params)),
+    history:      (saleId)        => request(`/tips/sales/${saleId}/history`),
+    reassign:     (saleId, body)  => request(`/tips/sales/${saleId}/assignee`, { method: "PUT", body: JSON.stringify(body) }),
+    pay:          (id, body)      => request(`/tips/staff/${id}/payouts`, { method: "POST", body: JSON.stringify(body) }),
+    payPool:      (body)          => request("/tips/pool/payouts", { method: "POST", body: JSON.stringify(body) }),
+    voidPayout:   (id)            => request(`/tips/payouts/${id}`, { method: "DELETE" }),
+  },
   // Agenda de citas (extra por empresa, ver services/agenda en el backend).
   agenda: {
     day:        (params = {})   => request("/agenda/day?" + new URLSearchParams(params)),
@@ -895,6 +913,10 @@ export const api = {
     moveAccount:  (saleId, body)      => request(`/tables/accounts/${saleId}/move`,  { method: "POST", body: JSON.stringify(body) }),
     splitAccount: (saleId, items)     => request(`/tables/accounts/${saleId}/split`, { method: "POST", body: JSON.stringify({ items }) }),
     requestBill:  (saleId, requested) => request(`/tables/accounts/${saleId}/bill`,  { method: "POST", body: JSON.stringify({ requested }) }),
+    // El cliente de la cuenta, desde la mesa: buscarlo, registrarlo y ponerlo (o quitarlo con null).
+    findCustomers:  (q)                 => request("/tables/customers?" + new URLSearchParams({ q })),
+    createCustomer: (body)              => request("/tables/customers", { method: "POST", body: JSON.stringify(body) }),
+    setCustomer:    (saleId, customerId) => request(`/tables/accounts/${saleId}/customer`, { method: "PUT", body: JSON.stringify({ customer_id: customerId }) }),
     // QR de la mesa: código nuevo (el viejo deja de servir).
     newQrCode:    (tableId)           => request(`/tables/${tableId}/qr`, { method: "POST" }),
     // Pedidos que el cliente hizo desde el QR: aceptar (sale como ronda) o rechazar.

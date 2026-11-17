@@ -74,6 +74,10 @@ async function list(req, query = {}) {
          WHERE ci.combo_id = p.id
       ) r ON p.is_combo
      WHERE p.company_id = :cid AND ${ES_PLATO}
+       AND (:wid IS NULL OR EXISTS (
+         SELECT 1 FROM product_stock pws
+          WHERE pws.product_id = p.id AND pws.warehouse_id = CAST(:wid AS int)
+       ))
      ORDER BY c.name NULLS LAST, p.name`,
     { replacements: { cid, wid }, type: Sequelize.QueryTypes.SELECT });
 
@@ -117,6 +121,10 @@ async function ingredients(req, query = {}) {
        AND i.is_combo = false AND i.is_service = false AND i.is_addon = false
        AND i.is_variant_parent = false AND i.piece_mode IS NULL
        AND i.name ILIKE :q
+       AND (:wid IS NULL OR EXISTS (
+         SELECT 1 FROM product_stock iws
+          WHERE iws.product_id = i.id AND iws.warehouse_id = CAST(:wid AS int)
+       ))
      ORDER BY i.sellable ASC, i.name
      LIMIT 20`,
     { replacements: { cid, wid, q: `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%` }, type: Sequelize.QueryTypes.SELECT });
@@ -144,16 +152,49 @@ async function createIngredient(req, body = {}) {
   const cost = body.cost === "" || body.cost == null ? 0 : parseFloat(body.cost);
   if (!Number.isFinite(cost) || cost < 0 || cost > 1e8) throw fail("Costo no válido");
 
-  const repetido = await Product.findOne({
-    where: { company_id: cid, name: { [Sequelize.Op.iLike]: name.replace(/[\\%_]/g, (m) => `\\${m}`) } },
-    attributes: ["id", "name", "is_combo", "is_service"],
-  });
-  if (repetido) throw fail(`Ya existe "${repetido.name}". Búscalo en la lista`, 409);
+  const rawWid = body.warehouse_id;
+  const wid = await sucursalDe(req, rawWid);
 
-  const p = await Product.create({
-    name, unit, price: 0, cost_price: round4(cost), sellable: false, qty_step: 1, company_id: cid,
+  const repetido = await Product.findOne({
+    where: { company_id: cid, name: { [Sequelize.Op.iLike]: name.replace(/[\%_]/g, (m) => `\\${m}`) } },
+    attributes: ["id", "name", "unit", "is_combo", "is_service", "sellable", "cost_price"],
   });
-  return { data: { id: p.id, name: p.name, unit: p.unit, sellable: false, cost: round4(cost), stock: null } };
+
+  // Si el insumo ya existe en el catálogo pero todavía no tiene ficha en el almacén elegido,
+  // lo casamos con ese almacén en vez de rechazarlo.
+  if (repetido) {
+    if (repetido.is_combo || repetido.is_service) {
+      throw fail(`Ya existe "${repetido.name}" como plato. Búscalo en la lista`, 409);
+    }
+    if (wid) {
+      await sequelize.transaction(async (transaction) => {
+        await ProductStock.findOrCreate({
+          where: { warehouse_id: wid, product_id: repetido.id },
+          defaults: { qty: 0, cost_price: cost, company_id: cid },
+          transaction,
+        });
+      });
+    }
+    return { data: {
+      id: repetido.id, name: repetido.name, unit: repetido.unit, sellable: !!repetido.sellable,
+      cost: round4(wid ? cost : parseFloat(repetido.cost_price) || 0), stock: wid ? 0 : null,
+    } };
+  }
+
+  let p;
+  await sequelize.transaction(async (transaction) => {
+    p = await Product.create({
+      name, unit, price: 0, cost_price: round4(cost), sellable: false, qty_step: 1, company_id: cid,
+    }, { transaction });
+
+    if (wid) {
+      await ProductStock.create({
+        warehouse_id: wid, product_id: p.id, qty: 0, cost_price: round4(cost), company_id: cid,
+      }, { transaction });
+    }
+  });
+
+  return { data: { id: p.id, name: p.name, unit: p.unit, sellable: false, cost: round4(cost), stock: wid ? 0 : null } };
 }
 
 async function platoDe(cid, productId, transaction, lock = false) {

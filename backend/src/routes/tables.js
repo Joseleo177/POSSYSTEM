@@ -40,6 +40,10 @@ const atender = permit("tables.serve", "sales.create");
 router.post  ("/accounts/:saleId/move",  atender, handle(req => cuentas.mover(req, req.params.saleId, req.body)));
 router.post  ("/accounts/:saleId/split", atender, handle(req => cuentas.dividir(req, req.params.saleId, req.body)));
 router.post  ("/accounts/:saleId/bill",  atender, handle(req => cuentas.pedirCuenta(req, req.params.saleId, req.body)));
+// El cliente de la cuenta: buscarlo, registrarlo (solo nombre, cédula y teléfono) y ponerlo.
+router.get   ("/customers",              atender, handle(req => cuentas.buscarClientes(req, req.query)));
+router.post  ("/customers",              atender, handle(req => cuentas.crearCliente(req, req.body)));
+router.put   ("/accounts/:saleId/customer", atender, handle(req => cuentas.asignarCliente(req, req.params.saleId, req.body)));
 
 router.get   ("/areas",            ver,    handle(req => svc.listAreas(req, req.query)));
 router.post  ("/areas",            editar, handle(req => svc.saveArea(req, req.body)));

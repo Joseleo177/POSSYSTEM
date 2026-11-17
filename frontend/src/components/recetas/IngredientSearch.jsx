@@ -42,7 +42,10 @@ export default function IngredientSearch({ warehouseId, onPick, exclude, exclude
 
     const crear = async () => {
         try {
-            const r = await api.recipes.createIngredient({ name: q.trim(), unit: nuevo.unit, cost: num(nuevo.cost) });
+            const r = await api.recipes.createIngredient({
+                name: q.trim(), unit: nuevo.unit, cost: num(nuevo.cost),
+                ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+            });
             notify(`Insumo "${r.data.name}" creado`);
             elegir(r.data);
         } catch (e) { notify(e?.message || "No se pudo crear el insumo", "err"); }

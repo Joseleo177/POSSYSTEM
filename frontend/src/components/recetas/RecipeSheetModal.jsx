@@ -54,7 +54,7 @@ export default function RecipeSheetModal({ productId, warehouseId, meta = 35, on
             .catch(e => { if (vivo) { notify(e?.message || "No se pudo abrir la receta", "err"); onClose?.(); } })
             .finally(() => { if (vivo) setLoading(false); });
         return () => { vivo = false; };
-    }, [productId]);
+    }, [productId, warehouseId]);
 
     const calc = useMemo(() => lines.map(l => calcular(l)), [lines]);
     const costo = calc.reduce((a, c) => a + c.costo, 0);

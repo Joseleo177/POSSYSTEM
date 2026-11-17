@@ -8,6 +8,8 @@ import { useApp } from "../../context/AppContext";
 import { cartKey } from "../../helpers/cartLine";
 import { desgloseIva, renglonesIva, tasaDeLinea } from "../../helpers/iva";
 import { monedaLocal } from "../../helpers/currency";
+import { useCart } from "../../context/CartContext";
+import SellerPickerModal from "./SellerPickerModal";
 
 // Mismo redondeo por línea que CartContext y CartSidebar: las líneas tienen que sumar el
 // total que se factura, al céntimo.
@@ -47,6 +49,9 @@ export default function CheckoutReview({
     setLineDiscount, convertToBase, lineManualDiscountDisplay = 0,
 }) {
     const { can, settings, company } = useApp();
+    // Propinas (extra de la empresa): la marca del recargo y el mesonero, como en el carrito.
+    const { propinas, chargeIsTip, setChargeIsTip, selectedTipSeller, setSelectedTipSeller } = useCart();
+    const [showTipPicker, setShowTipPicker] = useState(false);
     // Descuentos: con permiso propio y, salvo el administrador, con el tope de Configuración →
     // Punto de venta. El servidor vuelve a comprobar las dos cosas (sales/lineDiscount.js).
     const canDiscount = can("sales.discount");
@@ -550,7 +555,31 @@ export default function CheckoutReview({
                                             className="btn-outline h-10 px-2.5 rounded-lg text-[12px] font-semibold tabular-nums shrink-0">{p}%</button>
                                     ))}
                                 </div>
+                                {propinas && (
+                                    <div className="flex items-center gap-2">
+                                        <Segmented value={chargeIsTip ? "propina" : "otro"}
+                                            onChange={k => {
+                                                const es = k === "propina";
+                                                setChargeIsTip(es);
+                                                if (es && (!chargeLabel || chargeLabel === "Servicio")) setChargeLabel("Propina");
+                                                if (!es && chargeLabel === "Propina") setChargeLabel("Servicio");
+                                            }}
+                                            options={[{ key: "propina", label: "Propina" }, { key: "otro", label: "Otro recargo" }]} />
+                                        {chargeIsTip && (
+                                            <button type="button" onClick={() => setShowTipPicker(true)}
+                                                className="btn-outline flex-1 min-w-0 h-10 px-3 rounded-lg text-[13px] text-left truncate">
+                                                {selectedTipSeller
+                                                    ? <><span className="text-content-subtle">Para </span><span className="font-semibold">{toNameCase(selectedTipSeller.name)}</span></>
+                                                    : <span className="text-content-subtle">Elegir mesonero</span>}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
                             </>))}
+                            {propinas && (
+                                <SellerPickerModal source="tips" open={showTipPicker} onClose={() => setShowTipPicker(false)}
+                                    onPick={setSelectedTipSeller} selected={selectedTipSeller} />
+                            )}
                             {/* El dólar por encima de la tasa oficial: en bolívares la cuenta no
                                 cambia, en divisas baja. Ver descuentoDivisas (helpers/currency). */}
                             {puedeFx && !avanceOn && ajuste("Cobro en divisas", fxEnabled, () => setFxEnabled(!fxEnabled), (<>

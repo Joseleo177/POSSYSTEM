@@ -157,6 +157,15 @@ export function CartProvider({ children }) {
   const comisiones = !!company?.comisiones_enabled;
   const vendedorPayload = () => (comisiones ? { seller_id: selectedSeller?.id || null } : {});
 
+  // ── Propina (extra de la empresa) ──────────────────────────
+  // El recargo se marca como propina (o como otro recargo: delivery, servicio) y la propina le
+  // toca a un mesonero de la lista de personas (ver services/tips en el backend). La cuenta que
+  // viene de la tablet trae ya su mesonero. Sin el extra la venta no los nombra.
+  const propinas = !!company?.propinas_enabled;
+  const [chargeIsTip, setChargeIsTip] = useState(true);
+  const [selectedTipSeller, setSelectedTipSeller] = useState(null);
+  const propinaPayload = () => (propinas ? { service_charge_is_tip: !!chargeIsTip, tip_seller_id: selectedTipSeller?.id || null } : {});
+
   // ── Almacén activo ─────────────────────────────────────────
   const [employeeWarehouses, setEmployeeWarehouses] = useState([]);
   const [activeWarehouse, setActiveWarehouse] = useState(null);
@@ -222,6 +231,8 @@ export function CartProvider({ children }) {
     setCart(saved.cart);
     setSelectedCustomer(saved.customer || null);
     setSelectedSeller(saved.seller || null);
+    setSelectedTipSeller(saved.tipSeller || null);
+    setChargeIsTip(saved.chargeIsTip !== false);
     setDiscountEnabled(!!saved.discountEnabled);
     setDiscountPct(saved.discountPct ?? "");
     setDiscountMode(saved.discountMode || "pct");
@@ -237,13 +248,13 @@ export function CartProvider({ children }) {
     try {
       if (!cart.length || heldSaleId || quotationId) { localStorage.removeItem(cartStorageKey); return; }
       localStorage.setItem(cartStorageKey, JSON.stringify({
-        cart, customer: selectedCustomer, seller: selectedSeller,
+        cart, customer: selectedCustomer, seller: selectedSeller, tipSeller: selectedTipSeller, chargeIsTip,
         discountEnabled, discountPct, discountMode,
         chargeEnabled, chargeInput, chargeMode, chargeLabel,
         pendingKey: pendingKeyRef.current,
       }));
     } catch { /* almacenamiento lleno o bloqueado: el carrito sigue en pantalla */ }
-  }, [cartStorageKey, cart, selectedCustomer, selectedSeller, heldSaleId, quotationId,
+  }, [cartStorageKey, cart, selectedCustomer, selectedSeller, selectedTipSeller, chargeIsTip, heldSaleId, quotationId,
     discountEnabled, discountPct, discountMode, chargeEnabled, chargeInput, chargeMode, chargeLabel]);
 
   useEffect(() => {
@@ -524,6 +535,8 @@ export function CartProvider({ children }) {
     setCartTable(null);
     setSelectedCustomer(null);
     setSelectedSeller(null);
+    setSelectedTipSeller(null);
+    setChargeIsTip(true);
     // La moneda NO se resetea: es la preferencia de visualización del cajero y se mantiene
     // entre ventas. El cliente y la serie sí, porque pertenecen a la venta que se cerró.
     setSelectedSerieId(mySeries.length > 0 ? mySeries[0].id : null);
@@ -1004,7 +1017,7 @@ export function CartProvider({ children }) {
     setLoading(true);
     try {
       const createHold = () => api.sales.create({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note, seat: i.seat ?? null })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -1016,7 +1029,7 @@ export function CartProvider({ children }) {
         service_charge: chargeAmountBase,
         service_charge_label: chargeLabel,
         table_id: cartTable?.id || null,
-        ...vendedorPayload(),
+        ...vendedorPayload(), ...propinaPayload(),
         hold: true,
       });
 
@@ -1026,7 +1039,7 @@ export function CartProvider({ children }) {
       if (heldSaleId) {
         try {
           await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null, seat: i.seat ?? null })),
             discount_amount: discountAmount,
             // La tasa de divisas se elige al cobrar: una cuenta en espera no la guarda.
             fx_rate: null,
@@ -1040,7 +1053,7 @@ export function CartProvider({ children }) {
             exchange_rate: exchangeRate,
             serie_id: selectedSerieId,
             table_id: cartTable?.id ?? null,
-            ...vendedorPayload(),
+            ...vendedorPayload(), ...propinaPayload(),
           });
         } catch (e) {
           // Otra caja la eliminó o la cobró mientras se atendía: se guarda como cuenta
@@ -1067,7 +1080,7 @@ export function CartProvider({ children }) {
     }
   }, [cart, heldSaleId, activeWarehouse, selectedSerieId, selectedCustomer, selectedSeller, employee,
     currentCurrency, exchangeRate, discountAmount, chargeAmountBase, chargeLabel, cartTable,
-    clearCart, loadHeldCarts, notify, comisiones]);
+    clearCart, loadHeldCarts, notify, comisiones, propinas, chargeIsTip, selectedTipSeller]);
 
   // Dos cajas pueden acabar sobre la misma cuenta en espera: una la recupera y otra la
   // elimina o la cobra antes de que la primera termine. Ahí el PATCH devuelve SALE_GONE
@@ -1190,7 +1203,7 @@ export function CartProvider({ children }) {
           return [...acc, {
             ...withOwnStock(prod, parseFloat(item.quantity) || 1), price: precio, price_locked: true,
             qty: parseFloat(item.quantity) || 1, incluido: !(precio > 0),
-            key: `h${item.id}`, parentKey: `h${plato.id}`,
+            key: `h${item.id}`, parentKey: `h${plato.id}`, seat: item.seat ?? null,
           }];
         }
         const qty = parseFloat(item.quantity) || 1;
@@ -1205,6 +1218,8 @@ export function CartProvider({ children }) {
         return [...acc, {
           ...withOwnStock(prod, qty), price: precioBaseDe(item), price_locked: true, qty, ...ld,
           note: item.note || undefined,
+          // Puesto de la mesa (pedido por puesto): vuelve con la línea y se guarda igual al cobrar.
+          seat: item.seat ?? null,
           ...(repetido || conAdicional.has(item.id) ? { key: `h${item.id}` } : {}),
         }];
       }, []);
@@ -1216,6 +1231,9 @@ export function CartProvider({ children }) {
         setSelectedCustomer({ id: held.customer_id, name: held.customer_name, rif: held.customer_rif, price_level: held.customer_price_level || "detal" });
       }
       setSelectedSeller(held.seller_id ? { id: held.seller_id, name: held.seller_name } : null);
+      // Propina: el mesonero que trae la cuenta (la tablet lo pone) y si el recargo es propina.
+      setSelectedTipSeller(held.tip_seller_id ? { id: held.tip_seller_id, name: held.tip_seller_name } : null);
+      setChargeIsTip(parseFloat(held.service_charge || 0) > 0 ? !!held.service_charge_is_tip : true);
       if (held.serie_id) setSelectedSerieId(held.serie_id);
 
       // El descuento vuelve con la cuenta, por lo mismo que el recargo: se guardó como monto
@@ -1412,7 +1430,7 @@ export function CartProvider({ children }) {
             ...fx,
             service_charge: recargo,
             service_charge_label: recargoLabel,
-            ...vendedorPayload(),
+            ...vendedorPayload(), ...propinaPayload(),
             items: lineas.map(l => ({ product_id: l.product_id, quantity: l.quantity, price: l.price, promo: l.promo, line_discount: l.manual, wholesale: l.wholesale, list_price: l.list_price })),
           },
           receipt: venta,
@@ -1454,7 +1472,7 @@ export function CartProvider({ children }) {
       // líneas (por si se agregaron rondas) y se pasa a 'borrador' para que el cobro le
       // asigne el correlativo. Crear una nueva duplicaría la venta y el descuento de stock.
       const createPayload = () => ({
-        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note })),
+        items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, quantity: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note, seat: i.seat ?? null })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,
         employee_id: employee?.id || null,
@@ -1470,14 +1488,14 @@ export function CartProvider({ children }) {
         idempotency_key: pendingKeyRef.current,
         quotation_id: quotationId || null,
         table_id: cartTable?.id || null,
-        ...vendedorPayload(),
+        ...vendedorPayload(), ...propinaPayload(),
       });
 
       let res;
       if (heldSaleId) {
         try {
           res = await api.sales.update(heldSaleId, {
-            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null })),
+            items: cart.filter(i => parseFloat(i.qty) > 0).map(i => ({ product_id: i.id, price: i.price, qty: parseFloat(i.qty), line_discount: ldPayload(i), note: i.note ?? null, seat: i.seat ?? null })),
             discount_amount: parseFloat((discountAmount + fxDiscount).toFixed(5)),
             ...fxPayload(),
             service_charge: chargeAmountBase,
@@ -1490,7 +1508,7 @@ export function CartProvider({ children }) {
             currency_id: currentCurrency?.id || null,
             exchange_rate: exchangeRate,
             serie_id: selectedSerieId,
-            ...vendedorPayload(),
+            ...vendedorPayload(), ...propinaPayload(),
           });
         } catch (e) {
           // Otra caja eliminó o cobró esta cuenta mientras se atendía. En vez de dejar al
@@ -1555,7 +1573,7 @@ export function CartProvider({ children }) {
     }
     // discountAmount y el recargo van en la lista: sin ellos, cambiar el descuento o la
     // propina y cobrar sin volver a tocar el carrito enviaba los valores del render anterior.
-  }, [cart, activeWarehouse, selectedCustomer, selectedSeller, comisiones, selectedSerieId,
+  }, [cart, activeWarehouse, selectedCustomer, selectedSeller, comisiones, propinas, chargeIsTip, selectedTipSeller, selectedSerieId,
     employee, currentCurrency, exchangeRate, heldSaleId, loadHeldCarts,
     discountAmount, chargeAmountBase, chargeLabel, quotationId,
     mySeries, notify, clearCart, saveCart, activePromos, fxDiscount, fxRate, avanceEfectivo, avancePct, cartTable,
@@ -1606,6 +1624,8 @@ export function CartProvider({ children }) {
       selectedCustomer, setSelectedCustomer,
       // Vendedor (comisiones)
       selectedSeller, setSelectedSeller, comisiones,
+      // Propina (extra de la empresa)
+      propinas, chargeIsTip, setChargeIsTip, selectedTipSeller, setSelectedTipSeller,
       // Almacén
       employeeWarehouses, activeWarehouse, switchWarehouse, loadEmployeeWarehouses,
       // Checkout

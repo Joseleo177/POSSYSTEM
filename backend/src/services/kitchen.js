@@ -64,6 +64,7 @@ async function crearComanda({ sale, items, label, note, waiterId = null, tableId
     quantity: i.quantity,
     note: i.note ? String(i.note).trim().slice(0, 200) || null : null,
     modifiers: i.modifiers ? String(i.modifiers).slice(0, 400) : null,
+    seat: (() => { const n = parseInt(i.seat, 10); return n >= 1 && n <= 99 ? n : null; })(),
   })), { transaction });
   await resumirCuenta(sale.id, transaction);
   olvidarHuellas(sale.company_id);
@@ -123,7 +124,7 @@ async function board(req, { warehouse_id, v } = {}) {
            k.status AS kitchen_status, k.status_at AS kitchen_status_at,
            k.warehouse_id, s.status, s.invoice_number,
            t.name AS table_name, e.full_name AS waiter_name,
-           (SELECT json_agg(json_build_object('name', i.name, 'quantity', i.quantity, 'note', i.note, 'modifiers', i.modifiers) ORDER BY i.id)
+           (SELECT json_agg(json_build_object('name', i.name, 'quantity', i.quantity, 'note', i.note, 'modifiers', i.modifiers, 'seat', i.seat) ORDER BY i.seat NULLS FIRST, i.id)
               FROM kitchen_ticket_items i WHERE i.ticket_id = k.id) AS items
       FROM kitchen_tickets k
       JOIN sales s ON s.id = k.sale_id
@@ -194,6 +195,7 @@ async function fromSale(req, saleId, { items, label } = {}) {
     quantity: parseFloat(i.quantity),
     note: i.note,
     modifiers: i.modifiers,
+    seat: i.seat,
   })).filter(i => i.name && i.quantity > 0 && i.quantity <= 9999);
   if (!lineas.length) throw fail("La comanda está vacía", 400);
 

@@ -11,6 +11,8 @@ router.get("/margins",            auth, permit("reports.view"), ctrl.getMarginsR
 router.get("/customers-analysis", auth, permit("reports.view"), ctrl.getCustomersAnalysis);
 router.get("/audit",              auth, permit("reports.audit"), ctrl.getAuditReport);
 router.get("/expiry",             auth, permit("reports.view", "inventory.view"), ctrl.getExpiryReport);
+// Mermas: pérdidas de inventario por motivo, producto y sucursal, con su costo.
+router.get("/mermas",             auth, permit("reports.view", "inventory.view"), ctrl.getMermasReport);
 // Lleva también "accounting": es información de caja, y quien gestiona contabilidad la
 // necesita aunque no tenga acceso al resto de reportes.
 router.get("/payment-journals",   auth, permit("reports.view", "journals.view"), ctrl.getPaymentJournalsReport);

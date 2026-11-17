@@ -107,6 +107,12 @@ module.exports = (sequelize, DataTypes) => {
     // se copia para que cambiar el % del vendedor no altere lo ya vendido.
     seller_id:          { type: DataTypes.INTEGER,     allowNull: true },
     seller_pct:         { type: DataTypes.DECIMAL(5, 2), allowNull: true },
+    // Propinas (ver migración 20261121120000-propinas): el recargo es propina, a quién le toca
+    // (una persona de Comisiones) y si va al pozo. tip_pool se copia del ajuste de la empresa al
+    // cobrar, como el % de la comisión.
+    service_charge_is_tip: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    tip_seller_id:      { type: DataTypes.INTEGER,     allowNull: true },
+    tip_pool:           { type: DataTypes.BOOLEAN,     allowNull: false, defaultValue: false },
     // "Pidió la cuenta" (ver migración 20261031150000-pedir-cuenta): lo marca el mesonero y la
     // caja lo ve en el mapa.
     bill_requested_at:  { type: DataTypes.DATE,        allowNull: true },

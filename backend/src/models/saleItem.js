@@ -30,6 +30,9 @@ module.exports = (sequelize, DataTypes) => {
     // Nota de ESTA línea ("sin cebolla"), para la comanda. Distinta de sales.web_note, que es
     // del pedido entero.
     note: { type: DataTypes.STRING(200), allowNull: true },
+    // Puesto de la mesa que pidió el plato (1, 2, 3…); null = "Mesa" (compartido o sin puesto).
+    // Ajuste `mesa_por_puesto`; migración 20261121100000.
+    seat: { type: DataTypes.SMALLINT, allowNull: true },
     // Lo que descontó la línea de un combo o plato con receta, por unidad vendida:
     // [{ product_id, quantity }]. Anular, devolver y el kardex leen esto y no la receta de
     // hoy. Null en las líneas de antes (ver services/products/recipeStock.js).

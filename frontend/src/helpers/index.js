@@ -11,6 +11,7 @@ export * from "./printNotaCredito";
 export * from "./printDocument";
 export * from "./printInvoiceLetter";
 export * from "./printKitchenOrder";
+export * from "./printPrecuenta";
 export * from "./printQuotationLetter";
 export * from "./journals";
 export * from "./overlayGuard";

@@ -7,16 +7,24 @@ import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import { toNameCase } from "../../helpers";
 
-const vacio = { code: "", name: "", commission_pct: "", doc_id: "", phone: "", warehouse_id: "", active: true };
+const vacio = { code: "", name: "", commission_pct: "", doc_id: "", phone: "", warehouse_id: "", employee_id: "", active: true };
 
 /**
  * Alta y edición de un vendedor. `seller`: null cerrado · {} nuevo · la fila a editar.
  * El vendedor no es un usuario: la mayoría no entra al sistema, solo se nombra en la caja.
  */
-export default function SellerModal({ seller, onClose, onSaved }) {
+export default function SellerModal({ seller, onClose, onSaved, fuente = "commissions" }) {
     const { notify, sucursales = [] } = useApp();
     const [form, setForm] = useState(vacio);
     const nuevo = !seller?.id;
+    // fuente="tips": el personal de Propinas. Sin % de comisión (se conserva el que tenga) y con el
+    // usuario de la tablet, para que las rondas del mesonero le asignen la propina solas.
+    const propinas = fuente === "tips";
+    const [usuarios, setUsuarios] = useState(null);
+    useEffect(() => {
+        if (!seller || !propinas || usuarios) return;
+        api.tips.users().then(r => setUsuarios(r.data || [])).catch(() => setUsuarios([]));
+    }, [seller, propinas, usuarios]);
 
     useEffect(() => {
         if (!seller) return;
@@ -25,18 +33,21 @@ export default function SellerModal({ seller, onClose, onSaved }) {
             commission_pct: String(seller.commission_pct ?? ""),
             doc_id: seller.doc_id || "", phone: seller.phone || "",
             warehouse_id: seller.warehouse_id ? String(seller.warehouse_id) : "",
+            employee_id: seller.employee_id ? String(seller.employee_id) : "",
         } : vacio);
     }, [seller]);
 
     const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
     const pct = parseFloat(String(form.commission_pct).replace(",", "."));
-    const listo = form.code.trim() && form.name.trim() && Number.isFinite(pct) && pct >= 0 && pct <= 100;
+    const listo = form.code.trim() && form.name.trim() && (propinas || (Number.isFinite(pct) && pct >= 0 && pct <= 100));
 
     const guardar = async () => {
-        const body = { ...form, commission_pct: pct, warehouse_id: form.warehouse_id || null };
+        const body = { ...form, commission_pct: propinas ? undefined : pct, warehouse_id: form.warehouse_id || null, employee_id: form.employee_id || null };
         try {
-            const r = nuevo ? await api.commissions.createSeller(body) : await api.commissions.updateSeller(seller.id, body);
-            notify(nuevo ? "Vendedor creado" : "Vendedor actualizado");
+            const r = propinas
+                ? (nuevo ? await api.tips.createStaff(body) : await api.tips.updateStaff(seller.id, body))
+                : (nuevo ? await api.commissions.createSeller(body) : await api.commissions.updateSeller(seller.id, body));
+            notify(propinas ? (nuevo ? "Persona creada" : "Persona actualizada") : (nuevo ? "Vendedor creado" : "Vendedor actualizado"));
             onSaved?.(r.data);
         } catch (e) { notify(e.message, "err"); }
     };
@@ -44,7 +55,7 @@ export default function SellerModal({ seller, onClose, onSaved }) {
     const opcionesSucursal = [{ value: "", label: "Todas las sucursales" }, ...sucursales.map(w => ({ value: String(w.id), label: toNameCase(w.name) }))];
 
     return (
-        <Modal open={!!seller} onClose={onClose} title={nuevo ? "Nuevo vendedor" : "Editar vendedor"} width={520}>
+        <Modal open={!!seller} onClose={onClose} title={propinas ? (nuevo ? "Nueva persona" : "Editar persona") : (nuevo ? "Nuevo vendedor" : "Editar vendedor")} width={520}>
             <div className="space-y-4">
                 <div className="grid grid-cols-[110px_minmax(0,1fr)] gap-3">
                     <Field label="Código" hint="Se teclea en la caja">
@@ -57,6 +68,14 @@ export default function SellerModal({ seller, onClose, onSaved }) {
                     </Field>
                 </div>
 
+                {propinas ? (
+                    <Field label="Usuario de la tablet" hint="Opcional">
+                        <CustomSelect value={form.employee_id} onChange={v => set("employee_id", v)} className="w-full" boxClassName="rounded-lg"
+                            placeholder={usuarios ? "Sin usuario" : "Cargando…"}
+                            options={[{ value: "", label: "Sin usuario: lo elige la caja" }, ...(usuarios || []).map(u => ({ value: String(u.id), label: `${toNameCase(u.full_name)} · ${u.username}` }))]} />
+                        <p className="text-[12px] text-content-subtle mt-1">Con usuario, las cuentas que abre en la tablet le asignan la propina solas.</p>
+                    </Field>
+                ) : (
                 <Field label="Comisión" hint="Sobre lo cobrado, sin recargos">
                     <div className="relative">
                         <input className={`${INPUT} pr-9 tabular-nums`} inputMode="decimal" autoComplete="off"
@@ -67,6 +86,7 @@ export default function SellerModal({ seller, onClose, onSaved }) {
                         <p className="text-[12px] text-content-subtle mt-1">Rige para las ventas nuevas. Lo ya vendido conserva el % con que se vendió.</p>
                     )}
                 </Field>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Cédula" hint="Opcional">
@@ -95,7 +115,7 @@ export default function SellerModal({ seller, onClose, onSaved }) {
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 mt-6 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                 <button onClick={onClose} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
                 <Button onClick={guardar} disabled={!listo} className="h-12 sm:h-10 px-5">
-                    {nuevo ? "Crear vendedor" : "Guardar cambios"}
+                    {nuevo ? (propinas ? "Crear persona" : "Crear vendedor") : "Guardar cambios"}
                 </Button>
             </div>
         </Modal>

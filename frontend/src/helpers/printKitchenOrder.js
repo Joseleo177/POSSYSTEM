@@ -41,7 +41,7 @@ export function printKitchenOrder(order, companyInfo, printerWidth = 80, { titul
     const rows = items.map(i => `
         <tr>
             <td class="qty">${fmtQty(i.quantity)}</td>
-            <td class="name">${esc(i.name)}${i.modifiers ? `<div class="line-mod">${esc(i.modifiers)}</div>` : ""}${i.note ? `<div class="line-note">${esc(i.note)}</div>` : ""}</td>
+            <td class="name">${i.seat ? `<b>P${esc(i.seat)}</b> · ` : ""}${esc(i.name)}${i.modifiers ? `<div class="line-mod">${esc(i.modifiers)}</div>` : ""}${i.note ? `<div class="line-note">${esc(i.note)}</div>` : ""}</td>
         </tr>`).join("");
 
     const html = `<!DOCTYPE html>

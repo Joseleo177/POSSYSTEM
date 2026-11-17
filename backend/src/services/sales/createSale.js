@@ -23,6 +23,7 @@ const { assertTable } = require("../tables");
 const { componentesConStock } = require("../products/comboStock");
 const { vendeSinInsumo, fotoConsumo } = require("../products/recipeStock");
 const { sellerForSale } = require("../commissions");
+const { propinaDeVenta } = require("../tips");
 
 // Devuelve la venta con todas sus relaciones, en el formato plano que
 // espera el frontend. Reutilizado por la respuesta normal y la idempotente.
@@ -93,6 +94,8 @@ function promoDeLinea(productId, promo) {
 // Nota de la línea ("sin cebolla"), para la comanda: una sola línea y recortada, como la del
 // catálogo (publicCatalogService.createOrder).
 const notaLinea = (n) => String(n || "").replace(/[\r\n]+/g, " ").trim().slice(0, 200) || null;
+// Puesto de la mesa (pedido por puesto): 1 a 99, o null ("Mesa").
+const puestoLinea = (s) => { const n = parseInt(s, 10); return n >= 1 && n <= 99 ? n : null; };
 
 // `offline` solo lo pasa syncOfflineSale, nunca el cuerpo de la petición: { sold_at, ref }.
 // Con él, la venta ya ocurrió en una caja sin internet —la mercancía salió y el dinero entró—,
@@ -149,7 +152,13 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
     // Recargo de cabecera (propina/servicio). Llega en moneda base, igual que el descuento, y
     // suma al total en vez de restar. Negativo no: para bajar el total está el descuento.
     const chargeAmt = Math.max(0, parseFloat(service_charge) || 0);
-    const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || "Servicio") : null;
+    // Propina (extra de la empresa, ver services/tips): el recargo marcado como propina, a quién
+    // le toca —el mesonero de la tablet si no vino otro— y, si se factura ya, persona o pozo.
+    const propina = await propinaDeVenta(body, {
+      companyId: req?.company_id ?? req?.employee?.company_id ?? null,
+      waiterId, cobrando: !hold, offline: !!offline, transaction,
+    });
+    const chargeLabel = chargeAmt > 0 ? (service_charge_label?.trim().slice(0, 40) || (propina.service_charge_is_tip ? "Propina" : "Servicio")) : null;
     const rate = parseFloat(exchange_rate) || 1;
 
     // Promociones vigentes de esta sucursal (ver promoDiscounts.js: lo comparte updateSale,
@@ -280,7 +289,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         total += roundedPrice * item.quantity - lineDiscountUsd;
         // stockEntry va solo para congelar el costo de esta sucursal (el servicio no mueve
         // existencias): mismo criterio que el precio, y que el COALESCE que ve la caja.
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, isService: true, stockEntry: fichaSucursal, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
       } else if (product.is_combo) {
         const comboItems = await ProductComboItem.findAll({ where: { combo_id: product.id }, transaction });
         if (!comboItems || comboItems.length === 0) {
@@ -319,7 +328,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: true, ingredientsData, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
       } else {
         // La ficha ya se cargó arriba con lock para leer el precio de la sucursal.
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
@@ -332,7 +341,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), alMayor, listPrice });
+        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
       }
     }
 
@@ -385,6 +394,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         table_id: mesa ? mesa.id : null,
         waiter_id: waiterId,
         ...vendedor,
+        ...propina,
         idempotency_key: idempotency_key || null,
         // created_at queda en la hora en que llega: es cuando se factura y toma correlativo,
         // así los números siguen el orden de las fechas. La hora real de la venta va aparte.
@@ -436,6 +446,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           wholesale: !!entry.alMayor,
           list_price: entry.alMayor ? entry.listPrice : null,
           note: entry.note,
+          seat: entry.seat ?? null,
           components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
         },
         { transaction }

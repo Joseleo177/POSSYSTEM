@@ -21,8 +21,17 @@ const getEmpty = () => ({
  * pago puede salir en otra moneda a su tasa.
  *
  *   seller  – { id, name, code, saldo }   (null = cerrado)
+ *   fuente  – "commissions" (por defecto) o "tips": pagar propinas, mismo flujo con egreso
+ *             en la categoría "Propinas".
  */
-export default function PayoutModal({ seller, onClose, onPaid }) {
+const TEXTOS = {
+    commissions: { titulo: "Liquidar comisiones", persona: "Vendedor", tag: "Comisiones", listo: "Comisiones liquidadas" },
+    tips:        { titulo: "Pagar propinas", persona: "Persona", tag: "Propinas", listo: "Propinas pagadas" },
+};
+export default function PayoutModal({ seller, onClose, onPaid, fuente = "commissions", reparto = null }) {
+    // reparto: { shares, total, from, to, nombres } — repartir el pozo de propinas. El monto es fijo
+    // (la suma del reparto) y sale UN egreso con una fila por persona.
+    const t = reparto ? { titulo: "Repartir el pozo", persona: "Reparto", tag: "Propinas", listo: "Pozo repartido" } : (TEXTOS[fuente] || TEXTOS.commissions);
     const { notify, baseCurrency, activeCurrencies, outflowJournals: todas, sucursalActual, sucursales = [] } = useApp();
     const [form, setForm] = useState(getEmpty);
     const [loading, setLoading] = useState(false);
@@ -31,7 +40,8 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
     const [warehouseId, setWarehouseId] = useState(null);
     useEffect(() => {
         if (!seller) return;
-        setForm(getEmpty());
+        // En un reparto el monto es fijo: la suma del reparto, en moneda base hasta elegir la caja.
+        setForm(reparto ? { ...getEmpty(), received_amount: Number(seller.saldo || 0).toFixed(2) } : getEmpty());
         setWarehouseId(sucursalActual?.sells !== false && sucursalActual?.id ? sucursalActual.id : vendedoras[0]?.id ?? null);
     }, [seller]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -56,7 +66,10 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
     const submit = async () => {
         setLoading(true);
         try {
-            const r = await api.commissions.pay(seller.id, {
+            const pagar = reparto
+                ? (_id, body) => api.tips.payPool({ ...body, shares: reparto.shares, period_from: reparto.from || null, period_to: reparto.to || null })
+                : fuente === "tips" ? api.tips.pay : api.commissions.pay;
+            const r = await pagar(seller.id, {
                 amount: amountBase,
                 currency_id: payCur?.id || null,
                 exchange_rate: payRate,
@@ -67,7 +80,7 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                 reference: form.reference.trim() || null,
                 notes: form.notes.trim() || null,
             });
-            notify(r.data?.balance > 0.005 ? `Liquidado. Queda por pagar ${fmtRef(r.data.balance)}` : "Comisiones liquidadas");
+            notify(r.data?.balance > 0.005 ? `Pagado. Queda por pagar ${fmtRef(r.data.balance)}` : t.listo);
             onPaid?.(r.data);
         } catch (e) { notify(e.message, "err"); }
         setLoading(false);
@@ -76,14 +89,14 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
     const montoBoton = receivedNum > 0 ? `${paySym} ${receivedNum.toFixed(2)}` : "";
 
     return (
-        <Modal open={!!seller} onClose={onClose} title="Liquidar comisiones" width={760}>
+        <Modal open={!!seller} onClose={onClose} title={t.titulo} width={760}>
             <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                    <p className="text-[12px] text-content-subtle">Vendedor</p>
+                    <p className="text-[12px] text-content-subtle">{t.persona}</p>
                     <p className="text-[15px] font-semibold text-content dark:text-white truncate">{toNameCase(seller?.name)} <span className="font-normal text-content-subtle">· {seller?.code}</span></p>
                 </div>
                 <div className="text-right shrink-0">
-                    <p className="text-[12px] text-content-subtle">Por liquidar</p>
+                    <p className="text-[12px] text-content-subtle">{reparto ? "Total del reparto" : "Por liquidar"}</p>
                     <Money value={fmtRef(saldo)} className="block text-[22px] font-bold tracking-tight text-content dark:text-white leading-tight" />
                 </div>
             </div>
@@ -105,7 +118,7 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                             outflowOnly
                             placeholder="Elegir caja o banco…"
                             boxClassName="rounded-lg"
-                            methodPrompt={{ tag: "Comisiones", title: "¿De qué caja sale el pago?" }}
+                            methodPrompt={{ tag: t.tag, title: "¿De qué caja sale el pago?" }}
                             onSelect={(j) => {
                                 const curId = j.currency_id || baseCurrency?.id;
                                 const cur   = activeCurrencies.find(c => c.id === parseInt(curId));
@@ -145,7 +158,7 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                             <Field label="Monto">
                                 <div className="relative">
                                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{paySym}</span>
-                                    <input type="text" inputMode="decimal" autoComplete="off" value={form.received_amount}
+                                    <input type="text" inputMode="decimal" autoComplete="off" value={form.received_amount} readOnly={!!reparto}
                                         onChange={e => setForm(p => ({ ...p, received_amount: e.target.value.replace(/[^\d.,]/g, "") }))}
                                         placeholder="0.00" className={`${INPUT} pl-11 text-[14px] font-semibold tabular-nums`} />
                                 </div>
@@ -171,6 +184,16 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                 </div>
 
                 <aside className="min-w-0 lg:border-l lg:border-border/60 dark:lg:border-white/[0.06] lg:pl-6">
+                    {reparto ? (
+                        <>
+                            <p className="text-[13px] font-semibold text-content dark:text-white">Cómo se reparte</p>
+                            <p className="text-[12px] text-content-subtle mb-2">Un solo egreso, una línea por persona</p>
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-3.5 py-3 space-y-1.5 text-[13px]">
+                                {reparto.shares.map((s, i) => <Linea key={s.seller_id} label={reparto.nombres?.[i] || "—"} value={fmtRef(s.amount)} />)}
+                            </div>
+                            <p className="text-[12px] text-content-subtle mt-3 leading-relaxed">Anular el egreso en Contabilidad deshace todo el reparto y el dinero vuelve al pozo.</p>
+                        </>
+                    ) : (<>
                     <p className="text-[13px] font-semibold text-content dark:text-white">Cómo queda</p>
                     <p className="text-[12px] text-content-subtle mb-2">Lo que se le debe después de este pago</p>
                     <div className="rounded-xl border border-border/70 dark:border-white/[0.08] px-3.5 py-3 space-y-1.5 text-[13px]">
@@ -191,6 +214,7 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                         </div>
                     </div>
                     <p className="text-[12px] text-content-subtle mt-3 leading-relaxed">El pago sale como egreso en Contabilidad. Anularlo allá deshace la liquidación.</p>
+                    </>)}
                 </aside>
             </div>
 
@@ -199,7 +223,7 @@ export default function PayoutModal({ seller, onClose, onPaid }) {
                 <button onClick={submit} disabled={!canSubmit}
                     className="btn-accent sm:flex-1 h-12 sm:h-11 rounded-lg text-[14px] font-semibold active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 tabular-nums">
                     {loading && <Spinner />}
-                    {loading ? "Registrando…" : montoBoton ? `Pagar ${montoBoton}` : "Liquidar"}
+                    {loading ? "Registrando…" : montoBoton ? `Pagar ${montoBoton}` : fuente === "tips" ? "Pagar" : "Liquidar"}
                 </button>
             </div>
         </Modal>

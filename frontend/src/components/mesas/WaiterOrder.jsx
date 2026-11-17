@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../services/api";
-import { fmtMoney, fmtTime, resolveImageUrl, imgRetryOnError } from "../../helpers";
+import { fmtMoney, fmtTime, resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { isIntegerUnit } from "../../helpers/unitFormatter";
 import ConfirmModal from "../ui/ConfirmModal";
 import { Spinner } from "../ui/Spinner";
 import AddonPicker, { faltante, precioExtras } from "./AddonPicker";
 import CuentaAcciones from "./CuentaAcciones";
+import ClienteMesa from "./ClienteMesa";
+import CobroMesa from "./CobroMesa";
+import PrecuentaModal from "./PrecuentaModal";
 import { useApp } from "../../context/AppContext";
+import { printPrecuenta } from "../../helpers/printPrecuenta";
+import { monedaLocal } from "../../helpers/currency";
 
 // El menú de cada sucursal se recuerda mientras la sesión esté abierta: el mesonero entra y
 // sale de las mesas toda la noche, y el menú no cambia de una mesa a otra.
@@ -40,11 +45,15 @@ const Icono = {
     check: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />,
     x:     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />,
     info:  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />,
+    persona: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />,
     carta: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 4h10a1 1 0 011 1v15l-3-2-3 2-3-2-3 2V5a1 1 0 011-1zm2 4h6m-6 4h6" />,
 };
 const Svg = ({ d, className = "w-4 h-4" }) => <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">{d}</svg>;
 
 const esAgotado = (p) => !p.is_service && p.stock !== null && parseFloat(p.stock) <= 0;
+// Pedido por puesto: null = "Mesa" (lo compartido).
+const nombrePuesto = (s) => (s ? `Puesto ${s}` : "Mesa");
+const mismoPuesto = (a, b) => (a ?? null) === (b ?? null);
 const r2 = (n) => Math.round((parseFloat(n) || 0) * 100) / 100;
 // Precio de una unidad del plato con sus extras: es lo que cobra la caja (cada extra es una
 // línea aparte, por plato).
@@ -280,7 +289,24 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
     // "Mostrar al cliente": la tablet pasa a ser la carta. Sin cuentas, rondas ni totales de la
     // mesa; el cliente puede sumar platos y el mesonero revisa y envía al volver.
     const [cliente, setCliente] = useState(false);
-    const { companyInfo } = useApp();
+    const { companyInfo, settings, can, activeCurrencies, printerWidth } = useApp();
+
+    // Pedido por puesto (ajuste de la empresa): cada plato va a un puesto de la mesa, o a "Mesa"
+    // (null) si es para compartir. Lo que se toca en el menú va al puesto marcado.
+    const porPuesto = settings?.mesa_por_puesto === "true";
+    const [puesto, setPuesto] = useState(null);
+    const [nPuestos, setNPuestos] = useState(() => Math.max(1, Math.min(20, parseInt(table.seats, 10) || 4)));
+    const [editPuesto, setEditPuesto] = useState(null);   // índice de la línea a la que se le cambia el puesto
+
+    // Cliente de la cuenta. Para una cuenta que todavía no existe se guarda aquí y viaja con la
+    // primera ronda.
+    const [verCliente, setVerCliente] = useState(false);
+    const [clientePendiente, setClientePendiente] = useState(null);
+
+    // Cobrar en la tablet (solo con permiso de cobrar)
+    const puedeCobrar = can("sales.create");
+    const [cobrando, setCobrando] = useState(null);       // cuenta que se está cobrando
+    const [verPrecuenta, setVerPrecuenta] = useState(false);
 
     useEffect(() => {
         api.warehouses.getProducts(warehouseId, { sellable_only: true, limit: 1000 })
@@ -300,9 +326,14 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
             const lista = r.data?.accounts || [];
             setCuentas(lista);
             setCuentaSel(sel => (sel && (sel === "new" || lista.some(c => c.id === sel)) ? sel : (lista[0]?.id ?? "new")));
+            // Si ya se usaron más puestos de los que tiene la mesa (se arrimó una silla), se muestran.
+            const usados = lista.flatMap(c => (c.items || []).map(i => parseInt(i.seat, 10) || 0));
+            if (usados.length) setNPuestos(n => Math.min(20, Math.max(n, ...usados)));
+            return lista;
         } catch (e) {
             notify(e.message || "No se pudo abrir la mesa", "err");
             setCuentas([]);
+            return null;
         }
     }, [table.id, notify]);
     useEffect(() => { cargarCuentas(); }, [cargarCuentas]);
@@ -333,12 +364,14 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
     // Un plato con nota es otra línea: "sin cebolla" y "normal" van separados a la cocina. Las
     // tarjetas del menú suman sobre la línea SIN nota del producto.
     // Las tarjetas suman sobre la línea "simple" del plato: sin nota y sin adicionales.
-    const simple = (l) => !l.note && !l.options?.length;
+    // Con pedido por puesto, la línea "simple" es la del puesto marcado: tocar Agregar con el
+    // puesto 2 marcado no suma a lo del puesto 1.
+    const simple = (l) => !l.note && !l.options?.length && mismoPuesto(l.seat, puesto);
     const qtyEnMenu = (p) => ronda.filter(l => l.product.id === p.id && simple(l)).reduce((s, l) => s + l.qty, 0);
     const setQtyMenu = (p, qty) => setRonda(r => {
         const i = r.findIndex(l => l.product.id === p.id && simple(l));
         if (qty <= 0) return i < 0 ? r : r.filter((_, k) => k !== i);
-        if (i < 0) return [...r, { product: p, qty, note: "" }];
+        if (i < 0) return [...r, { product: p, qty, note: "", seat: puesto }];
         return r.map((l, k) => (k === i ? { ...l, qty } : l));
     });
     const agregar = (p) => setQtyMenu(p, qtyEnMenu(p) + (isIntegerUnit(p.unit) ? 1 : (parseFloat(p.qty_step) || 1)));
@@ -349,10 +382,10 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
         if (!note && !options.length) return setQtyMenu(p, qtyEnMenu(p) + qty);
         const firma = options.map(o => o.id).sort((a, b) => a - b).join(",");
         setRonda(r => {
-            const i = r.findIndex(l => l.product.id === p.id
+            const i = r.findIndex(l => l.product.id === p.id && mismoPuesto(l.seat, puesto)
                 && l.note.trim().toLowerCase() === note.toLowerCase()
                 && (l.options || []).map(o => o.id).sort((a, b) => a - b).join(",") === firma);
-            if (i < 0) return [...r, { product: p, qty, note, options }];
+            if (i < 0) return [...r, { product: p, qty, note, options, seat: puesto }];
             return r.map((l, k) => (k === i ? { ...l, qty: l.qty + qty } : l));
         });
     };
@@ -369,7 +402,12 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
             const r = await api.tables.sendRound(table.id, {
                 sale_id: cuentaSel || undefined,
                 note: notaCocina.trim() || undefined,
-                items: ronda.map(l => ({ product_id: l.product.id, qty: l.qty, note: l.note.trim() || undefined, options: l.options?.map(o => o.id) })),
+                // El cliente elegido antes de abrir la cuenta (una cuenta que ya existe lo cambia aparte).
+                customer_id: !cuenta && clientePendiente ? clientePendiente.id : undefined,
+                items: ronda.map(l => ({
+                    product_id: l.product.id, qty: l.qty, note: l.note.trim() || undefined, options: l.options?.map(o => o.id),
+                    seat: porPuesto && l.seat ? l.seat : undefined,
+                })),
             });
             notify(`${table.name}: ronda ${r.data?.round_no || ""} enviada a cocina`);
             onClose(true);
@@ -385,9 +423,52 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
     // Si se dividió, se movió o se marcó la cuenta, el mapa tiene que volver a leerse al salir.
     const volver = () => (ronda.length ? setSalir(true) : onClose(tocada));
 
+    // ── Cliente de la cuenta ──
+    const clienteActual = cuenta ? (cuenta.customer || null) : clientePendiente;
+    const ponerCliente = async (c) => {
+        if (!cuenta) { setClientePendiente(c); return; }
+        await api.tables.setCustomer(cuenta.id, c ? c.id : null);
+        setTocada(true);
+        await cargarCuentas();
+        notify(c ? `${toNameCase(c.name)} quedó en la cuenta` : "La cuenta quedó a Cliente general");
+    };
+
+    // ── Precuenta ──
+    // El ticket con precios que se le lleva al cliente antes de cobrar. No es factura. Marca que
+    // pidió la cuenta (el mapa la pinta así).
+    const local = monedaLocal(activeCurrencies);
+    const tasaLocal = parseFloat(local?.exchange_rate) || 0;
+    const localSym = local?.symbol || "Bs.";
+    const enBs = (n) => (local && tasaLocal > 0 ? fmtMoney((parseFloat(n) || 0) * tasaLocal, localSym) : null);
+    const precuenta = () => {
+        if (!cuenta) return;
+        setVerPrecuenta(true);
+    };
+
+    // ── Cobrar en la tablet ──
+    // Una hoja propia de la mesa (CobroMesa): qué puestos pagan, el cliente, la propina y el
+    // total en Ref. y Bs. Por debajo usa el carrito y la factura de la caja, y termina en la misma
+    // botonera de pago: la pantalla, el cobro y el ticket no pueden diferir.
+    const cobrar = () => {
+        if (!cuenta) return;
+        if (ronda.length) return notify("Envía o descarta la ronda antes de cobrar", "err");
+        setCobrando(cuenta);
+        setHoja(false);
+    };
+    const terminarCobro = useCallback(async (huboCambio) => {
+        setCobrando(null);
+        if (!huboCambio) return;
+        setTocada(true);
+        const lista = await cargarCuentas();
+        // La mesa quedó libre: de vuelta al mapa.
+        if (lista && lista.length === 0) onClose(true);
+    }, [cargarCuentas, onClose]);
+
     useEffect(() => {
         const onKey = (e) => {
             if (e.key !== "Escape") return;
+            // Con la caja, cliente o precuenta encima, Escape es de ellas.
+            if (cobrando || verCliente || verPrecuenta) return;
             e.stopPropagation();
             if (ficha) setFicha(null); else if (hoja) setHoja(false); else if (cliente) setCliente(false); else volver();
         };
@@ -397,38 +478,126 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
 
     const lineasMesa = cuenta?.items || [];
     const rondasMesa = cuenta?.rounds || [];
-    // Al dividir o juntar, las comandas siguen siendo lo que se mandó a cocina, que ya no es lo que
-    // tiene la cuenta: entonces se muestra también lo que tiene ahora.
-    const cuentaDistinta = useMemo(() => {
-        const suma = (pares) => pares.reduce((m, [k, q]) => m.set(k, (m.get(k) || 0) + (parseFloat(q) || 0)), new Map());
-        const enCuenta = suma(lineasMesa.filter(l => !l.is_addon).map(l => [l.name, l.quantity]));
-        const enRondas = suma(rondasMesa.flatMap(r => (r.items || []).map(i => [i.name, i.quantity])));
-        return enCuenta.size !== enRondas.size || [...enCuenta].some(([k, q]) => Math.abs((enRondas.get(k) || 0) - q) > 0.0005);
-    }, [lineasMesa, rondasMesa]);
+
+    // Puestos de la mesa: "Mesa" (lo compartido) y del 1 al último usado.
+    const puestosLista = useMemo(() => [null, ...Array.from({ length: nPuestos }, (_, k) => k + 1)], [nPuestos]);
+    const cuentaPuesto = (s) => ronda.filter(l => mismoPuesto(l.seat, s)).reduce((a, l) => a + (isIntegerUnit(l.product.unit) ? l.qty : 1), 0);
+    // La ronda por puesto, cada grupo con su subtotal (sin perder el índice de cada línea).
+    const gruposRonda = useMemo(() => puestosLista
+        .map(s => {
+            const lineas = ronda.map((l, i) => ({ l, i })).filter(x => mismoPuesto(x.l.seat, s));
+            return { seat: s, lineas, total: lineas.reduce((a, x) => a + precioLinea(x.l) * x.l.qty, 0) };
+        })
+        .filter(g => g.lineas.length), [ronda, puestosLista]);
+    // La cuenta por puesto: cada plato con sus adicionales con precio (la venta los guarda detrás).
+    const gruposCuenta = useMemo(() => {
+        const platos = [];
+        for (const it of lineasMesa) {
+            const monto = parseFloat(it.subtotal ?? parseFloat(it.price) * parseFloat(it.quantity)) || 0;
+            if (it.is_addon && platos.length) {
+                const p = platos[platos.length - 1];
+                p.monto += monto;
+                if (parseFloat(it.price) > 0) p.extras.push(it);
+                continue;
+            }
+            platos.push({ ...it, monto, extras: [] });
+        }
+        const porPuesto = new Map();
+        for (const p of platos) {
+            const k = p.seat || null;
+            if (!porPuesto.has(k)) porPuesto.set(k, { seat: k, platos: [], total: 0 });
+            const g = porPuesto.get(k);
+            g.platos.push(p);
+            g.total += p.monto;
+        }
+        return [...porPuesto.values()].sort((a, b) => (a.seat ?? 0) - (b.seat ?? 0));
+    }, [lineasMesa]);
 
     // ── Panel: la ronda que se arma y lo que ya está en la mesa ──
+    // Cada puesto es un grupo: tocarlo lo deja marcado y lo que se agregue del menú cae ahí.
+    const fichaPuesto = (s, activo, cuenta) => (
+        <span className={`h-6 min-w-[24px] px-1.5 rounded-md text-[11px] font-bold tabular-nums inline-flex items-center justify-center ${activo
+            ? "bg-brand-600 text-white" : "bg-surface-2 dark:bg-white/[0.08] text-content-subtle"}`}>
+            {s ? `P${s}` : "M"}{cuenta ? <span className="ml-1 font-semibold opacity-80">{cuenta}</span> : null}
+        </span>
+    );
+
+    const lineaRonda = ({ l, i }) => (
+        <li key={`${l.product.id}-${i}`} className="py-2.5">
+            <div className="flex items-start gap-3">
+                <span className="w-11 h-11 rounded-lg overflow-hidden bg-surface-2 dark:bg-white/[0.06] shrink-0 flex items-center justify-center text-content-subtle">
+                    {l.product.image_url
+                        ? <img src={resolveImageUrl(l.product.image_url)} alt="" className="w-full h-full object-cover" onError={imgRetryOnError} />
+                        : <Svg d={Icono.plato} className="w-5 h-5" />}
+                </span>
+                <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-semibold text-content dark:text-white leading-snug">{l.product.name}</div>
+                    {l.options?.length > 0 && <div className="text-[12px] text-content dark:text-white/80 leading-snug">{textoOpciones(l.options)}</div>}
+                    {l.note && editNota !== i && <div className="text-[12px] text-amber-700 dark:text-amber-400 leading-snug">{l.note}</div>}
+                    <div className="text-[12px] text-content-subtle tabular-nums">{fmtMoney(precioLinea(l), sym)} c/u</div>
+                </div>
+                <div className="shrink-0 flex flex-col items-end gap-1">
+                    <div className="w-[112px]">
+                        <Stepper small qty={l.qty} step={isIntegerUnit(l.product.unit) ? 1 : (parseFloat(l.product.qty_step) || 1)} onChange={qty => setLinea(i, { qty })} />
+                    </div>
+                    <span className="text-[13px] font-semibold tabular-nums text-content dark:text-white">{fmtMoney(precioLinea(l) * l.qty, sym)}</span>
+                </div>
+            </div>
+            {editNota === i ? (
+                <input autoFocus autoComplete="off" maxLength={200} value={l.note}
+                    placeholder="Sin hielo, bien caliente…"
+                    onChange={e => setLinea(i, { note: e.target.value })}
+                    onBlur={() => setEditNota(null)}
+                    onKeyDown={e => { if (e.key === "Enter") setEditNota(null); }}
+                    className="mt-2 w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+            ) : (
+                <div className="mt-1 pl-14 flex items-center gap-4 flex-wrap">
+                    <button onClick={() => setEditNota(i)} className="inline-flex items-center gap-1.5 text-[12px] min-h-[32px] text-content-subtle">
+                        <Svg d={Icono.nota} className="w-3.5 h-3.5" />{l.note ? "Editar nota" : "Nota"}
+                    </button>
+                    {porPuesto && (
+                        <button onClick={() => setEditPuesto(editPuesto === i ? null : i)} className="inline-flex items-center gap-1.5 text-[12px] min-h-[32px] text-content-subtle">
+                            <Svg d={Icono.persona} className="w-3.5 h-3.5" />Mover a otro puesto
+                        </button>
+                    )}
+                </div>
+            )}
+            {porPuesto && editPuesto === i && (
+                <div className="mt-2 pl-14 flex flex-wrap gap-1.5">
+                    {puestosLista.map(s => (
+                        <button key={s ?? "mesa"} onClick={() => { setLinea(i, { seat: s }); setEditPuesto(null); }}
+                            className={`h-9 min-w-[44px] px-3 rounded-lg text-[13px] font-semibold border ${mismoPuesto(l.seat, s)
+                                ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+                                : "border-border dark:border-white/10 text-content dark:text-white"}`}>
+                            {s ? `P${s}` : "Mesa"}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </li>
+    );
+
     const panelRonda = (
         <div className="flex flex-col h-full min-h-0">
-            {cuentas && cuentas.length > 0 && (
+            {/* Varias cuentas en la mesa (se separó al cobrar, se dividió, o vino del QR): se elige
+                a cuál va la ronda. Con una sola no se muestra nada. */}
+            {cuentas && cuentas.length > 1 && (
                 <div className="shrink-0 px-4 pt-3 flex gap-1.5 overflow-x-auto scrollbar-hide">
                     {cuentas.map((c, i) => (
                         <button key={c.id} onClick={() => setCuentaSel(c.id)}
-                            className={`h-9 px-3 rounded-lg text-[12px] font-semibold whitespace-nowrap border ${cuentaSel === c.id ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300" : "border-border dark:border-white/10 text-content-subtle"}`}>
-                            {cuentas.length > 1 ? `Cuenta ${i + 1}` : "Cuenta"} · <span className="tabular-nums">{fmtMoney(c.total, sym)}</span>
+                            className={`h-10 px-3 rounded-lg text-left whitespace-nowrap border ${cuentaSel === c.id ? "border-brand-500 bg-brand-500/10" : "border-border dark:border-white/10"}`}>
+                            <span className={`block text-[12px] font-semibold leading-tight ${cuentaSel === c.id ? "text-brand-700 dark:text-brand-300" : "text-content dark:text-white"}`}>{c.customer_name ? toNameCase(c.customer_name).split(" ")[0] : `Cuenta ${i + 1}`}</span>
+                            <span className="block text-[11px] text-content-subtle tabular-nums leading-tight">{fmtMoney(c.total, sym)}</span>
                         </button>
                     ))}
-                    <button onClick={() => setCuentaSel("new")}
-                        className={`h-9 px-3 rounded-lg text-[12px] font-semibold whitespace-nowrap border border-dashed ${cuentaSel === "new" ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300" : "border-border dark:border-white/15 text-content-subtle"}`}>
-                        + Cuenta aparte
-                    </button>
                 </div>
             )}
 
             <div className="shrink-0 px-4 pt-3">
                 <div className="grid grid-cols-2 p-1 rounded-xl bg-surface-2 dark:bg-white/[0.05]">
-                    {[["ronda", `Nueva ronda${ronda.length ? ` · ${fmtQty(unidades)}` : ""}`], ["mesa", `En la mesa${rondasMesa.length ? ` · ${rondasMesa.length}` : ""}`]].map(([k, label]) => (
+                    {[["ronda", `Nueva ronda${ronda.length ? ` · ${fmtQty(unidades)}` : ""}`], ["mesa", cuenta ? `En la mesa · ${fmtMoney(cuenta.total, sym)}` : "En la mesa"]].map(([k, label]) => (
                         <button key={k} onClick={() => setPanel(k)}
-                            className={`h-9 rounded-lg text-[13px] font-semibold ${panel === k ? "bg-white dark:bg-white/10 text-content dark:text-white shadow-sm" : "text-content-subtle"}`}>
+                            className={`h-10 rounded-lg text-[13px] font-semibold tabular-nums ${panel === k ? "bg-white dark:bg-white/10 text-content dark:text-white shadow-sm" : "text-content-subtle"}`}>
                             {label}
                         </button>
                     ))}
@@ -441,96 +610,168 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
                 </div>
             )}
 
+            {/* Cliente de la cuenta: lo pone el mesonero; con él se factura al cobrar. */}
+            {cuentas && (
+                <button type="button" onClick={() => setVerCliente(true)}
+                    className="shrink-0 mx-4 mt-3 min-h-[48px] px-3 py-2 rounded-xl border border-border/60 dark:border-white/[0.08] flex items-center gap-3 text-left">
+                    <span className="w-8 h-8 rounded-full bg-surface-2 dark:bg-white/[0.06] flex items-center justify-center text-content-subtle shrink-0"><Svg d={Icono.persona} /></span>
+                    <span className="flex-1 min-w-0">
+                        <span className="block text-[13px] font-semibold text-content dark:text-white truncate">{clienteActual ? toNameCase(clienteActual.name) : "Sin cliente"}</span>
+                        <span className="block text-[12px] text-content-subtle truncate tabular-nums">{clienteActual ? (clienteActual.rif || "Sin cédula") : "Toca para ponerlo: con él se factura"}</span>
+                    </span>
+                    <span className="text-[12px] font-semibold text-content-subtle shrink-0">{clienteActual ? "Cambiar" : "Agregar"}</span>
+                </button>
+            )}
+
+            {/* Puestos: el marcado recibe lo que se toque en el menú. */}
+            {panel === "ronda" && porPuesto && (
+                <div className="shrink-0 px-4 pt-3">
+                    <div className="flex items-baseline justify-between mb-1.5">
+                        <span className="text-[12px] text-content-subtle">Agregar para</span>
+                        <span className="text-[12px] font-semibold text-brand-700 dark:text-brand-300">{nombrePuesto(puesto)}</span>
+                    </div>
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+                        {puestosLista.map(s => {
+                            const on = mismoPuesto(puesto, s);
+                            const n = cuentaPuesto(s);
+                            return (
+                                <button key={s ?? "mesa"} onClick={() => setPuesto(s)} aria-pressed={on}
+                                    className={`h-11 min-w-[52px] px-3 rounded-xl border shrink-0 flex flex-col items-center justify-center leading-none ${on
+                                        ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+                                        : "border-border dark:border-white/10 text-content dark:text-white"}`}>
+                                    <span className="text-[13px] font-bold">{s ? `P${s}` : "Mesa"}</span>
+                                    <span className={`text-[10px] mt-0.5 tabular-nums ${n ? "" : "opacity-50"}`}>{n ? `${fmtQty(n)} ${n === 1 ? "plato" : "platos"}` : "vacío"}</span>
+                                </button>
+                            );
+                        })}
+                        {nPuestos < 20 && (
+                            <button onClick={() => { setNPuestos(n => n + 1); setPuesto(nPuestos + 1); }} aria-label="Otro puesto" title="Otro puesto"
+                                className="h-11 w-11 rounded-xl border border-dashed border-border dark:border-white/15 text-content-subtle flex items-center justify-center shrink-0">
+                                <Svg d={Icono.mas} />
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
+
             <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3">
                 {panel === "ronda" ? (
                     ronda.length === 0 ? (
                         <div className="py-10 text-center">
                             <div className="w-12 h-12 mx-auto rounded-xl bg-surface-2 dark:bg-white/[0.06] flex items-center justify-center text-content-subtle"><Svg d={Icono.plato} className="w-6 h-6" /></div>
                             <div className="text-[14px] font-semibold text-content dark:text-white mt-3">La ronda está vacía</div>
-                            <div className="text-[13px] text-content-subtle mt-1">Toca los platos del menú para sumarlos.</div>
+                            <div className="text-[13px] text-content-subtle mt-1">{porPuesto ? "Marca el puesto y toca los platos del menú." : "Toca los platos del menú para sumarlos."}</div>
                         </div>
-                    ) : (
-                        <ul className="divide-y divide-border/60 dark:divide-white/[0.06]">
-                            {ronda.map((l, i) => (
-                                <li key={`${l.product.id}-${i}`} className="py-3">
-                                    <div className="flex items-start gap-3">
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-[14px] font-semibold text-content dark:text-white leading-snug">{l.product.name}</div>
-                                            {l.options?.length > 0 && (
-                                                <div className="text-[12px] text-content dark:text-white/80 leading-snug">{textoOpciones(l.options)}</div>
-                                            )}
-                                            <div className="text-[12px] text-content-subtle tabular-nums">{fmtMoney(precioLinea(l), sym)} c/u · {fmtMoney(precioLinea(l) * l.qty, sym)}</div>
-                                        </div>
-                                        <div className="w-[118px] shrink-0">
-                                            <Stepper small qty={l.qty} step={isIntegerUnit(l.product.unit) ? 1 : (parseFloat(l.product.qty_step) || 1)} onChange={qty => setLinea(i, { qty })} />
-                                        </div>
-                                    </div>
-                                    {editNota === i ? (
-                                        <input autoFocus autoComplete="off" maxLength={200} value={l.note}
-                                            placeholder="Sin hielo, bien caliente…"
-                                            onChange={e => setLinea(i, { note: e.target.value })}
-                                            onBlur={() => setEditNota(null)}
-                                            onKeyDown={e => { if (e.key === "Enter") setEditNota(null); }}
-                                            className="mt-2 w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
-                                    ) : (
-                                        <button onClick={() => setEditNota(i)}
-                                            className={`mt-1.5 inline-flex items-center gap-1.5 text-[13px] min-h-[32px] ${l.note ? "text-amber-700 dark:text-amber-400" : "text-content-subtle"}`}>
-                                            <Svg d={Icono.nota} className="w-3.5 h-3.5" />
-                                            {l.note || "Agregar nota"}
-                                        </button>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
-                    )
-                ) : (
-                    !cuenta ? (
-                        <div className="py-10 text-center text-[13px] text-content-subtle">
-                            {cuentaSel === "new" ? "La ronda abre una cuenta aparte en esta mesa." : "La mesa todavía no tiene cuenta. La abre la primera ronda."}
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex items-baseline justify-between">
-                                <span className="text-[12px] text-content-subtle">Abierta {fmtTime(cuenta.created_at)}{cuenta.waiter_name ? ` · ${cuenta.waiter_name}` : ""}</span>
-                                <span className="text-[20px] font-bold tracking-tight text-content dark:text-white tabular-nums">{fmtMoney(cuenta.total, sym)}</span>
-                            </div>
-                            <CuentaAcciones table={table} cuenta={cuenta} cuentas={cuentas} warehouseId={warehouseId} sym={sym} notify={notify}
-                                onChanged={(id) => { setTocada(true); if (id) setCuentaSel(id); cargarCuentas(); }} />
-                            {(rondasMesa.length === 0 || cuentaDistinta) && lineasMesa.length > 0 && (
-                                <section>
-                                    {rondasMesa.length > 0 && <h4 className="text-[13px] font-semibold text-content dark:text-white mb-1">Lo que tiene la cuenta ahora</h4>}
-                                    <ul className="space-y-0.5">
-                                        {/* Con los adicionales bajo su plato; el contorno incluido (a 0) ya va en la nota. */}
-                                        {lineasMesa.filter(it => !(it.is_addon && !(parseFloat(it.price) > 0))).map(it => (it.is_addon
-                                            ? <li key={it.id} className="text-[12px] text-content-subtle pl-4">+ {it.name}</li>
-                                            : <li key={it.id} className="text-[13px] text-content dark:text-white"><span className="font-semibold tabular-nums">{fmtQty(it.quantity)}</span> {it.name}{it.note ? <span className="block text-[12px] text-content-subtle pl-4">{it.note}</span> : null}</li>
-                                        ))}
-                                    </ul>
-                                    {rondasMesa.length > 0 && <p className="mt-2 text-[12px] text-content-subtle">La cuenta se dividió o se juntó. Abajo, lo que se mandó a cocina.</p>}
-                                </section>
-                            )}
-                            {rondasMesa.map(r => {
-                                const e = ESTADO_RONDA[r.status] || ESTADO_RONDA.nueva;
+                    ) : porPuesto ? (
+                        <div className="space-y-3">
+                            {gruposRonda.map(g => {
+                                const on = mismoPuesto(puesto, g.seat);
                                 return (
-                                    <section key={r.id} className="rounded-xl border border-border/60 dark:border-white/[0.06] p-3">
-                                        <header className="flex items-center justify-between gap-2">
-                                            <span className="text-[13px] font-semibold text-content dark:text-white">Ronda {r.round_no} · {fmtTime(r.created_at)}</span>
-                                            <span className={`inline-flex items-center gap-1 text-[12px] font-medium ${e.cls}`}>
-                                                {e.check && <Svg d={Icono.check} className="w-3.5 h-3.5" />}{e.txt}
-                                            </span>
-                                        </header>
-                                        <ul className="mt-1.5 space-y-0.5">
-                                            {(r.items || []).map((it, k) => (
-                                                <li key={k} className="text-[13px] text-content dark:text-white">
-                                                    <span className="font-semibold tabular-nums">{fmtQty(it.quantity)}</span> {it.name}
-                                                    {it.modifiers && <span className="block text-[12px] text-content-subtle pl-4">{it.modifiers}</span>}
-                                                    {it.note && <span className="block text-[12px] text-amber-700 dark:text-amber-400 pl-4">{it.note}</span>}
-                                                </li>
-                                            ))}
-                                        </ul>
+                                    <section key={g.seat ?? "mesa"} className={`rounded-xl border ${on ? "border-brand-500/60 bg-brand-500/[0.04]" : "border-border/60 dark:border-white/[0.06]"}`}>
+                                        <button type="button" onClick={() => setPuesto(g.seat)}
+                                            className="w-full px-3 pt-2.5 pb-1 flex items-center gap-2 text-left">
+                                            {fichaPuesto(g.seat, on)}
+                                            <span className="text-[13px] font-semibold text-content dark:text-white">{g.seat ? `Puesto ${g.seat}` : "Mesa (compartido)"}</span>
+                                            {on && <span className="text-[11px] font-semibold text-brand-700 dark:text-brand-300">Agregando aquí</span>}
+                                            <span className="ml-auto text-[13px] font-semibold tabular-nums text-content dark:text-white">{fmtMoney(g.total, sym)}</span>
+                                        </button>
+                                        <ul className="px-3 divide-y divide-border/60 dark:divide-white/[0.06]">{g.lineas.map(lineaRonda)}</ul>
                                     </section>
                                 );
                             })}
+                        </div>
+                    ) : (
+                        <ul className="divide-y divide-border/60 dark:divide-white/[0.06]">{ronda.map((l, i) => lineaRonda({ l, i }))}</ul>
+                    )
+                ) : (
+                    !cuenta ? (
+                        <div className="py-10 text-center">
+                            <div className="w-12 h-12 mx-auto rounded-xl bg-surface-2 dark:bg-white/[0.06] flex items-center justify-center text-content-subtle"><Svg d={Icono.carta} className="w-6 h-6" /></div>
+                            <div className="text-[14px] font-semibold text-content dark:text-white mt-3">La mesa no tiene cuenta</div>
+                            <div className="text-[13px] text-content-subtle mt-1">La abre la primera ronda que envíes a cocina.</div>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Lo que debe la cuenta, en Ref. y en Bs., con lo que se hace con ella. */}
+                            <div className="rounded-2xl border border-border/60 dark:border-white/[0.06] bg-surface-2/60 dark:bg-white/[0.03] p-4">
+                                <div className="text-[12px] text-content-subtle">Abierta {fmtTime(cuenta.created_at)}{cuenta.waiter_name ? ` · ${toNameCase(cuenta.waiter_name)}` : ""}</div>
+                                <div className="mt-1 flex items-end justify-between gap-3">
+                                    <span className="text-[13px] text-content-subtle">Total de la cuenta</span>
+                                    <span className="text-[26px] font-bold tracking-tight text-content dark:text-white tabular-nums leading-none">{fmtMoney(cuenta.total, sym)}</span>
+                                </div>
+                                {enBs(cuenta.total) && <div className="text-right text-[13px] text-content-subtle tabular-nums mt-1">{enBs(cuenta.total)}</div>}
+                                <div className={`mt-3 grid gap-2 ${puedeCobrar && !bloqueada ? "grid-cols-2" : "grid-cols-1"}`}>
+                                    <button type="button" onClick={precuenta}
+                                        className="btn-outline h-12 rounded-xl text-[14px] font-semibold inline-flex items-center justify-center gap-2">
+                                        <Svg d={Icono.carta} />Precuenta
+                                    </button>
+                                    {puedeCobrar && !bloqueada && (
+                                        <button type="button" onClick={cobrar}
+                                            className="btn-accent h-12 rounded-xl text-[14px] font-semibold inline-flex items-center justify-center gap-2 active:scale-[0.99]">
+                                            Cobrar
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+
+                            <CuentaAcciones table={table} cuenta={cuenta} cuentas={cuentas} warehouseId={warehouseId} sym={sym} notify={notify}
+                                onChanged={(id) => { setTocada(true); if (id) setCuentaSel(id); cargarCuentas(); }} />
+
+                            {/* La cuenta por puesto, con su subtotal: lo que pagaría cada uno. */}
+                            <section>
+                                <h4 className="text-[14px] font-semibold text-content dark:text-white mb-2">Lo que tiene la cuenta</h4>
+                                <div className="space-y-2">
+                                    {gruposCuenta.map(g => (
+                                        <div key={g.seat ?? "mesa"} className="rounded-xl border border-border/60 dark:border-white/[0.06] px-3 py-2">
+                                            {(porPuesto || gruposCuenta.length > 1) && (
+                                                <div className="flex items-center gap-2 pb-1">
+                                                    {fichaPuesto(g.seat, false)}
+                                                    <span className="text-[13px] font-semibold text-content dark:text-white">{g.seat ? `Puesto ${g.seat}` : "Mesa (compartido)"}</span>
+                                                    <span className="ml-auto text-[13px] font-semibold tabular-nums text-content dark:text-white">{fmtMoney(g.total, sym)}</span>
+                                                </div>
+                                            )}
+                                            <ul className="divide-y divide-border/40 dark:divide-white/[0.04]">
+                                                {g.platos.map(p => (
+                                                    <li key={p.id} className="py-1.5 flex items-start gap-2 text-[13px]">
+                                                        <span className="font-semibold tabular-nums w-6 text-right shrink-0 text-content dark:text-white">{fmtQty(p.quantity)}</span>
+                                                        <span className="flex-1 min-w-0 text-content dark:text-white">
+                                                            {p.name}
+                                                            {p.extras.length > 0 && <span className="block text-[12px] text-content-subtle">{p.extras.map(x => `+ ${x.name}`).join(" · ")}</span>}
+                                                            {p.note && <span className="block text-[12px] text-content-subtle">{p.note}</span>}
+                                                        </span>
+                                                        <span className="tabular-nums text-content-subtle shrink-0">{fmtMoney(p.monto, sym)}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ))}
+                                </div>
+                            </section>
+
+                            {/* Lo enviado a cocina y cómo va. */}
+                            {rondasMesa.length > 0 && (
+                                <section>
+                                    <h4 className="text-[14px] font-semibold text-content dark:text-white mb-2">Enviado a cocina</h4>
+                                    <div className="rounded-xl border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.06]">
+                                        {rondasMesa.map(r => {
+                                            const e = ESTADO_RONDA[r.status] || ESTADO_RONDA.nueva;
+                                            return (
+                                                <div key={r.id} className="px-3 py-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <span className="text-[13px] font-semibold text-content dark:text-white">Ronda {r.round_no} · {fmtTime(r.created_at)}</span>
+                                                        <span className={`inline-flex items-center gap-1 text-[12px] font-medium ${e.cls}`}>
+                                                            {e.check && <Svg d={Icono.check} className="w-3.5 h-3.5" />}{e.txt}
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-[12px] text-content-subtle mt-0.5">
+                                                        {(r.items || []).map(it => `${it.seat ? `P${it.seat} ` : ""}${fmtQty(it.quantity)} ${it.name}`).join(" · ")}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </section>
+                            )}
                         </div>
                     )
                 )}
@@ -538,13 +779,20 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
 
             {panel === "ronda" && ronda.length > 0 && (
                 <div className="shrink-0 border-t border-border/60 dark:border-white/[0.06] p-4 space-y-3 bg-white dark:bg-surface-dark-2">
+                    <div className="flex items-end justify-between gap-3">
+                        <span className="text-[13px] text-content-subtle">{fmtQty(unidades)} {unidades === 1 ? "plato" : "platos"} en esta ronda</span>
+                        <span className="text-right">
+                            <span className="block text-[20px] font-bold tracking-tight tabular-nums text-content dark:text-white leading-none">{fmtMoney(totalRonda, sym)}</span>
+                            {enBs(totalRonda) && <span className="block text-[12px] text-content-subtle tabular-nums mt-0.5">{enBs(totalRonda)}</span>}
+                        </span>
+                    </div>
                     <input autoComplete="off" maxLength={300} value={notaCocina} onChange={e => setNotaCocina(e.target.value)}
                         placeholder="Nota para la cocina (opcional)"
                         className="w-full h-10 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] text-content dark:text-white placeholder:text-content-subtle/60 focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                     <button onClick={enviar} disabled={enviando}
                         className="btn-accent w-full h-12 rounded-xl text-[15px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.99]">
                         {enviando && <Spinner />}
-                        Enviar a cocina · <span className="tabular-nums">{fmtMoney(totalRonda, sym)}</span>
+                        Enviar a cocina
                     </button>
                 </div>
             )}
@@ -608,6 +856,26 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
                             <input value={q} onChange={e => setQ(e.target.value)} autoComplete="off" type="search" placeholder="Buscar en el menú"
                                 className="w-full h-11 pl-10 pr-3 rounded-xl border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[14px] text-content dark:text-white focus:outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
                         </label>
+                        {/* Pedido por puesto: lo que se toque en el menú va al puesto marcado. */}
+                        {porPuesto && !cliente && (
+                            <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+                                <span className="text-[12px] text-content-subtle shrink-0">Para</span>
+                                {[null, ...Array.from({ length: nPuestos }, (_, k) => k + 1)].map(s => (
+                                    <button key={s ?? "mesa"} onClick={() => setPuesto(s)} aria-pressed={mismoPuesto(puesto, s)}
+                                        className={`h-10 min-w-[44px] px-3 rounded-lg text-[13px] font-semibold whitespace-nowrap shrink-0 border ${mismoPuesto(puesto, s)
+                                            ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+                                            : "bg-white dark:bg-white/[0.04] border-border dark:border-white/10 text-content dark:text-white"}`}>
+                                        {s ? s : "Mesa"}
+                                    </button>
+                                ))}
+                                {nPuestos < 20 && (
+                                    <button onClick={() => { setNPuestos(n => n + 1); setPuesto(nPuestos + 1); }} aria-label="Otro puesto" title="Otro puesto"
+                                        className="h-10 w-10 rounded-lg border border-dashed border-border dark:border-white/15 text-content-subtle flex items-center justify-center shrink-0">
+                                        <Svg d={Icono.mas} />
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
                             {["todo", ...categorias].map(c => (
                                 <button key={c} onClick={() => setCat(c)}
@@ -679,6 +947,37 @@ export default function WaiterOrder({ table, warehouseId, sym = "Ref.", notify, 
 
             {ficha && (
                 <FichaPlato p={ficha} warehouseId={warehouseId} sym={sym} onAdd={agregarDesdeFicha} onClose={() => setFicha(null)} />
+            )}
+
+            {verCliente && (
+                <ClienteMesa value={clienteActual} onPick={ponerCliente} onClose={() => setVerCliente(false)} notify={notify} />
+            )}
+
+            {verPrecuenta && (
+                <PrecuentaModal
+                    open={verPrecuenta}
+                    onClose={() => setVerPrecuenta(false)}
+                    cuenta={cuenta}
+                    table={table}
+                    sym={sym}
+                    notify={notify}
+                    onBillRequested={() => {
+                        setTocada(true);
+                        cargarCuentas();
+                    }}
+                />
+            )}
+
+            {/* Cobrar en la tablet: hoja propia de la mesa */}
+            {cobrando && (
+                <CobroMesa
+                    table={table}
+                    cuenta={cobrando}
+                    sym={sym}
+                    notify={notify}
+                    onClose={() => setCobrando(null)}
+                    onDone={terminarCobro}
+                />
             )}
 
             <ConfirmModal isOpen={salir} title="¿Descartar la ronda?"

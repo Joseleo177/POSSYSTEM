@@ -54,6 +54,26 @@ function DividirModal({ cuenta, sym, notify, onClose, onDone }) {
     const elegidos = platos.filter(p => pasan[p.id] > 0);
     const todo = platos.every(p => (pasan[p.id] || 0) >= parseFloat(p.quantity));
 
+    // Pedido por puesto: un toque pasa (o devuelve) todo lo de ese puesto.
+    const puestos = useMemo(() => {
+        const m = new Map();
+        for (const p of platos) {
+            if (!p.seat) continue;
+            const parte = montoDe(p) + p.adicionales.reduce((a, x) => a + montoDe(x), 0);
+            m.set(p.seat, (m.get(p.seat) || 0) + parte);
+        }
+        return [...m.entries()].sort(([a], [b]) => a - b);
+    }, [platos]);
+    const puestoEntero = (s) => platos.filter(p => p.seat === s).every(p => (pasan[p.id] || 0) >= parseFloat(p.quantity));
+    const tocarPuesto = (s) => {
+        const quitar = puestoEntero(s);
+        setPasan(prev => {
+            const n = { ...prev };
+            for (const p of platos) if (p.seat === s) n[p.id] = quitar ? 0 : parseFloat(p.quantity);
+            return n;
+        });
+    };
+
     const dividir = async () => {
         try {
             const r = await api.tables.splitAccount(cuenta.id, elegidos.map(p => ({ id: p.id, qty: pasan[p.id] })));
@@ -81,6 +101,24 @@ function DividirModal({ cuenta, sym, notify, onClose, onDone }) {
             <p className="text-[13px] text-content-subtle mb-3">
                 Marca lo que paga otra persona. Pasa a una cuenta nueva en la misma mesa, que se cobra y se factura aparte. Los adicionales van con su plato.
             </p>
+            {puestos.length > 0 && (
+                <div className="mb-3">
+                    <div className="text-[12px] text-content-subtle mb-1.5">Por puesto</div>
+                    <div className="flex flex-wrap gap-2">
+                        {puestos.map(([s, m]) => {
+                            const on = puestoEntero(s);
+                            return (
+                                <button key={s} type="button" onClick={() => tocarPuesto(s)} aria-pressed={on}
+                                    className={`h-11 px-3.5 rounded-lg border text-[13px] font-semibold inline-flex items-center gap-2 ${on
+                                        ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300"
+                                        : "border-border dark:border-white/10 text-content dark:text-white"}`}>
+                                    Puesto {s} <span className="font-normal text-content-subtle tabular-nums">{fmtMoney(m, sym)}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
             <ul className="divide-y divide-border/60 dark:divide-white/[0.06] border-y border-border/60 dark:border-white/[0.06]">
                 {platos.map(p => {
                     const max = parseFloat(p.quantity);
@@ -91,6 +129,7 @@ function DividirModal({ cuenta, sym, notify, onClose, onDone }) {
                         <li key={p.id} className="py-3 flex items-center gap-3">
                             <div className="flex-1 min-w-0">
                                 <div className="text-[14px] font-semibold text-content dark:text-white leading-snug">
+                                    {p.seat && <span className="text-content-subtle font-medium mr-1">P{p.seat}</span>}
                                     <span className="tabular-nums">{fmtQty(max)}</span> {p.name}
                                 </div>
                                 {(p.note || p.adicionales.length > 0) && (
