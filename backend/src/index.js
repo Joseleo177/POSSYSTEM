@@ -1,23 +1,23 @@
 require("dotenv").config();
 require("pg"); // Required for Vercel to bundle pg with Sequelize
 require("./config/envValidator"); // Joi env validation
-const express      = require("express");
-const cors         = require("cors");
-const path         = require("path");
-const rateLimit    = require("express-rate-limit");
-const logger       = require("./middleware/logger");
+const express = require("express");
+const cors = require("cors");
+const path = require("path");
+const rateLimit = require("express-rate-limit");
+const logger = require("./middleware/logger");
 const errorHandler = require("./middleware/errorHandler");
-const auditLog     = require("./middleware/auditLog");
+const auditLog = require("./middleware/auditLog");
 
-const app  = express();
+const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.set('trust proxy', 1);
 
 // ── CORS ─────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
-  ? process.env.CORS_ORIGIN.split(",")
-  : ["*"];
+    ? process.env.CORS_ORIGIN.split(",").map(s => s.trim()).filter(Boolean)
+    : ["*"];
 const corsOptions = {
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes("*") || allowedOrigins.includes(origin)) return cb(null, true);
@@ -88,66 +88,66 @@ app.use(auditLog);
 
 // ── Public routes ─────────────────────────────────────────────
 app.use("/api/auth/login", loginLimiter);   // strict limiter on login
-app.use("/api/auth",       require("./routes/auth"));
+app.use("/api/auth", require("./routes/auth"));
 
 // Catálogo público: se accede por token, sin sesión. Lleva su propio rate limit y
 // resuelve el company_id desde el token (ver services/publicCatalogService.js).
 app.use("/api/public/catalog", require("./routes/publicCatalog").publicRouter);
 // QR de la mesa: el cliente ve cómo va su pedido y pide la cuenta (por el código de la mesa).
-app.use("/api/public/mesa",    require("./routes/publicMesa"));
+app.use("/api/public/mesa", require("./routes/publicMesa"));
 
 // ── Protected routes ──────────────────────────────────────────
 const { auth, permit } = require("./middleware/auth");
 
-app.use("/api/products",         auth, require("./routes/products"));
-app.use("/api/sales",            auth, require("./routes/sales"));
-app.use("/api/sales",            auth, require("./routes/returns"));   // devoluciones
-app.use("/api/categories",       auth, require("./routes/categories"));
-app.use("/api/customers",        auth, require("./routes/customers"));
-app.use("/api/dashboard",        auth, require("./routes/dashboard"));
-app.use("/api/employees",        require("./routes/employees"));        // auth+permit dentro
-app.use("/api/currencies",       require("./routes/currencies"));       // auth+permit dentro
-app.use("/api/settings",         require("./routes/settings"));         // auth+permit dentro
+app.use("/api/products", auth, require("./routes/products"));
+app.use("/api/sales", auth, require("./routes/sales"));
+app.use("/api/sales", auth, require("./routes/returns"));   // devoluciones
+app.use("/api/categories", auth, require("./routes/categories"));
+app.use("/api/customers", auth, require("./routes/customers"));
+app.use("/api/dashboard", auth, require("./routes/dashboard"));
+app.use("/api/employees", require("./routes/employees"));        // auth+permit dentro
+app.use("/api/currencies", require("./routes/currencies"));       // auth+permit dentro
+app.use("/api/settings", require("./routes/settings"));         // auth+permit dentro
 app.use("/api/payment-journals", require("./routes/paymentJournals"));  // auth dentro
-app.use("/api/purchases",         require("./routes/purchases"));        // auth dentro
+app.use("/api/purchases", require("./routes/purchases"));        // auth dentro
 app.use("/api/purchase-payments", require("./routes/purchasePayments")); // auth dentro
-app.use("/api/warehouses",       require("./routes/warehouses"));       // auth dentro
-app.use("/api/banks",            require("./routes/banks"));            // auth+permit dentro
-app.use("/api/payments",         require("./routes/payments"));         // auth dentro
-app.use("/api/series",           require("./routes/series"));           // auth+permit dentro
-app.use("/api/reports",          require("./routes/reports"));          // auth dentro
+app.use("/api/warehouses", require("./routes/warehouses"));       // auth dentro
+app.use("/api/banks", require("./routes/banks"));            // auth+permit dentro
+app.use("/api/payments", require("./routes/payments"));         // auth dentro
+app.use("/api/series", require("./routes/series"));           // auth+permit dentro
+app.use("/api/reports", require("./routes/reports"));          // auth dentro
 app.use("/api/iva-declarations", require("./routes/ivaDeclarations"));  // auth dentro
-app.use("/api/cash-sessions",    require("./routes/cashSessions"));     // auth dentro
-app.use("/api/expenses",         require("./routes/expenses"));          // auth dentro
-app.use("/api/companies",        require("./routes/companies"));         // auth+superuser dentro
-app.use("/api/quotations",       require("./routes/quotations"));        // auth dentro
-app.use("/api/promotions",       require("./routes/promotions"));        // auth dentro
-app.use("/api/credit-notes",     require("./routes/creditNotes"));       // auth dentro
-app.use("/api/incomes",          require("./routes/incomes"));            // auth dentro
-app.use("/api/cash-advances",    require("./routes/cashAdvances"));       // auth+permit dentro
-app.use("/api/cashea",           require("./routes/cashea"));             // auth+permit dentro
+app.use("/api/cash-sessions", require("./routes/cashSessions"));     // auth dentro
+app.use("/api/expenses", require("./routes/expenses"));          // auth dentro
+app.use("/api/companies", require("./routes/companies"));         // auth+superuser dentro
+app.use("/api/quotations", require("./routes/quotations"));        // auth dentro
+app.use("/api/promotions", require("./routes/promotions"));        // auth dentro
+app.use("/api/credit-notes", require("./routes/creditNotes"));       // auth dentro
+app.use("/api/incomes", require("./routes/incomes"));            // auth dentro
+app.use("/api/cash-advances", require("./routes/cashAdvances"));       // auth+permit dentro
+app.use("/api/cashea", require("./routes/cashea"));             // auth+permit dentro
 app.use("/api/bank-reconciliations", require("./routes/bankReconciliation")); // auth+permit dentro
-app.use("/api/factory",          require("./routes/factory"));             // auth+permit+módulo dentro
-app.use("/api/kitchen",          require("./routes/kitchen"));             // auth+permit+módulo dentro
-app.use("/api/commissions",      require("./routes/commissions"));         // auth+permit+módulo dentro
-app.use("/api/tips",             require("./routes/tips"));                // auth+permit+módulo dentro
-app.use("/api/cobranza",         require("./routes/cobranza"));            // auth+permit+módulo dentro
-app.use("/api/agenda",           require("./routes/agenda"));              // auth+módulo dentro; permisos en el servicio
-app.use("/api/tables",           require("./routes/tables"));              // auth+permit+módulo dentro
-app.use("/api/addons",           require("./routes/addons"));              // auth+permit+módulo dentro
-app.use("/api/recipes",          require("./routes/recipes"));             // auth+permit+módulo dentro
-app.use("/api/production",       require("./routes/production"));          // auth+permit+módulo dentro
-app.use("/api/backup",           require("./routes/backup"));             // auth+config dentro
-app.use("/api/catalog-link",     require("./routes/publicCatalog").adminRouter); // auth+config dentro
-app.use("/api/catalog-banners",  require("./routes/catalogBanners"));       // auth+config dentro
+app.use("/api/factory", require("./routes/factory"));             // auth+permit+módulo dentro
+app.use("/api/kitchen", require("./routes/kitchen"));             // auth+permit+módulo dentro
+app.use("/api/commissions", require("./routes/commissions"));         // auth+permit+módulo dentro
+app.use("/api/tips", require("./routes/tips"));                // auth+permit+módulo dentro
+app.use("/api/cobranza", require("./routes/cobranza"));            // auth+permit+módulo dentro
+app.use("/api/agenda", require("./routes/agenda"));              // auth+módulo dentro; permisos en el servicio
+app.use("/api/tables", require("./routes/tables"));              // auth+permit+módulo dentro
+app.use("/api/addons", require("./routes/addons"));              // auth+permit+módulo dentro
+app.use("/api/recipes", require("./routes/recipes"));             // auth+permit+módulo dentro
+app.use("/api/production", require("./routes/production"));          // auth+permit+módulo dentro
+app.use("/api/backup", require("./routes/backup"));             // auth+config dentro
+app.use("/api/catalog-link", require("./routes/publicCatalog").adminRouter); // auth+config dentro
+app.use("/api/catalog-banners", require("./routes/catalogBanners"));       // auth+config dentro
 app.use("/api/catalog-checkout", require("./routes/catalogCheckout"));      // auth+config dentro
-app.use("/api/payment-reports",  require("./routes/paymentReports"));       // auth+permit dentro
-app.use("/api/web-orders",       require("./routes/webOrders"));            // auth+permit+módulo dentro
-app.use("/api/benefit-tags",     require("./routes/benefitTags"));          // auth dentro
+app.use("/api/payment-reports", require("./routes/paymentReports"));       // auth+permit dentro
+app.use("/api/web-orders", require("./routes/webOrders"));            // auth+permit+módulo dentro
+app.use("/api/benefit-tags", require("./routes/benefitTags"));          // auth dentro
 app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
-app.use("/api/huellas",          require("./routes/huellas"));             // auth dentro; "¿cambió algo?" de la caja
+app.use("/api/huellas", require("./routes/huellas"));             // auth dentro; "¿cambió algo?" de la caja
 
-app.use("/api/events",           require("./routes/events"));             // SSE stream
+app.use("/api/events", require("./routes/events"));             // SSE stream
 
 // ── Health check ──────────────────────────────────────────────
 app.get("/health", async (req, res) => {
