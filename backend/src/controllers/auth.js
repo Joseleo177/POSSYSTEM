@@ -9,9 +9,10 @@ if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
 const EXPIRES = "12h";
 
 // Sucursales entre las que el usuario elige al entrar y en el selector de la barra. El admin
-// (y el superusuario) no está atado a almacenes: elige entre todas las activas de la empresa.
-// El resto, entre las suyas. `sells` distingue un depósito, que no factura.
+// (y el superusuario) no está atado a almacenes: elige entre todas las sucursales activas de la
+// empresa. Los depósitos (`sells === false`) no cuentan como sucursal de trabajo.
 async function sucursalesDe({ company_id, is_superuser, permissions, warehouses }) {
+  let lista;
   if (is_superuser || permissions?.all) {
     if (!company_id) return [];
     const rows = await Warehouse.findAll({
@@ -20,11 +21,14 @@ async function sucursalesDe({ company_id, is_superuser, permissions, warehouses 
       order: [['sort_order', 'ASC'], ['name', 'ASC']],
       raw: true,
     });
-    return rows.map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+    lista = rows.map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+  } else {
+    lista = (warehouses || [])
+      .filter(w => w.active !== false)
+      .map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
   }
-  return (warehouses || [])
-    .filter(w => w.active !== false)
-    .map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+  const soloSucursales = lista.filter(w => w.sells !== false);
+  return soloSucursales.length ? soloSucursales : lista;
 }
 
 // POST /api/auth/login
@@ -134,7 +138,7 @@ const me = async (req, res) => {
       return res.json({ ok: true, employee: {
         ...req.employee,
         role: emp.Role.name, role_label: emp.Role.label, permissions,
-        warehouses: (emp.Warehouses || []).map(w => ({ id: w.id, name: w.name })),
+        warehouses: (emp.Warehouses || []).filter(w => w.active !== false).map(w => ({ id: w.id, name: w.name, sells: w.sells !== false })),
         sucursales,
       } });
     }
@@ -177,7 +181,7 @@ const refresh = async (req, res) => {
     const emp = await Employee.findByPk(decoded.id, {
       include: [
         { model: Role, attributes: ['name', 'label', 'permissions'] },
-        { model: Warehouse, attributes: ['id', 'name'], through: { attributes: [] } }
+        { model: Warehouse, attributes: ['id', 'name', 'active', 'sells'], through: { attributes: [] } }
       ]
     });
 

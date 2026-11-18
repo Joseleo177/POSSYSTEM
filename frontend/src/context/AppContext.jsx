@@ -23,9 +23,14 @@ applyRememberedBrandColor();
 // sesión para que la pregunta se repita; una recarga de la página la conserva.
 const claveSucursal = (emp) => `nxus_sucursal_${emp.company_id ?? 0}_${emp.id}`;
 
-// Lo que viene del servidor. Una respuesta vieja (sin `sucursales`) se arma con las asignadas.
-const sucursalesDe = (emp) => emp?.sucursales
-  ?? (emp?.warehouses || []).map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+// Lo que viene del servidor. Los depósitos (`sells === false`) no cuentan como sucursal en el
+// selector de la barra superior ni al iniciar sesión.
+const sucursalesDe = (emp) => {
+  const lista = emp?.sucursales
+    ?? (emp?.warehouses || []).map(w => ({ id: w.id, name: w.name, sells: w.sells !== false }));
+  const soloSucursales = lista.filter(w => w.sells !== false);
+  return soloSucursales.length ? soloSucursales : lista;
+};
 
 // Deja solo ids que sigan siendo del usuario. Sin actual válida no hay selección: se pregunta.
 function normalizarSeleccion(sel, lista) {

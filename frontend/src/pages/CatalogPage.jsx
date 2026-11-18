@@ -30,12 +30,14 @@ const TABS = [
 ];
 
 export default function CatalogPage() {
-    const { employee, activeCurrencies, company, refreshEmployee, loadCategories } = useApp();
+    const { employee, activeCurrencies, company, settings, refreshEmployee, loadCategories } = useApp();
+    const subcatEnabled = settings?.subcategorias_enabled === "true";
     const {
         products, setProducts, search, setSearch, debouncedSearch, loadProducts, can,
         categories, notify, loading,
         page, totalProducts, limit,
         filterCategory, setFilterCategory,
+        filterSubcategory, setFilterSubcategory,
         filterType, setFilterType,
         filterStock, setFilterStock,
         filterVisible, setFilterVisible,
@@ -70,7 +72,7 @@ export default function CatalogPage() {
     // empresa factura con IVA (el superusuario lo enciende en Empresas).
     const ivaAdmin = !!company?.iva_enabled && !!(employee?.is_superuser || employee?.permissions?.all);
 
-    const availableWarehouses = employee?.warehouses || [];
+    const availableWarehouses = (employee?.warehouses || []).filter(w => w.sells !== false);
     // El catálogo muestra precios y existencias de UNA sucursal: arranca en la actual y, con
     // varias marcadas en la barra de arriba, se puede mirar otra de ellas.
     const suc = useSucursalFilter({ todas: false });
@@ -82,7 +84,7 @@ export default function CatalogPage() {
 
     useEffect(() => {
         if (warehouseId) loadProducts(1, warehouseId);
-    }, [debouncedSearch, warehouseId, loadProducts, filterCategory, filterType]);
+    }, [debouncedSearch, warehouseId, loadProducts, filterCategory, filterSubcategory, filterType]);
 
     useEffect(() => { localStorage.setItem("catalog_view", viewMode); }, [viewMode]);
 
@@ -338,7 +340,7 @@ export default function CatalogPage() {
                                                 conjuntos fijos y cortos, y ahí el botón sigue siendo un clic menos. */}
                                             <CustomSelect
                                                 value={filterCategory}
-                                                onChange={setFilterCategory}
+                                                onChange={v => { setFilterCategory(v); setFilterSubcategory(""); }}
                                                 height="h-9"
                                                 options={[
                                                     { value: "", label: "Todas" },
@@ -350,6 +352,26 @@ export default function CatalogPage() {
                                                 ]}
                                             />
                                         </div>
+                                        {subcatEnabled && (() => {
+                                            const subcats = filterCategory
+                                                ? (categories.find(c => String(c.id) === String(filterCategory))?.subcategories || [])
+                                                : [...new Set(categories.flatMap(c => c.subcategories || []))];
+                                            if (!subcats.length) return null;
+                                            return (
+                                                <div>
+                                                    <div className="text-[12px] font-medium text-content-subtle mb-1.5">Subcategoría</div>
+                                                    <CustomSelect
+                                                        value={filterSubcategory}
+                                                        onChange={setFilterSubcategory}
+                                                        height="h-9"
+                                                        options={[
+                                                            { value: "", label: "Todas" },
+                                                            ...subcats.map(s => ({ value: s, label: s })),
+                                                        ]}
+                                                    />
+                                                </div>
+                                            );
+                                        })()}
                                         <div>
                                             <div className="text-[12px] font-medium text-content-subtle mb-1.5">Tipo</div>
                                             <div className="grid grid-cols-2 gap-1">

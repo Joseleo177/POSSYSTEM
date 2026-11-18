@@ -1,7 +1,7 @@
 const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode, setVariantImage } = require("../services/products");
 const { importProducts } = require("../services/products/importProducts");
 const { broadcast } = require("../services/sseService");
-const { assertWarehouseAccess, visibleWarehouseIds, isAdmin } = require("../middleware/auth");
+const { assertWarehouseAccess, visibleWarehouseIds, scopeWarehouseIds, isAdmin } = require("../middleware/auth");
 const { assertProductAccess, idsVisibles, noEncontrado } = require("../services/products/productAccess");
 const { ProductStock, Sequelize } = require("../models");
 const catalogoIva = require("../services/fiscal/catalogoIva");
@@ -18,7 +18,14 @@ async function listar(req) {
   const company_id = req.employee?.company_id ?? null;
   const q = { ...req.query };
   const visibles = await visibleWarehouseIds(req);
-  if (!visibles) return getAll({ ...q, company_id });
+  if (!visibles) {
+    if (!q.warehouse_id && !q.for_purchase && !q.not_in_warehouse_id) {
+      const sucursales = await scopeWarehouseIds(req);
+      if (sucursales && sucursales.length === 1) q.warehouse_id = String(sucursales[0]);
+      else if (sucursales) return getAll({ ...q, company_id, visible_ids: sucursales });
+    }
+    return getAll({ ...q, company_id });
+  }
 
   if (q.warehouse_id) await assertWarehouseAccess(req, q.warehouse_id);
   if (q.not_in_warehouse_id) await assertWarehouseAccess(req, q.not_in_warehouse_id);

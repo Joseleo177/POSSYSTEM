@@ -30,7 +30,7 @@ const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch { /* sin a
 
 export default function RecetasPage() {
     const { can } = useApp();
-    const canEdit = can("products.edit");
+    const canEdit = can("products.edit") || can("production.manage");
     const canProduce = can("production.manage");
 
     const [tab, setTabState] = useState(() => {
@@ -61,7 +61,7 @@ export default function RecetasPage() {
 
     useEffect(() => {
         api.warehouses.getAll()
-            .then(r => setWarehouses((r.data || []).filter(w => w.active !== false)))
+            .then(r => setWarehouses((r.data || []).filter(w => w.active !== false && w.sells !== false)))
             .catch(() => {})
             .finally(() => setWhReady(true));
     }, []);
@@ -94,6 +94,7 @@ export default function RecetasPage() {
             {whReady && tab === "preparaciones" && (
                 <PreparacionesView warehouseId={warehouseId} sucursal={sucursal} version={version}
                     onOpen={p => setPrepId(p.product_id)}
+                    onDeleted={refresh}
                     onProduce={canProduce ? p => setProduce({ product_id: p.product_id }) : null} />
             )}
             {whReady && tab === "produccion" && (

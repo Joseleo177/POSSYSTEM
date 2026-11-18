@@ -18,15 +18,17 @@ export function useCatalog() {
 
     // Filtros
     const [filterCategory, setFilterCategory] = useState("");
+    const [filterSubcategory, setFilterSubcategory] = useState("");
     const [filterType, setFilterType] = useState("");      // "" | "service" | "combo" | "normal"
     const [filterStock, setFilterStock] = useState("");   // "" | "with" | "no"
     const [filterVisible, setFilterVisible] = useState(""); // "" | "yes" | "no"
     const [filterIva, setFilterIva] = useState("");         // "" | G | E | R | A (empresas con IVA)
 
-    const activeFilterCount = [filterCategory, filterType, filterStock, filterVisible, filterIva].filter(Boolean).length;
+    const activeFilterCount = [filterCategory, filterSubcategory, filterType, filterStock, filterVisible, filterIva].filter(Boolean).length;
 
     const clearFilters = () => {
         setFilterCategory("");
+        setFilterSubcategory("");
         setFilterType("");
         setFilterStock("");
         setFilterVisible("");
@@ -44,6 +46,7 @@ export function useCatalog() {
             if (warehouseId) q.warehouse_id = warehouseId;
 
             if (filterCategory) q.category_id = filterCategory;
+            if (filterSubcategory) q.subcategory = filterSubcategory;
             if (filterType === "service") q.is_service = true;
             else if (filterType === "combo") q.is_combo = true;
             else if (filterType === "normal") { q.is_service = false; q.is_combo = false; }
@@ -59,13 +62,14 @@ export function useCatalog() {
         } finally {
             setLoading(false);
         }
-    }, [notify, debouncedSearch, limit, filterCategory, filterType, filterStock, filterVisible, filterIva]);
+    }, [notify, debouncedSearch, limit, filterCategory, filterSubcategory, filterType, filterStock, filterVisible, filterIva]);
 
     return {
         products, setProducts, loading, search, setSearch, debouncedSearch, loadProducts,
         can, categories, notify,
         page, setPage, totalProducts, limit,
         filterCategory, setFilterCategory,
+        filterSubcategory, setFilterSubcategory,
         filterType, setFilterType,
         filterStock, setFilterStock,
         filterVisible, setFilterVisible,

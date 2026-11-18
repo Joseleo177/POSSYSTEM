@@ -284,7 +284,7 @@ async function anotarVariantes(rows, warehouseId) {
 
 // visible_ids: almacenes de quien consulta (null = admin, toda la empresa). Sin una sucursal
 // elegida, acota la lista a lo de esos almacenes y la existencia a lo que hay en ellos.
-async function getAll({ search, barcode, category_id, is_combo, is_service, is_addon, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, iva_tipo, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
+async function getAll({ search, barcode, category_id, subcategory, is_combo, is_service, is_addon, warehouse_id, not_in_warehouse_id, stock_filter, visible_in_catalog, sellable, iva_tipo, for_purchase, variant_view, limit = 100, offset = 0, company_id, visible_ids = null }) {
   if (visible_ids && !visible_ids.length) return { data: [], total: 0, limit: parseInt(limit, 10), offset: parseInt(offset, 10) };
   const porVisibles = visible_ids && !warehouse_id;
   // Catálogo, POS y promociones usan warehouse_id para acotar a lo que ESA sucursal
@@ -296,6 +296,7 @@ async function getAll({ search, barcode, category_id, is_combo, is_service, is_a
   const where = {};
   if (company_id) where.company_id = company_id;
   if (category_id) where.category_id = category_id;
+  if (subcategory) where.subcategory = String(subcategory).trim();
   // Exacto, no como `search`: la ficha de producto pregunta si un código ya es de otro
   // producto de la empresa, y "759104" no puede casar con "7591049002252".
   if (barcode) where.barcode = String(barcode).trim();
@@ -682,6 +683,7 @@ async function createProduct({ body, file, company_id }) {
       name, price,
       stock: 0,
       category_id: category_id || null,
+      subcategory: String(body.subcategory ?? "").trim().slice(0, 100) || null,
       image_filename: imageValue,
       unit: unit || "unidad",
       qty_step: qty_step || 1,
@@ -939,6 +941,9 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       name: opt(name, product.name, product.name),
       price: (alcanceSucursal && !esGlobalSinFicha) ? product.price : precioFinal,
       category_id: opt(category_id, product.category_id),
+      subcategory: body.subcategory === undefined
+        ? product.subcategory
+        : (String(body.subcategory ?? "").trim().slice(0, 100) || null),
       image_filename: currentImageValue,
       unit: opt(unit, product.unit, "unidad"),
       qty_step: opt(qty_step, product.qty_step, 1),

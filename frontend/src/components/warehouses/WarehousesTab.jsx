@@ -194,7 +194,7 @@ export default function WarehousesTab({ notify, currentEmployee }) {
                     setFilter={setTransferFilter}
                     clearFilters={clearTransferFilters}
                     activeFilterCount={transferFilterCount}
-                    warehouses={sucursalesMarcadas}
+                    warehouses={warehouses.filter(w => w.active !== false)}
                     onOpenDetail={setTransferDetail}
                     onOpenReceive={setTransferReceiving}
                     canReceive={canReceive}
@@ -204,7 +204,10 @@ export default function WarehousesTab({ notify, currentEmployee }) {
             )}
 
             {subTab === "movimientos" && (
-                <MovementsView />
+                <MovementsView
+                    warehouses={warehouses.filter(w => w.active !== false)}
+                    selectedWarehouse={selectedWarehouse}
+                />
             )}
 
             {subTab === "ajustes" && (

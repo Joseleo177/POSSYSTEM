@@ -32,13 +32,15 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
     // `loadCategories` refresca la lista global (ficha del producto, filtros, caja). Esta
     // pestaña lleva la suya propia, con conteos, y sin avisar a la otra lo nuevo no aparecía
     // en el resto de la app hasta recargar la página.
-    const { company, loadCategories } = useApp();
+    const { company, settings, loadCategories } = useApp();
     const catalogEnabled = !!company?.catalog_enabled;
+    const subcatEnabled = settings?.subcategorias_enabled === "true";
     const [categories, setCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [modal, setModal] = useState(false);       // false | "new" | {id, name, color}
     const [deleteDialog, setDeleteDialog] = useState(null);
-    const [form, setForm] = useState({ name: "", color: COLOR_INICIAL, short_description: "" });
+    const [form, setForm] = useState({ name: "", color: COLOR_INICIAL, short_description: "", subcategories: [] });
+    const [subInput, setSubInput] = useState("");
     const [saving, setSaving] = useState(false);
     const [q, setQ] = useState("");
     // Foto de la categoría: solo la usa la vitrina pública. `file` es la nueva elegida y
@@ -56,7 +58,8 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
     useEffect(() => { load(); }, [load]);
 
     const openNew  = useCallback(() => {
-        setForm({ name: "", color: COLOR_INICIAL, short_description: "" });
+        setForm({ name: "", color: COLOR_INICIAL, short_description: "", subcategories: [] });
+        setSubInput("");
         setImage({ file: null, current: null, clearImage: false });
         setModal("new");
     }, []);
@@ -74,20 +77,50 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
     }, [triggerNew, openNew]);
 
     const openEdit = (cat) => {
-        setForm({ name: cat.name, color: cat.color || COLOR_INICIAL, short_description: cat.short_description || "" });
+        setForm({
+            name: cat.name,
+            color: cat.color || COLOR_INICIAL,
+            short_description: cat.short_description || "",
+            subcategories: Array.isArray(cat.subcategories) ? cat.subcategories : [],
+        });
+        setSubInput("");
         setImage({ file: null, current: cat.image_url || null, clearImage: false });
         setModal(cat);
+    };
+
+    const addSubcategory = () => {
+        const val = subInput.trim().replace(/\s+/g, " ").slice(0, 100);
+        if (!val) return;
+        setForm(p => {
+            const list = Array.isArray(p.subcategories) ? p.subcategories : [];
+            if (list.some(s => s.toLowerCase() === val.toLowerCase())) return p;
+            return { ...p, subcategories: [...list, val] };
+        });
+        setSubInput("");
+    };
+
+    const removeSubcategory = (sub) => {
+        setForm(p => ({
+            ...p,
+            subcategories: (p.subcategories || []).filter(s => s !== sub),
+        }));
     };
 
     const save = async () => {
         if (!form.name.trim()) return notify("El nombre es requerido", "err");
         setSaving(true);
         try {
+            const pend = subInput.trim().replace(/\s+/g, " ").slice(0, 100);
+            const currentSubs = Array.isArray(form.subcategories) ? form.subcategories : [];
+            const finalSubs = pend && !currentSubs.some(s => s.toLowerCase() === pend.toLowerCase())
+                ? [...currentSubs, pend]
+                : currentSubs;
+            const payload = { ...form, subcategories: finalSubs };
             if (modal === "new") {
-                await api.categories.create(form, image.file);
+                await api.categories.create(payload, image.file);
                 notify("Categoría creada");
             } else {
-                await api.categories.update(modal.id, form, image.file, image.clearImage);
+                await api.categories.update(modal.id, payload, image.file, image.clearImage);
                 notify("Categoría actualizada");
             }
             setModal(false);
@@ -164,6 +197,15 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                                                         {cat.short_description && (
                                                             <div className="text-[12px] text-content-subtle truncate">{cat.short_description}</div>
                                                         )}
+                                                        {subcatEnabled && Array.isArray(cat.subcategories) && cat.subcategories.length > 0 && (
+                                                            <div className="mt-1 flex flex-wrap gap-1">
+                                                                {cat.subcategories.map(sub => (
+                                                                    <span key={sub} className="inline-flex items-center px-2 py-0.5 rounded-md bg-surface-2 dark:bg-white/[0.06] text-[11px] font-medium text-content-subtle">
+                                                                        {sub}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </td>
@@ -214,9 +256,55 @@ export default function CategoriesTab({ notify, can, triggerNew }) {
                     <div>
                         <label className="label">Nombre <span className="text-red-500">*</span></label>
                         <input type="text" value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
-                            placeholder="Ej: Bebidas, Lácteos…" className="input h-10" autoFocus autoComplete="off"
+                            placeholder="Ej: Almuerzos, Bebidas, Lácteos…" className="input h-10" autoFocus autoComplete="off"
                             onKeyDown={e => e.key === "Enter" && save()} />
                     </div>
+
+                    {subcatEnabled && (
+                        <div>
+                            <label className="label">Subcategorías <span className="font-normal text-content-subtle">· opcional</span></label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="text"
+                                    value={subInput}
+                                    onChange={e => setSubInput(e.target.value)}
+                                    placeholder="Ej: Parrilla, Asados, Cocina…"
+                                    className="input h-10 flex-1"
+                                    autoComplete="off"
+                                    onKeyDown={e => {
+                                        if (e.key === "Enter") {
+                                            e.preventDefault();
+                                            addSubcategory();
+                                        }
+                                    }}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={addSubcategory}
+                                    disabled={!subInput.trim()}
+                                    className="btn-outline h-10 px-3.5 rounded-lg text-[13px] font-semibold shrink-0 disabled:opacity-40"
+                                >
+                                    + Agregar
+                                </button>
+                            </div>
+                            {Array.isArray(form.subcategories) && form.subcategories.length > 0 && (
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {form.subcategories.map(sub => (
+                                        <span key={sub} className="inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg bg-brand-500/10 border border-brand-500/30 text-[12px] font-semibold text-brand-700 dark:text-brand-300">
+                                            {sub}
+                                            <button type="button" onClick={() => removeSubcategory(sub)} aria-label={`Quitar ${sub}`}
+                                                className="w-4 h-4 rounded-full hover:bg-brand-500/20 flex items-center justify-center">
+                                                ×
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                            <p className="text-[11px] text-content-subtle mt-1.5">
+                                Permite clasificar productos dentro de esta categoría para filtrarlos en el catálogo y ver sus ventas por subcategoría en los reportes.
+                            </p>
+                        </div>
+                    )}
 
                     <div>
                         <label className="label">Color</label>

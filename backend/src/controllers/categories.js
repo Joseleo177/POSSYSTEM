@@ -1,7 +1,41 @@
-const { Category, Product } = require("../models");
+const { Category, Product, sequelize } = require("../models");
 const { imageUrl, saveImage, deleteImage } = require("../utils/imageStorage");
 const { visibleWarehouseIds } = require("../middleware/auth");
 const { condicionSucursal } = require("../services/products/productAccess");
+
+let _subcatReady = null;
+function ensureSubcatColumns() {
+  if (!_subcatReady) {
+    _subcatReady = sequelize.query(`
+      ALTER TABLE categories ADD COLUMN IF NOT EXISTS subcategories JSONB DEFAULT '[]'::jsonb;
+      ALTER TABLE products ADD COLUMN IF NOT EXISTS subcategory VARCHAR(100);
+    `).catch(() => {});
+  }
+  return _subcatReady;
+}
+
+function parseSubcategories(raw) {
+  if (raw === undefined) return undefined;
+  let arr = raw;
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    try { arr = JSON.parse(trimmed); }
+    catch { arr = trimmed.split(","); }
+  }
+  if (!Array.isArray(arr)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of arr) {
+    const s = String(item ?? "").trim().replace(/\s+/g, " ").slice(0, 100);
+    if (!s) continue;
+    const k = s.toLowerCase();
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(s);
+  }
+  return out;
+}
 
 // create y update filtran por company_id a mano, y no por el hook de tenant como hacía este
 // controlador antes.
@@ -19,11 +53,13 @@ const tenant = (req) => req.employee?.company_id ?? null;
 // aquí no cambia nada.
 const withUrl = (c) => {
   const j = typeof c.toJSON === "function" ? c.toJSON() : c;
-  return { ...j, image_url: imageUrl(j.image_filename) };
+  const subcategories = Array.isArray(j.subcategories) ? j.subcategories.map(s => String(s ?? "").trim()).filter(Boolean) : [];
+  return { ...j, subcategories, image_url: imageUrl(j.image_filename) };
 };
 
 const getAll = async (req, res) => {
   try {
+    await ensureSubcatColumns();
     // Las categorías son de la empresa, pero el conteo es de lo que ve quien consulta: a una
     // sucursal le decía "120 productos" en Víveres cuando ella maneja 10.
     const visibles = await visibleWarehouseIds(req);
@@ -50,12 +86,14 @@ const getAll = async (req, res) => {
 
 const create = async (req, res) => {
   try {
-    const { name, color, short_description } = req.body;
+    await ensureSubcatColumns();
+    const { name, color, short_description, subcategories } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "name es requerido" });
     const company_id = tenant(req);
+    const subcats = parseSubcategories(subcategories) ?? [];
     const [category, created] = await Category.findOrCreate({
       where: { name: name.trim(), company_id },
-      defaults: { name: name.trim(), color: color || null, short_description: short_description || null, company_id }
+      defaults: { name: name.trim(), color: color || null, short_description: short_description || null, subcategories: subcats, company_id }
     });
     if (!created) return res.status(409).json({ ok: false, message: "Categoría ya existe" });
 
@@ -74,12 +112,19 @@ const create = async (req, res) => {
 
 const update = async (req, res) => {
   try {
-    const { name, color, short_description } = req.body;
+    await ensureSubcatColumns();
+    const { name, color, short_description, subcategories } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "name es requerido" });
     const category = await Category.findOne({ where: { id: req.params.id, company_id: tenant(req) } });
     if (!category) return res.status(404).json({ ok: false, message: "Categoría no encontrada" });
 
-    const patch = { name: name.trim(), color: color || null, short_description: short_description || null };
+    const subcats = parseSubcategories(subcategories);
+    const patch = {
+      name: name.trim(),
+      color: color || null,
+      short_description: short_description || null,
+      ...(subcats !== undefined ? { subcategories: subcats } : {}),
+    };
 
     if (req.file) {
       const old = category.image_filename;

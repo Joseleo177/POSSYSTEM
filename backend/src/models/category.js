@@ -38,6 +38,12 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(160),
       allowNull: true,
       defaultValue: null
+    },
+    // Subcategorías definidas dentro de esta categoría (ej. ["Parrilla", "Asados"]).
+    subcategories: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      defaultValue: []
     }
   }, {
     sequelize,

@@ -10,8 +10,9 @@ export default function ProductTable({
     selectedProducts = [], onToggleSelect, onSelectAll, isSelectionMode = false,
     priceCurrency = "base", localCurrency = null, onToggleVisible, catalogEnabled = false
 }) {
-    const { baseCurrency, company } = useApp();
+    const { baseCurrency, company, settings } = useApp();
     const conIva = !!company?.iva_enabled;
+    const subcatEnabled = settings?.subcategorias_enabled === "true";
     const fmtPrice = (n) => {
         if (priceCurrency === "local" && localCurrency) {
             return fmtBase(parseFloat(n) * parseFloat(localCurrency.exchange_rate), localCurrency);
@@ -90,9 +91,16 @@ export default function ProductTable({
                             </div>
                         </td>
                         <td>
-                            <span className="text-[11px] font-semibold text-content-subtle uppercase tracking-wide">
-                                {p.category_name || "General"}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="text-[11px] font-semibold text-content-subtle uppercase tracking-wide">
+                                    {p.category_name || "General"}
+                                </span>
+                                {subcatEnabled && p.subcategory && (
+                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-surface-2 dark:bg-white/[0.06] text-content dark:text-white/80">
+                                        {p.subcategory}
+                                    </span>
+                                )}
+                            </div>
                         </td>
                         <td className="text-center">
                             {p.is_service ? (

@@ -22,7 +22,7 @@ const PIECE_UNIT = { area: "M2", length: "METRO" };
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO", "M2"];
 const EMPTY = {
-    name: "", price: "", stock: "", category_id: "", unit: "UNIDAD", qty_step: "1",
+    name: "", price: "", stock: "", category_id: "", subcategory: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
     is_combo: false, combo_items: [], is_service: false, barcode: "", bulk_price: "",
     brand: "", short_description: "", description: "", benefit_tag_ids: [],
@@ -40,7 +40,8 @@ const EMPTY = {
 // con ese código en vez de crear otro. onRegistered: avisa que se agregó a la sucursal, para
 // que la pantalla recargue su lista.
 export default function ProductModal({ open, onClose, onSave, editData, categories, loading, warehouseId, warehouseName, warehouseCount = 1, initialName = "", onPickExisting, onRegistered }) {
-    const { notify, activeCurrencies, company, can } = useApp();
+    const { notify, activeCurrencies, company, settings, can } = useApp();
+    const subcatEnabled = settings?.subcategorias_enabled === "true";
     const catalogEnabled = !!company?.catalog_enabled;
     // Extra por empresa: precio al mayor y textos de ficha para el catálogo PDF.
     const pdfEnabled = !!company?.catalogo_pdf_enabled;
@@ -107,6 +108,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         ? editData.warehouse_stock
                         : editData.stock,
                     category_id: editData.category_id || "",
+                    subcategory: editData.subcategory || "",
                     unit: editData.unit || "unidad",
                     qty_step: editData.qty_step || "1",
                     // Los combos no tienen presentación ni precio por bulto: esos campos les
@@ -576,7 +578,22 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     // de sus ingredientes y un servicio no tiene.
     const conStock = !!editData?.id && !form.is_combo && !form.is_service && !form.has_variants;
     // Unidades en caja de oración ("Unidad", "Kg") y no en mayúsculas.
-    const unidadLabel = (u) => u === "KG" ? "Kg" : u.charAt(0) + u.slice(1).toLowerCase();
+    const unidadLabel = (u) => {
+        if (!u) return "";
+        if (u === "KG") return "Kg";
+        if (u === "M2") return "m²";
+        if (u === "PORCION") return "Porción (und)";
+        return u.charAt(0) + u.slice(1).toLowerCase();
+    };
+
+    // Si el producto trae una unidad no estándar (ej. PORCION de recetas viejas), se suma
+    // a la lista para que el selector nunca quede vacío ni deseleccionado.
+    const unitOptions = useMemo(() => {
+        const list = [...UNITS];
+        const cur = (form.unit || "").toUpperCase();
+        if (cur && !list.includes(cur)) list.push(cur);
+        return list.map(u => ({ value: u, label: unidadLabel(u) }));
+    }, [form.unit]);
 
     // Acciones fijas al pie del modal: el formulario es largo (y con variantes, mucho) y había
     // que bajar hasta el final para guardar.
@@ -642,22 +659,54 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
 
                     {/* Información principal */}
                     <div className="flex-1 min-w-0 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-                            <div className="md:col-span-8">
-                                <label className="label">Nombre</label>
-                                <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input" placeholder="Ej. Harina de maíz 1 kg" />
-                            </div>
-                            <div className="md:col-span-4">
-                                <label className="label">Categoría</label>
-                                <CustomSelect
-                                    value={form.category_id}
-                                    onChange={val => set("category_id", val)}
-                                    options={[{ value: "", label: "Sin categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
-                                    placeholder="Sin categoría"
-                                    className="w-full"
-                                />
-                            </div>
-                        </div>
+                        {(() => {
+                            const catSel = (categories || []).find(c => String(c.id) === String(form.category_id));
+                            const sugeridas = subcatEnabled && Array.isArray(catSel?.subcategories) ? catSel.subcategories : [];
+                            const tieneSubcats = sugeridas.length > 0;
+                            return (
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
+                                    <div className={tieneSubcats ? "md:col-span-6" : "md:col-span-8"}>
+                                        <label className="label">Nombre</label>
+                                        <input value={form.name} onChange={e => set("name", e.target.value)} autoFocus className="input" placeholder="Ej. Harina de maíz 1 kg" />
+                                    </div>
+                                    <div className={tieneSubcats ? "md:col-span-3" : "md:col-span-4"}>
+                                        <label className="label">Categoría</label>
+                                        <CustomSelect
+                                            value={form.category_id}
+                                            onChange={val => {
+                                                const nuevaCat = (categories || []).find(c => String(c.id) === String(val));
+                                                const nuevasSubs = Array.isArray(nuevaCat?.subcategories) ? nuevaCat.subcategories : [];
+                                                setForm(prev => ({
+                                                    ...prev,
+                                                    category_id: val,
+                                                    subcategory: nuevasSubs.some(s => s.toLowerCase() === String(prev.subcategory || "").toLowerCase())
+                                                        ? prev.subcategory
+                                                        : "",
+                                                }));
+                                            }}
+                                            options={[{ value: "", label: "Sin categoría" }, ...categories.map(c => ({ value: String(c.id), label: c.name }))]}
+                                            placeholder="Sin categoría"
+                                            className="w-full"
+                                        />
+                                    </div>
+                                    {tieneSubcats && (
+                                        <div className="md:col-span-3">
+                                            <label className="label">Subcategoría</label>
+                                            <CustomSelect
+                                                value={form.subcategory || ""}
+                                                onChange={val => set("subcategory", val)}
+                                                options={[
+                                                    { value: "", label: "Sin subcategoría" },
+                                                    ...sugeridas.map(s => ({ value: s, label: s })),
+                                                ]}
+                                                placeholder="Sin subcategoría"
+                                                className="w-full"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })()}
 
                         {/* En el teléfono, unidad y existencia comparten fila (son cortas) y el
                             código y el precio van a lo ancho; en escritorio, todo en una línea. */}
@@ -667,7 +716,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                                 <CustomSelect
                                     value={form.unit}
                                     onChange={val => set("unit", val)}
-                                    options={UNITS.map(u => ({ value: u, label: unidadLabel(u) }))}
+                                    options={unitOptions}
                                     placeholder="Unidad de medida"
                                     className="w-full"
                                     disabled={!!form.piece_mode}

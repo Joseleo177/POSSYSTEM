@@ -21,7 +21,7 @@ async function getPayables({ warehouse_id, supplier_id, search }, req) {
     await assertWarehouseAccess(req, warehouse_id);
     where.push('p.warehouse_id = :wid'); rep.wid = parseInt(warehouse_id);
   } else {
-    const allowed = await scopeWarehouseIds(req);
+    const allowed = await scopeWarehouseIds(req, { includeDeposits: true });
     if (allowed) {
       const ids = allowed.filter(Number.isInteger);
       where.push(ids.length ? `(p.warehouse_id IN (${ids.join(',')}) OR p.warehouse_id IS NULL)` : 'p.warehouse_id IS NULL');

@@ -29,9 +29,9 @@ router.use(auth, moduloActivo);
 
 router.get   ("/preparations",          permit(...VER),            handle(req => svc.listPreparations(req, req.query)));
 router.get   ("/preparations/:id",      permit(...VER),            handle(req => svc.getPreparation(req, req.params.id, req.query)));
-router.post  ("/preparations",          permit("products.edit"),   handle(req => svc.createPreparation(req, req.body)));
-router.put   ("/preparations/:id",      permit("products.edit"),   handle(req => svc.savePreparation(req, req.params.id, req.body)));
-router.delete("/preparations/:id",      permit("products.edit"),   handle(req => svc.removePreparation(req, req.params.id)));
+router.post  ("/preparations",          permit("products.edit", "production.manage"), handle(req => svc.createPreparation(req, req.body)));
+router.put   ("/preparations/:id",      permit("products.edit", "production.manage"), handle(req => svc.savePreparation(req, req.params.id, req.body)));
+router.delete("/preparations/:id",      permit("products.edit", "production.manage"), handle(req => svc.removePreparation(req, req.params.id)));
 
 router.get   ("/batches",               permit(...VER),            handle(req => svc.listBatches(req, req.query)));
 router.get   ("/batches/:id",           permit(...VER),            handle(req => svc.getBatch(req, req.params.id)));

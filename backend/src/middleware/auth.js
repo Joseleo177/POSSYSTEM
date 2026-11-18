@@ -163,38 +163,56 @@ const selectedWarehouseIds = (req) => {
   return ids.length ? ids : null;
 };
 
-// Almacenes de la empresa, para validar lo que marca el admin. Cambian muy de vez en cuando:
-// 30 s de caché ahorran una consulta por petición mientras el admin navega con un filtro puesto.
+// Almacenes de la empresa, para validar lo que marca el admin y distinguir sucursales de
+// depósitos (`sells === false`).
 const companyWarehouseCache = new Map();
-const COMPANY_WAREHOUSES_TTL = 30_000;
-const companyWarehouseIds = async (companyId) => {
-  const hit = companyWarehouseCache.get(companyId);
-  if (hit && Date.now() - hit.t < COMPANY_WAREHOUSES_TTL) return hit.ids;
+const COMPANY_WAREHOUSES_TTL = 5_000;
+const invalidateCompanyWarehouses = (companyId) => {
+  if (companyId) companyWarehouseCache.delete(companyId);
+  else companyWarehouseCache.clear();
+};
+const companyWarehouseRows = async (companyId) => {
+  const key = companyId ?? 0;
+  const hit = companyWarehouseCache.get(key);
+  if (hit && Date.now() - hit.t < COMPANY_WAREHOUSES_TTL) return hit.rows;
   const { Warehouse } = require("../models");
-  const rows = await Warehouse.findAll({ attributes: ['id'], raw: true });
-  const ids = rows.map(r => r.id);
-  companyWarehouseCache.set(companyId, { t: Date.now(), ids });
-  return ids;
+  const rows = await Warehouse.findAll({
+    ...(companyId ? { where: { company_id: companyId } } : {}),
+    attributes: ['id', 'sells', 'active'],
+    raw: true,
+  });
+  companyWarehouseCache.set(key, { t: Date.now(), rows });
+  return rows;
 };
 
 // Almacenes que entran en un LISTADO o un REPORTE: los que el empleado puede ver, recortados a
-// los que marcó en la barra. Nunca amplía: una sucursal marcada que no le corresponde se ignora,
-// y si de lo marcado no queda nada se cae a lo permitido. `null` = el admin sin filtro.
-//
-// No sirve para autorizar: abrir, editar o cobrar algo de una sucursal asignada pero no marcada
-// sigue permitido (para eso están visibleWarehouseIds y assertWarehouseAccess).
-const scopeWarehouseIds = async (req) => {
+// los que marcó en la barra. Por defecto (`includeDeposits = false`) excluye los depósitos
+// (`sells === false`), que solo participan en Inventario, Transferencias y Compras.
+const scopeWarehouseIds = async (req, { includeDeposits = false } = {}) => {
   if (!req) return null;
-  if (req._scopeWarehouseIds !== undefined) return req._scopeWarehouseIds;
+  const cacheKey = includeDeposits ? "_scopeWarehouseIdsAll" : "_scopeWarehouseIds";
+  if (req[cacheKey] !== undefined) return req[cacheKey];
   const visibles = await visibleWarehouseIds(req);
   const marcadas = selectedWarehouseIds(req);
+  const rows = await companyWarehouseRows(req.company_id);
+  const tieneDepositos = rows.some(r => r.sells === false);
+  const sucursalIds = rows.filter(r => r.active !== false && r.sells !== false).map(r => r.id);
+  const todosIds = rows.map(r => r.id);
+
   let ids = visibles;
+  if (!includeDeposits) {
+    if (ids !== null) {
+      ids = ids.filter(id => sucursalIds.includes(id));
+    } else if (tieneDepositos) {
+      ids = sucursalIds;
+    }
+  }
   if (marcadas) {
-    const base = visibles ?? await companyWarehouseIds(req.company_id);
+    const base = ids ?? (includeDeposits ? todosIds : sucursalIds);
     const quedan = base.filter(id => marcadas.includes(id));
     if (quedan.length) ids = quedan;
   }
-  req._scopeWarehouseIds = ids;
+  req[cacheKey] = ids;
   return ids;
 };
 
@@ -246,4 +264,5 @@ const warehouseAccess = (getId = (req) => req.params.id, opts = {}) => async (re
 module.exports = {
   auth, permit, superuser, hasPermission, warehouseAccess, assertWarehouseAccess,
   visibleWarehouseIds, scopeWarehouseIds, selectedWarehouseIds, employeeWarehouseIds, isAdmin,
+  invalidateCompanyWarehouses,
 };

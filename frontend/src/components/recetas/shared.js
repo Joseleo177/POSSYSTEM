@@ -36,10 +36,10 @@ export const medidaTanda = (unit) => {
 
 // En qué se cuenta lo que sale de una preparación.
 export const UNIDADES_PREP = [
-    { key: "PORCION", label: "Porciones", suf: "porc." },
-    { key: "KG",      label: "Kilos",     suf: "kg" },
-    { key: "LITRO",   label: "Litros",    suf: "l" },
-    { key: "UNIDAD",  label: "Unidades",  suf: "und" },
+    { key: "UNIDAD",  label: "Unidades",          suf: "und" },
+    { key: "KG",      label: "Kilos",             suf: "kg" },
+    { key: "LITRO",   label: "Litros",            suf: "l" },
+    { key: "PORCION", label: "Porciones (und)",   suf: "porc." },
 ];
 
 // "28 porciones", "4,5 l": lo que rinde o hay de una preparación.

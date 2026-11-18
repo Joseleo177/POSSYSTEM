@@ -1,7 +1,7 @@
 const {
   Warehouse, ProductStock, EmployeeWarehouse, StockTransfer, Sale, Purchase, Sequelize, sequelize
 } = require("../../models");
-const { isAdmin, employeeWarehouseIds } = require("../../middleware/auth");
+const { isAdmin, employeeWarehouseIds, invalidateCompanyWarehouses } = require("../../middleware/auth");
 const { Op } = Sequelize;
 
 async function getAll(req) {
@@ -108,6 +108,7 @@ async function createWarehouse({ name, description, sort_order = 0, sells = true
   const parentId = (sells === false && parent_warehouse_id) ? parent_warehouse_id : null;
   try {
     const warehouse = await Warehouse.create({ name: name.trim(), description: description || null, sort_order, sells: sells !== false, parent_warehouse_id: parentId });
+    invalidateCompanyWarehouses();
     return { data: warehouse };
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -130,6 +131,7 @@ async function updateWarehouse(id, { name, description, active, sort_order, sell
   const parentId = (finalSells === false && parent_warehouse_id) ? parent_warehouse_id : null;
   try {
     await warehouse.update({ name: name.trim(), description: description || null, active: active ?? true, sort_order: sort_order ?? 0, sells: finalSells, parent_warehouse_id: parentId });
+    invalidateCompanyWarehouses();
     return { data: warehouse };
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError') {
@@ -166,6 +168,7 @@ async function deleteWarehouse(warehouseId) {
     await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouseId }, transaction });
     await warehouse.destroy({ transaction });
     await transaction.commit();
+    invalidateCompanyWarehouses();
     return { message: "Almacén eliminado exitosamente" };
   } catch (err) {
     await transaction.rollback();

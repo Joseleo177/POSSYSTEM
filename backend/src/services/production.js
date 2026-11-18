@@ -176,10 +176,25 @@ async function createPreparation(req, body = {}) {
         throw fail(`"${p.name}" no lleva existencia propia: una preparación tiene que poder guardarse`);
       }
       if (await RecipeSheet.findOne({ where: { product_id: p.id }, transaction })) throw fail(`"${p.name}" ya tiene ficha`);
-      // Lo que rinde una tanda se cuenta en la unidad del producto: tiene que ser una de estas.
-      if (!UNIDADES.includes(String(p.unit || "").toUpperCase())) {
+      const nextUnit = body.unit ? String(body.unit).toUpperCase() : String(p.unit || "").toUpperCase();
+      if (!UNIDADES.includes(nextUnit)) {
         throw fail(`"${p.name}" se cuenta en ${String(p.unit || "otra unidad").toLowerCase()}: una preparación va en porciones, kilos, litros o unidades`);
       }
+      const patch = {};
+      if (nextUnit !== p.unit) patch.unit = nextUnit;
+      if (body.name != null) {
+        const nextName = String(body.name || "").replace(/\s+/g, " ").trim();
+        if (nextName.length < 2 || nextName.length > 200) throw fail("Escribe el nombre de la preparación");
+        if (nextName.toLowerCase() !== String(p.name || "").trim().toLowerCase()) {
+          const dup = await Product.findOne({
+            where: { company_id: cid, id: { [Sequelize.Op.ne]: p.id }, name: { [Sequelize.Op.iLike]: nextName.replace(/[\\%_]/g, (m) => `\\${m}`) } },
+            attributes: ["id", "name"], transaction,
+          });
+          if (dup) throw fail(`Ya existe "${dup.name}"`, 409);
+        }
+        if (nextName !== p.name) patch.name = nextName;
+      }
+      if (Object.keys(patch).length) await p.update(patch, { transaction });
     } else {
       const name = String(body.name || "").replace(/\s+/g, " ").trim();
       if (name.length < 2 || name.length > 200) throw fail("Escribe el nombre de la preparación");
@@ -187,10 +202,18 @@ async function createPreparation(req, body = {}) {
       if (!UNIDADES.includes(unit)) throw fail("Elige en qué se cuenta: porciones, kilos, litros o unidades");
       const repetido = await Product.findOne({
         where: { company_id: cid, name: { [Sequelize.Op.iLike]: name.replace(/[\\%_]/g, (m) => `\\${m}`) } },
-        attributes: ["id", "name"], transaction,
+        transaction, lock: true,
       });
-      if (repetido) throw fail(`Ya existe "${repetido.name}"`, 409);
-      p = await Product.create({ name, unit, price: 0, cost_price: 0, sellable: false, qty_step: 1, company_id: cid }, { transaction });
+      if (repetido) {
+        const tieneFicha = await RecipeSheet.findOne({ where: { product_id: repetido.id }, transaction });
+        if (tieneFicha || repetido.is_combo || repetido.is_service || repetido.is_addon || repetido.is_variant_parent || repetido.piece_mode) {
+          throw fail(`Ya existe "${repetido.name}"`, 409);
+        }
+        await repetido.update({ name, unit }, { transaction });
+        p = repetido;
+      } else {
+        p = await Product.create({ name, unit, price: 0, cost_price: 0, sellable: false, qty_step: 1, company_id: cid }, { transaction });
+      }
     }
     await guardarFicha(req, cid, p, body, transaction);
     return p.id;
@@ -202,6 +225,25 @@ async function savePreparation(req, productId, body = {}) {
   const cid = companyOf(req);
   await sequelize.transaction(async (transaction) => {
     const { p } = await prepDe(cid, productId, transaction, true);
+    const patch = {};
+    if (body.name != null) {
+      const nextName = String(body.name || "").replace(/\s+/g, " ").trim();
+      if (nextName.length < 2 || nextName.length > 200) throw fail("Escribe el nombre de la preparación");
+      if (nextName.toLowerCase() !== String(p.name || "").trim().toLowerCase()) {
+        const dup = await Product.findOne({
+          where: { company_id: cid, id: { [Sequelize.Op.ne]: p.id }, name: { [Sequelize.Op.iLike]: nextName.replace(/[\\%_]/g, (m) => `\\${m}`) } },
+          attributes: ["id", "name"], transaction,
+        });
+        if (dup) throw fail(`Ya existe "${dup.name}"`, 409);
+      }
+      if (nextName !== p.name) patch.name = nextName;
+    }
+    if (body.unit != null) {
+      const nextUnit = String(body.unit || "").toUpperCase();
+      if (!UNIDADES.includes(nextUnit)) throw fail("Elige en qué se cuenta: porciones, kilos, litros o unidades");
+      if (nextUnit !== p.unit) patch.unit = nextUnit;
+    }
+    if (Object.keys(patch).length) await p.update(patch, { transaction });
     await guardarFicha(req, cid, p, body, transaction);
   });
   return getPreparation(req, productId, { warehouse_id: body.warehouse_id });

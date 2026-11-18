@@ -586,6 +586,17 @@ export default function SettingsTab({ notify }) {
                             </Seccion>
                         )}
 
+                        <Seccion titulo="Catálogo y clasificación" detalle="Subcategorías opcionales para agrupar productos y analizarlos en reportes." className="h-full">
+                            <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                <Interruptor
+                                    titulo="Habilitar subcategorías de productos"
+                                    detalle="Permite agregar subcategorías dentro de cada categoría, elegirlas en la ficha del producto y consultar el reporte de ventas por subcategoría."
+                                    checked={settings.subcategorias_enabled === "true"}
+                                    onChange={() => setSettings(p => ({ ...p, subcategorias_enabled: p.subcategorias_enabled === "true" ? "false" : "true" }))}
+                                />
+                            </div>
+                        </Seccion>
+
                         {/* Cobro a tasa de divisas: opción de cada comercio, apagada por defecto. Sin
                             ella no aparece el interruptor ni al facturar ni al cobrar, y el servidor
                             lo rechaza (services/sales/fxRate.js). */}

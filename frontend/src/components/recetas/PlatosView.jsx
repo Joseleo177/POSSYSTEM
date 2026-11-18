@@ -7,7 +7,6 @@ import { LedgerSkeleton, LedgerEmpty, ledgerRow } from "../ui/Ledger";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
 import { toNameCase, fmtBase } from "../../helpers";
 import Modal from "../ui/Modal";
-import { INPUT } from "../fabrica/shared";
 import RecipeSheetModal from "./RecipeSheetModal";
 import { fmtPct, foodCostTone } from "./shared";
 
@@ -37,10 +36,10 @@ function PlatoPicker({ open, platos, money, onPick, onClose }) {
         <Modal open={open} onClose={onClose} title="Nueva ficha técnica" width={520}>
             <div className="space-y-3">
                 <div className="relative">
-                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
-                    <input value={q} onChange={e => setQ(e.target.value)} className={`${INPUT} pl-9`} autoComplete="off" spellCheck={false}
+                    <input value={q} onChange={e => setQ(e.target.value)} className="input pl-9" autoComplete="off" spellCheck={false}
                         placeholder="¿De qué plato? Sancocho, pabellón…" data-autofocus />
                 </div>
                 {platos.length === 0 ? (
@@ -51,16 +50,16 @@ function PlatoPicker({ open, platos, money, onPick, onClose }) {
                 ) : lista.length === 0 ? (
                     <p className="py-8 text-center text-[13px] text-content-subtle">Ningún plato sin ficha coincide con «{q.trim()}».</p>
                 ) : (
-                    <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border/70 dark:border-white/10 divide-y divide-border/60 dark:divide-white/[0.06]">
+                    <div className="max-h-[55vh] overflow-y-auto rounded-lg border border-border dark:border-white/10 bg-white dark:bg-[#161821] divide-y divide-border/60 dark:divide-white/[0.06]">
                         {lista.map(p => (
                             <button key={p.product_id} type="button" onClick={() => onPick(p)}
-                                className="w-full flex items-center gap-3 px-3 py-2 min-h-12 text-left hover:bg-surface-2 dark:hover:bg-white/[0.04]">
+                                className="w-full flex items-center gap-3 px-3 py-2 min-h-12 text-left hover:bg-surface-2 dark:hover:bg-white/[0.04] transition-colors">
                                 <Thumb r={p} />
                                 <span className="flex-1 min-w-0">
                                     <span className="block text-[13px] font-medium text-content dark:text-white truncate">{toNameCase(p.name)}</span>
-                                    <span className="block text-[12px] text-content-subtle truncate">{p.category_name ? toNameCase(p.category_name) : "Sin categoría"}</span>
+                                    <span className="block text-[11px] text-content-subtle truncate">{p.category_name ? toNameCase(p.category_name) : "Sin categoría"}</span>
                                 </span>
-                                <Money value={money(p.price)} className="text-[13px] text-content dark:text-white shrink-0" />
+                                <Money value={money(p.price)} className="text-[13px] font-semibold text-content dark:text-white shrink-0 tabular-nums" />
                             </button>
                         ))}
                     </div>

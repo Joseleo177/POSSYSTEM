@@ -353,7 +353,7 @@ async function cancelTransfer(id, req) {
 // sale. Para el admin sin filtro no hay referencia posible, así que se ignora.
 async function visibilityWhere(req, warehouse_id, direction) {
   const where = {};
-  const visibleIds = await scopeWarehouseIds(req);
+  const visibleIds = await scopeWarehouseIds(req, { includeDeposits: true });
   if (Array.isArray(visibleIds) && visibleIds.length === 0) return null;
   if (warehouse_id && !isAdmin(req) && !(await employeeWarehouseIds(req.employee?.id)).includes(parseInt(warehouse_id))) {
     throw fail("No tienes acceso a este almacén", 403);
@@ -460,7 +460,7 @@ async function getTransferSummary(req) {
   const where = await visibilityWhere(req, warehouse_id);
   if (!where) return { data: { in_transit: 0, to_receive: 0, with_differences: 0 } };
 
-  const visibleIds = await scopeWarehouseIds(req);
+  const visibleIds = await scopeWarehouseIds(req, { includeDeposits: true });
 
   const [inTransit, withDiff] = await Promise.all([
     StockTransfer.count({ where: { ...where, status: 'sent' } }),

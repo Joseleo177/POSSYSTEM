@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { api } from "../../services/api";
 import { useApp } from "../../context/AppContext";
-import SucursalFilter, { useSucursalFilter } from "../ui/SucursalFilter";
+import CustomSelect from "../ui/CustomSelect";
 import StockQty, { splitQty } from "../ui/StockQty";
 import { useDebounce } from "../../hooks/useDebounce";
 import { resolveImageUrl, imgRetryOnError } from "../../helpers/image";
@@ -153,16 +153,30 @@ function ProductPicker({ warehouseId, onSelect, autoFocus }) {
 
 // Pestaña Movimientos de Inventario: buscar un producto y leer su historial completo —ventas,
 // compras, devoluciones, transferencias y ajustes— con la existencia después de cada uno.
-export default function MovementsView() {
-    const { employee } = useApp();
+export default function MovementsView({ warehouses = [], selectedWarehouse = null }) {
+    const { employee, sucursalActual } = useApp();
     const { RECENT_KEY } = claves(employee);
     const [product, setProduct] = useState(null);
     const [recent, setRecent] = useState(() => { const r = leer(RECENT_KEY, []); return Array.isArray(r) ? r : []; });
 
-    // El kardex se lee por sucursal (sumando todas, cada transferencia aparece dos veces: sale
-    // de una y entra en otra). Arranca en la actual; con varias marcadas se elige entre ellas.
-    const suc = useSucursalFilter({ todas: false });
-    const warehouseId = suc.warehouseId;
+    // En Inventario → Movimientos sí participan todos los almacenes propios (sucursales y
+    // depósitos) para consultar el kardex de entradas, salidas, compras y transferencias.
+    const [warehouseId, setWarehouseId] = useState(() =>
+        String(selectedWarehouse?.id || sucursalActual?.id || warehouses[0]?.id || "")
+    );
+
+    useEffect(() => {
+        if (selectedWarehouse?.id) {
+            setWarehouseId(String(selectedWarehouse.id));
+        } else if (!warehouseId && (sucursalActual?.id || warehouses[0]?.id)) {
+            setWarehouseId(String(sucursalActual?.id || warehouses[0]?.id));
+        }
+    }, [selectedWarehouse?.id, sucursalActual?.id, warehouses]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const whOptions = warehouses.map(w => ({
+        value: String(w.id),
+        label: w.sells === false ? `${toNameCase(w.name)} (Depósito)` : toNameCase(w.name),
+    }));
 
     const elegir = (p) => {
         setProduct(p);
@@ -176,10 +190,17 @@ export default function MovementsView() {
         <div className="flex-1 min-h-0 flex flex-col">
             {/* ── Buscador ── */}
             <div className="shrink-0 px-4 lg:px-6 py-3 border-b border-border/60 dark:border-white/[0.06] flex items-center gap-2">
-                {/* La existencia que muestra el buscador es la de la sucursal elegida, la misma
+                {/* La existencia que muestra el buscador es la del almacén elegido, la misma
                     del historial que se abre. Una sola fila también en el teléfono. */}
                 <ProductPicker warehouseId={warehouseId} onSelect={elegir} autoFocus={!product} />
-                <SucursalFilter filter={suc} className="w-[118px] sm:w-52 shrink-0" boxClassName="" />
+                {whOptions.length > 1 && (
+                    <CustomSelect
+                        value={warehouseId}
+                        onChange={setWarehouseId}
+                        options={whOptions}
+                        className="w-[140px] sm:w-56 shrink-0"
+                    />
+                )}
             </div>
 
             {product ? (

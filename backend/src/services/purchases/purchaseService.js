@@ -23,7 +23,7 @@ async function getAll({ limit = 50, offset = 0, search, status, order_status, da
     await assertWarehouseAccess(req, warehouse_id);
     where.warehouse_id = parseInt(warehouse_id);
   } else {
-    const allowedWarehouses = await scopeWarehouseIds(req);
+    const allowedWarehouses = await scopeWarehouseIds(req, { includeDeposits: true });
     if (allowedWarehouses) {
       // Va en Op.and porque el filtro de búsqueda de abajo ocupa Op.or: si se escribiera
       // ahí, uno pisaría al otro y el listado dejaría de estar acotado.

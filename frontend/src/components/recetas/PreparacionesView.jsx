@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useApp } from "../../context/AppContext";
 import { api } from "../../services/api";
 import Money from "../ui/Money";
+import ConfirmModal from "../ui/ConfirmModal";
 import { LedgerSkeleton, LedgerEmpty, ledgerRow, RowCta, stopRow } from "../ui/Ledger";
 import { toNameCase, fmtBase } from "../../helpers";
 import { fmtRinde } from "./shared";
@@ -12,12 +13,15 @@ import { fmtRinde } from "./shared";
 
 const sinAcentos = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
-export default function PreparacionesView({ warehouseId, sucursal, version, onOpen, onProduce }) {
-    const { baseCurrency, notify } = useApp();
+export default function PreparacionesView({ warehouseId, sucursal, version, onOpen, onProduce, onDeleted }) {
+    const { baseCurrency, notify, can } = useApp();
+    const canEdit = can("products.edit") || can("production.manage");
     const money = (n) => fmtBase(n, baseCurrency);
     const [rows, setRows] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [deleting, setDeleting] = useState(null);
+    const [localVer, setLocalVer] = useState(0);
 
     useEffect(() => {
         let vivo = true;
@@ -27,7 +31,7 @@ export default function PreparacionesView({ warehouseId, sucursal, version, onOp
             .catch(e => { if (vivo) notify(e?.message || "No se pudieron cargar las preparaciones", "err"); })
             .finally(() => { if (vivo) setLoading(false); });
         return () => { vivo = false; };
-    }, [warehouseId, version]);
+    }, [warehouseId, version, localVer]);
 
     const visibles = useMemo(() => {
         const q = sinAcentos(search.trim());
@@ -43,6 +47,7 @@ export default function PreparacionesView({ warehouseId, sucursal, version, onOp
     const enNegativo = (r) => r.stock != null && r.stock < 0;
 
     return (
+        <>
         <div className="flex-1 flex flex-col overflow-y-auto lg:overflow-hidden -mx-3 sm:-mx-4 -my-2">
             <div className="shrink-0 px-4 py-2 flex flex-wrap items-center gap-2 border-b border-border/20 dark:border-white/5">
                 <div className="relative flex-1 min-w-[180px] max-w-md">
@@ -65,7 +70,7 @@ export default function PreparacionesView({ warehouseId, sucursal, version, onOp
                                 <th className="w-[150px] text-right">Hay</th>
                                 <th className="w-[160px] text-right">Costo por unidad</th>
                                 <th className="w-[160px] text-right whitespace-nowrap">Costo de la tanda</th>
-                                <th className="w-[120px] pr-4" />
+                                <th className="w-[180px] pr-4" />
                             </tr>
                         </thead>
                         <tbody>
@@ -95,7 +100,23 @@ export default function PreparacionesView({ warehouseId, sucursal, version, onOp
                                             )}
                                         </td>
                                         <td className="pr-4" onClick={stopRow}>
-                                            <div className="flex justify-end">
+                                            <div className="flex items-center justify-end gap-1.5">
+                                                {canEdit && (
+                                                    <>
+                                                        <button type="button" onClick={() => onOpen(r)} title="Editar preparación" aria-label="Editar preparación"
+                                                            className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-content-subtle hover:text-content dark:hover:text-white hover:bg-surface-2 dark:hover:bg-white/[0.06] transition-colors">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                            </svg>
+                                                        </button>
+                                                        <button type="button" onClick={() => setDeleting(r)} title="Eliminar preparación" aria-label="Eliminar preparación"
+                                                            className="w-8 h-8 inline-flex items-center justify-center rounded-lg text-content-subtle hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors">
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                                            </svg>
+                                                        </button>
+                                                    </>
+                                                )}
                                                 {onProduce && <RowCta onClick={() => onProduce(r)}>Producir</RowCta>}
                                             </div>
                                         </td>
@@ -124,21 +145,50 @@ export default function PreparacionesView({ warehouseId, sucursal, version, onOp
                             <span className="text-[14px] font-semibold text-content dark:text-white truncate">{toNameCase(r.name)}</span>
                             <span className={`text-[13px] tabular-nums shrink-0 ${enNegativo(r) ? "text-red-600 dark:text-red-400 font-semibold" : "text-content dark:text-white"}`}>Hay {existencia(r)}</span>
                         </div>
-                        <div className="mt-1 flex items-end justify-between gap-3">
+                        <div className="mt-1 flex items-end justify-between gap-2">
                             <div className="min-w-0 text-[12px] text-content-subtle">
                                 <div className="truncate">{resumen(r)}</div>
                                 {r.unit_cost != null && <div className="truncate">Por unidad <Money value={money(r.unit_cost)} /></div>}
                             </div>
-                            {onProduce && (
-                                <button onClick={e => { e.stopPropagation(); onProduce(r); }}
-                                    className="btn-accent h-9 px-4 rounded-lg text-[13px] font-semibold shrink-0 active:scale-95">
-                                    Producir
-                                </button>
-                            )}
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={e => e.stopPropagation()}>
+                                {canEdit && (
+                                    <button type="button" onClick={() => setDeleting(r)} aria-label="Eliminar preparación"
+                                        className="w-9 h-9 inline-flex items-center justify-center rounded-lg border border-border dark:border-white/10 text-content-subtle hover:text-red-600 dark:hover:text-red-400">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                )}
+                                {onProduce && (
+                                    <button type="button" onClick={() => onProduce(r)}
+                                        className="btn-accent h-9 px-4 rounded-lg text-[13px] font-semibold shrink-0 active:scale-95">
+                                        Producir
+                                    </button>
+                                )}
+                            </div>
                         </div>
                     </div>
                 ))}
             </div>
         </div>
+
+        <ConfirmModal
+            isOpen={!!deleting}
+            title="Eliminar preparación"
+            message={deleting ? `¿Eliminar la preparación "${toNameCase(deleting.name)}"? Se borrará su ficha de tanda (el producto base y las tandas ya registradas se conservan).` : ""}
+            confirmText="Eliminar"
+            onCancel={() => setDeleting(null)}
+            onConfirm={async () => {
+                if (!deleting) return;
+                try {
+                    await api.production.removePreparation(deleting.product_id);
+                    notify("Preparación eliminada");
+                    setDeleting(null);
+                    setLocalVer(v => v + 1);
+                    onDeleted?.();
+                } catch (e) { notify(e?.message || "No se pudo eliminar la preparación", "err"); }
+            }}
+        />
+        </>
     );
 }

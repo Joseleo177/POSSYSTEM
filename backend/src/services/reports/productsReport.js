@@ -1,7 +1,7 @@
 const { sequelize, Sequelize } = require("../../models");
 const { sanitizeDate, dateClause, buildSerieScope, DISPATCHED_SQL } = require("./shared");
 
-async function productsReport({ date_from, date_to, serie_ids, limit = 20, company_id, tcS, tcP, rep, wh, allowedWarehouses, hours, warehouse_id }) {
+async function productsReport({ date_from, date_to, serie_ids, category_id, subcategory, limit = 20, company_id, tcS, tcP, rep, wh, allowedWarehouses, hours, warehouse_id }) {
   // Sucursal concreta: este reporte alimenta el detalle por producto del PDF de Ventas, que
   // tiene que cuadrar con los totales de esa pantalla cuando ella misma está acotada a una
   // sola sucursal. Mismo criterio que salesReport y marginsReport.
@@ -17,7 +17,24 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
   // Mismo recorte por serie que salesReport: este reporte alimenta el detalle por producto
   // del PDF de ventas, y con filtros distintos las líneas no sumarían el total que lo encabeza.
   const se = buildSerieScope(serie_ids);
-  const lim = parseInt(limit);
+  const lim = parseInt(limit) || 20;
+
+  const catId = category_id ? parseInt(category_id, 10) : null;
+  const subTxt = subcategory ? String(subcategory).trim() : null;
+  const repLocal = { ...rep };
+  let filtroCat = "";
+  if (catId && Number.isInteger(catId)) {
+    repLocal.catId = catId;
+    filtroCat += " AND p.category_id = :catId";
+  }
+  if (subTxt === "__none__") {
+    filtroCat += " AND (p.subcategory IS NULL OR TRIM(p.subcategory) = '')";
+  } else if (subTxt === "__any__") {
+    filtroCat += " AND p.subcategory IS NOT NULL AND TRIM(p.subcategory) <> ''";
+  } else if (subTxt) {
+    repLocal.subTxt = subTxt.toLowerCase();
+    filtroCat += " AND LOWER(TRIM(COALESCE(p.subcategory, ''))) = :subTxt";
+  }
 
   // Mismo criterio de "venta realizada" que salesReport y marginsReport: lo que salió del
   // inventario. Las anuladas quedan fuera —si no, productos que nunca se vendieron aparecían
@@ -33,11 +50,14 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
   const valueSale = `(SELECT COALESCE(SUM(qty * COALESCE(price, p.price)), 0)
                         FROM product_stock WHERE product_id = p.id AND company_id = p.company_id ${wh()})`;
 
-  const [topByRevenue, topByQty, slowMovers, stockValue] = await Promise.all([
+  const [topByRevenue, topByQty, bySubcategory, slowMovers, stockValue] = await Promise.all([
     sequelize.query(
       `SELECT si.product_id,
               si.name AS product_name,
               COALESCE(p.category_id, 0) AS category_id,
+              COALESCE(c.name, 'Sin categoría') AS category_name,
+              COALESCE(NULLIF(TRIM(p.subcategory), ''), '') AS subcategory,
+              COALESCE(p.unit, 'UNIDAD') AS unit,
               COUNT(DISTINCT si.sale_id)::int AS sale_count,
               COALESCE(SUM(si.quantity), 0)::float AS total_qty,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue,
@@ -45,23 +65,50 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
        LEFT JOIN products p ON si.product_id = p.id
-       WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS}
-       GROUP BY si.product_id, si.name, p.category_id
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS} ${filtroCat}
+       GROUP BY si.product_id, si.name, p.category_id, c.name, p.subcategory, p.unit
        ORDER BY total_revenue DESC
        LIMIT ${lim}`,
-      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+      { replacements: repLocal, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
-      `SELECT si.product_id, si.name AS product_name,
+      `SELECT si.product_id,
+              si.name AS product_name,
+              COALESCE(p.category_id, 0) AS category_id,
+              COALESCE(c.name, 'Sin categoría') AS category_name,
+              COALESCE(NULLIF(TRIM(p.subcategory), ''), '') AS subcategory,
+              COALESCE(p.unit, 'UNIDAD') AS unit,
+              COUNT(DISTINCT si.sale_id)::int AS sale_count,
+              COALESCE(SUM(si.quantity), 0)::float AS total_qty,
+              COALESCE(SUM(si.subtotal), 0)::float AS total_revenue,
+              COALESCE(AVG(si.price), 0)::float AS avg_price
+       FROM sale_items si
+       JOIN sales s ON si.sale_id = s.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN categories c ON p.category_id = c.id
+       WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS} ${filtroCat}
+       GROUP BY si.product_id, si.name, p.category_id, c.name, p.subcategory, p.unit
+       ORDER BY total_qty DESC
+       LIMIT ${lim}`,
+      { replacements: repLocal, type: Sequelize.QueryTypes.SELECT }
+    ),
+    sequelize.query(
+      `SELECT COALESCE(p.category_id, 0) AS category_id,
+              COALESCE(c.name, 'Sin categoría') AS category_name,
+              COALESCE(NULLIF(TRIM(p.subcategory), ''), '') AS subcategory,
+              COUNT(DISTINCT si.product_id)::int AS product_count,
+              COUNT(DISTINCT si.sale_id)::int AS sale_count,
               COALESCE(SUM(si.quantity), 0)::float AS total_qty,
               COALESCE(SUM(si.subtotal), 0)::float AS total_revenue
        FROM sale_items si
        JOIN sales s ON si.sale_id = s.id
+       LEFT JOIN products p ON si.product_id = p.id
+       LEFT JOIN categories c ON p.category_id = c.id
        WHERE TRUE ${tcS} ${wh('s')} ${se('s')} ${dS} ${stS}
-       GROUP BY si.product_id, si.name
-       ORDER BY total_qty DESC
-       LIMIT ${lim}`,
-      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+       GROUP BY p.category_id, c.name, COALESCE(NULLIF(TRIM(p.subcategory), ''), '')
+       ORDER BY total_qty DESC, total_revenue DESC`,
+      { replacements: repLocal, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
       `SELECT p.id, p.name,
@@ -78,7 +125,7 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
          )
        ORDER BY p.name ASC
        LIMIT 20`,
-      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+      { replacements: repLocal, type: Sequelize.QueryTypes.SELECT }
     ),
     sequelize.query(
       `SELECT
@@ -87,13 +134,14 @@ async function productsReport({ date_from, date_to, serie_ids, limit = 20, compa
          COALESCE(SUM(${valueCost}), 0)::float AS total_value_cost
        FROM products p
        WHERE is_combo = false AND is_service = false ${tcP}`,
-      { replacements: rep, type: Sequelize.QueryTypes.SELECT }
+      { replacements: repLocal, type: Sequelize.QueryTypes.SELECT }
     ),
   ]);
 
   return {
     top_by_revenue: topByRevenue,
     top_by_qty:     topByQty,
+    by_subcategory: bySubcategory,
     slow_movers:    slowMovers,
     stock_value:    stockValue[0] || { product_count: 0, total_value_sale: 0, total_value_cost: 0 },
   };

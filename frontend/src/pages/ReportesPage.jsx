@@ -4,6 +4,7 @@ import { useApp } from "../context/AppContext";
 import Page from "../components/ui/Page";
 
 import SalesReport from "./reportes/SalesReport";
+import SubcategoriasReport from "./reportes/SubcategoriasReport";
 import InventoryReport from "./reportes/InventoryReport";
 import MarginsReport from "./reportes/MarginsReport";
 import CustomersReport from "./reportes/CustomersReport";
@@ -19,8 +20,9 @@ import LibroVentasReport from "./reportes/LibroVentasReport";
 import DeclaracionIvaReport from "./reportes/DeclaracionIvaReport";
 
 const TABS = [
-  { key: "ventas",       label: "Ventas" },
-  { key: "inventario",   label: "Inventario" },
+  { key: "ventas",        label: "Ventas" },
+  { key: "subcategorias", label: "Subcategorías" },
+  { key: "inventario",    label: "Inventario" },
   { key: "margenes",     label: "Márgenes" },
   { key: "clientes",     label: "Clientes" },
   { key: "auditoria",    label: "Auditoría" },
@@ -37,7 +39,7 @@ const TABS = [
 ];
 
 const NAV_GROUPS = [
-  { label: "Comercial",   items: ["ventas", "margenes", "cobrar", "clientes"] },
+  { label: "Comercial",   items: ["ventas", "subcategorias", "margenes", "cobrar", "clientes"] },
   { label: "Inventario",  items: ["inventario", "mermas", "vencimientos", "compras"] },
   { label: "Operaciones", items: ["finanzas", "sesiones", "diarios", "auditoria"] },
 ];
@@ -51,8 +53,13 @@ export default function ReportesPage() {
   const [tab, setTab] = useState("ventas");
   const [openGroup, setOpenGroup] = useState(null);
   const navRef = useRef(null);
-  const { pendingAction, setPendingAction, company } = useApp();
-  const grupos = company?.iva_enabled ? [...NAV_GROUPS, FISCAL_GROUP] : NAV_GROUPS;
+  const { pendingAction, setPendingAction, company, settings } = useApp();
+  const subcatEnabled = settings?.subcategorias_enabled === "true";
+  const baseGroups = NAV_GROUPS.map(g => g.label === "Comercial"
+    ? { ...g, items: subcatEnabled ? ["ventas", "subcategorias", "margenes", "cobrar", "clientes"] : ["ventas", "margenes", "cobrar", "clientes"] }
+    : g
+  );
+  const grupos = company?.iva_enabled ? [...baseGroups, FISCAL_GROUP] : baseGroups;
 
   useEffect(() => {
     const handler = (e) => { if (navRef.current && !navRef.current.contains(e.target)) setOpenGroup(null); };
@@ -106,8 +113,9 @@ export default function ReportesPage() {
   return (
     <Page module="Analítica" title="Reportes" subheader={subheader}>
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        {tab === "ventas"       && <SalesReport />}
-        {tab === "inventario"   && <InventoryReport />}
+        {tab === "ventas"        && <SalesReport />}
+        {tab === "subcategorias" && <SubcategoriasReport />}
+        {tab === "inventario"    && <InventoryReport />}
         {tab === "margenes"     && <MarginsReport />}
         {tab === "clientes"     && <CustomersReport />}
         {tab === "auditoria"    && <AuditReport />}
