@@ -24,9 +24,11 @@ CREATE INDEX IF NOT EXISTS idx_products_active_ingredient
 -- 3. Precio por caja por sucursal (hereda de products.box_price si es NULL)
 ALTER TABLE product_stock ADD COLUMN IF NOT EXISTS box_price DECIMAL(14,5);
 
--- 4. Factor de stock y etiqueta de presentación en líneas de venta
+-- 4. Factor de stock, etiqueta de presentación y lotes FEFO en líneas de venta y transferencias
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS stock_factor DECIMAL(10,3) NOT NULL DEFAULT 1;
 ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS unit_label VARCHAR(40);
+ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS lot_allocations JSONB;
+ALTER TABLE stock_transfer_items ADD COLUMN IF NOT EXISTS lot_allocations JSONB;
 
 -- 5. PIN de autorización farmacéutica en empleados (bcrypt, 4–6 dígitos)
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS approval_pin_hash VARCHAR(255);
@@ -69,6 +71,10 @@ INSERT INTO "SequelizeMeta" (name)
 SELECT '20261123110000-farmacia-pin-permisos.js'
  WHERE NOT EXISTS (SELECT 1 FROM "SequelizeMeta" WHERE name = '20261123110000-farmacia-pin-permisos.js');
 
+INSERT INTO "SequelizeMeta" (name)
+SELECT '20261123120000-lotes-fefo.js'
+ WHERE NOT EXISTS (SELECT 1 FROM "SequelizeMeta" WHERE name = '20261123120000-lotes-fefo.js');
+
 COMMIT;
 
 -- Encender el extra en una farmacia (cambiar el id), o desde Gestión de Empresas → Editar → Rubros → Farmacia:
@@ -87,6 +93,8 @@ SELECT esperado.t AS tabla, esperado.c AS columna_faltante
     ('product_stock', 'box_price'),
     ('sale_items', 'stock_factor'),
     ('sale_items', 'unit_label'),
+    ('sale_items', 'lot_allocations'),
+    ('stock_transfer_items', 'lot_allocations'),
     ('employees', 'approval_pin_hash'),
     ('sale_prescriptions', 'patient_name'),
     ('sale_prescriptions', 'photo_filename'),

@@ -3,6 +3,7 @@ const {
 } = require("../../models");
 const { isAdmin, employeeWarehouseIds, assertWarehouseAccess, scopeWarehouseIds } = require("../../middleware/auth");
 const { toLocalDate, endOfLocalDay } = require("../../utils/localDate");
+const { consumeLotsFEFO, restoreLots, receiveLots } = require("../products/lotStock");
 const { Op } = Sequelize;
 
 // La transferencia es un documento de dos tiempos:
@@ -145,6 +146,12 @@ async function createTransfer(req) {
 
       // Sale del origen y queda en tránsito. El destino NO se toca hasta la recepción.
       await fromStock.decrement('qty', { by: parsedQty, transaction });
+      const lotAllocations = await consumeLotsFEFO({
+        warehouse_id: from_warehouse_id,
+        product_id: it.product_id,
+        qty: parsedQty,
+        transaction,
+      });
       await syncProductStock(it.product_id, transaction);
 
       created.push(await StockTransferItem.create({
@@ -156,6 +163,7 @@ async function createTransfer(req) {
         // Lo que costaba en el origen. Si esa sucursal nunca recibió una compra propia, el
         // del catálogo es la única referencia que hay.
         unit_cost:    fromStock.cost_price ?? product.cost_price ?? null,
+        lot_allocations: lotAllocations,
       }, { transaction }));
     }
 
@@ -207,6 +215,16 @@ async function receiveTransfer(id, req) {
           lock: true,
         });
         await toStock.increment('qty', { by: received, transaction });
+        if (line.lot_allocations?.length && sent > 0) {
+          await receiveLots({
+            allocations: line.lot_allocations,
+            warehouse_id: transfer.to_warehouse_id,
+            product_id: line.product_id,
+            ratio: received / sent,
+            company_id: transfer.company_id,
+            transaction,
+          });
+        }
 
         // El costo viaja con la mercancía: llega valorizada a lo que costó donde estaba. Sin
         // esto, un producto que la sucursal destino nunca compró se quedaba con el costo del
@@ -326,6 +344,15 @@ async function cancelTransfer(id, req) {
         lock: true,
       });
       await fromStock.increment('qty', { by: num(line.qty_sent), transaction });
+      if (line.lot_allocations?.length) {
+        await restoreLots({
+          allocations: line.lot_allocations,
+          warehouse_id: transfer.from_warehouse_id,
+          product_id: line.product_id,
+          company_id: transfer.company_id,
+          transaction,
+        });
+      }
       await syncProductStock(line.product_id, transaction);
     }
 

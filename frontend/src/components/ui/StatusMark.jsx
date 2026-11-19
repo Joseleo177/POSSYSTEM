@@ -53,6 +53,15 @@ export const PRESCRIPTION_STATUS = {
     libre:      { label: "Libre",      tone: "neutral", quiet: "check" },
 };
 
+// Estado de vencimiento de un lote: rojo = vencido, ámbar = ≤ 30 d, celeste = ventana droguería (≤ 180 d), gris = vigente.
+export const LOT_STATUS = {
+    expired: { label: "Vencido",    tone: "danger",  flag: true },
+    d30:     { label: "≤ 30 días",  tone: "warning", flag: true },
+    d90:     { label: "≤ 90 días",  tone: "warning" },
+    d180:    { label: "≤ 180 días", tone: "info" },
+    ok:      { label: "Vigente",    tone: "success", quiet: "check" },
+};
+
 export const statusTone = (status, map = SALE_STATUS) => {
     const s = map[status];
     return s?.flag ? TONES[s.tone].toneVar : undefined;

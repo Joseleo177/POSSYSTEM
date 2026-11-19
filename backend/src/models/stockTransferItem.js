@@ -26,6 +26,8 @@ module.exports = (sequelize, DataTypes) => {
     // loss | return — qué se hizo con el faltante al resolver la diferencia.
     diff_resolution: DataTypes.STRING(20),
     resolved_at:  DataTypes.DATE,
+    // Lotes descontados FEFO al despachar: [{ lot_id, lot_number, expiration_date, qty }].
+    lot_allocations: DataTypes.JSONB,
   }, {
     sequelize,
     tableName: 'stock_transfer_items',

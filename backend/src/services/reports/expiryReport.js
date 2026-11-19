@@ -15,21 +15,36 @@ async function expiryReport({ allowedWarehouses, warehouse_id } = {}) {
   const lots = await ProductLot.findAll({
     where,
     include: [
-      { model: Product,    as: 'product',   attributes: ['name', 'unit'] },
-      { model: Warehouse,  as: 'warehouse', attributes: ['name'] },
+      { model: Product,   as: 'product',   attributes: ['name', 'unit', 'cost_price', 'active_ingredient', 'shelf_location'] },
+      { model: Warehouse, as: 'warehouse', attributes: ['name'] },
     ],
-    order: [['expiration_date', 'ASC']],
+    order: [['expiration_date', 'ASC'], ['id', 'ASC']],
   });
 
-  return lots.map(l => ({
-    id:        l.id,
-    product:   l.product?.name    || 'Producto desconocido',
-    lot:       l.lot_number,
-    expiry:    l.expiration_date,
-    stock:     l.qty,
-    unit:      l.product?.unit    || 'uds',
-    warehouse: l.warehouse?.name  || 'N/A',
-  }));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return lots.map(l => {
+    const exp = new Date(`${l.expiration_date}T00:00:00`);
+    const days_left = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    const stock = parseFloat(l.qty || 0);
+    const cost_price = parseFloat(l.product?.cost_price || 0);
+    return {
+      id:                l.id,
+      product_id:        l.product_id,
+      product:           l.product?.name || 'Producto desconocido',
+      active_ingredient: l.product?.active_ingredient || null,
+      shelf_location:    l.product?.shelf_location || null,
+      lot:               l.lot_number,
+      expiry:            l.expiration_date,
+      days_left,
+      stock,
+      unit:              l.product?.unit || 'unidad',
+      cost_price,
+      value_at_risk:     parseFloat((stock * cost_price).toFixed(2)),
+      warehouse:         l.warehouse?.name || 'N/A',
+    };
+  });
 }
 
 module.exports = expiryReport;

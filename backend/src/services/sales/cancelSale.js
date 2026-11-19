@@ -2,6 +2,7 @@ const { Sale, SaleItem, Product, ProductStock, Op, sequelize } = require("./shar
 
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { consumoDeLinea } = require("../products/recipeStock");
+const { restoreLots } = require("../products/lotStock");
 
 module.exports = async function cancelSale(id, req) {
   const transaction = await sequelize.transaction();
@@ -71,6 +72,15 @@ module.exports = async function cancelSale(id, req) {
         });
         const qtyToRestore = parseFloat((parseFloat(item.quantity) * parseFloat(item.stock_factor || 1)).toFixed(3));
         await stockEntry.increment("qty", { by: qtyToRestore, transaction });
+        if (item.lot_allocations?.length) {
+          await restoreLots({
+            allocations: item.lot_allocations,
+            warehouse_id: sale.warehouse_id,
+            product_id: item.product_id,
+            company_id: sale.company_id,
+            transaction,
+          });
+        }
 
         const totalStock = await ProductStock.sum("qty", {
           where: { product_id: item.product_id },

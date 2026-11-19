@@ -44,7 +44,9 @@ module.exports = (sequelize, DataTypes) => {
     // Factor de descuento en inventario (módulo Farmacia): 1 = unidad mínima, package_size = caja.
     // Anulaciones y devoluciones multiplican quantity * stock_factor para reponer exactamente.
     stock_factor: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 1 },
-    unit_label: { type: DataTypes.STRING(40), allowNull: true }
+    unit_label: { type: DataTypes.STRING(40), allowNull: true },
+    // Lotes descontados en FEFO al vender: [{ lot_id, lot_number, expiration_date, qty }].
+    lot_allocations: { type: DataTypes.JSONB, allowNull: true }
   }, {
     sequelize,
     tableName: 'sale_items',

@@ -5,6 +5,7 @@ const {
 const { assertWarehouseAccess } = require("../../middleware/auth");
 const { excludeAnnulledReturns, factorDevolucion, saleDebt, refreshSaleStatus, settleSurplus, defaultSurplusMode } = require("./shared");
 const { consumoDeLinea } = require("../products/recipeStock");
+const { restoreLots } = require("../products/lotStock");
 
 async function createReturn({ saleId, items, reason, employee_id, refund, surplus_mode }, req) {
   if (!items?.length) { const e = new Error("Debes indicar al menos un producto a devolver"); e.status = 400; throw e; }
@@ -174,6 +175,16 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
           });
           const qtyToRestore = parseFloat((parseFloat(line.qty) * parseFloat(vendida?.stock_factor || 1)).toFixed(3));
           await stockEntry.increment("qty", { by: qtyToRestore, transaction });
+          if (vendida?.lot_allocations?.length && parseFloat(vendida.quantity) > 0) {
+            await restoreLots({
+              allocations: vendida.lot_allocations,
+              warehouse_id: sale.warehouse_id,
+              product_id: line.product_id,
+              ratio: parseFloat(line.qty) / parseFloat(vendida.quantity),
+              company_id: sale.company_id,
+              transaction,
+            });
+          }
           const totalStock = await ProductStock.sum("qty", { where: { product_id: line.product_id }, transaction });
           await Product.update({ stock: totalStock || 0 }, { where: { id: line.product_id }, transaction });
         }

@@ -26,6 +26,7 @@ const { leerTasaDivisas, tienePagoEnDivisas } = require("./fxRate");
 const { assertTable } = require("../tables");
 const { componentesConStock } = require("../products/comboStock");
 const { vendeSinInsumo, fotoConsumo } = require("../products/recipeStock");
+const { consumeLotsFEFO } = require("../products/lotStock");
 const { sellerForSale } = require("../commissions");
 const { propinaDeVenta } = require("../tips");
 
@@ -521,6 +522,25 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         if (costo != null) unitCost = parseFloat((parseFloat(costo) * (entry.stockFactor || 1)).toFixed(5));
       }
 
+      let lotAllocations = null;
+      if (entry.isService) {
+        // no-op
+      } else if (entry.isCombo) {
+        for (const ing of entry.ingredientsData) {
+          if (ing.servicio) continue;
+          await ing.stockEntry.decrement("qty", { by: ing.qtyNeeded, transaction });
+          await consumeLotsFEFO({ warehouse_id, product_id: ing.ingredient.id, qty: ing.qtyNeeded, transaction });
+          const totalStock = await ProductStock.sum("qty", { where: { product_id: ing.ingredient.id }, transaction });
+          await ing.ingredient.update({ stock: totalStock || 0 }, { transaction });
+        }
+      } else {
+        const deducted = entry.qtyToDeduct ?? entry.qty;
+        await entry.stockEntry.decrement("qty", { by: deducted, transaction });
+        lotAllocations = await consumeLotsFEFO({ warehouse_id, product_id: entry.product.id, qty: deducted, transaction });
+        const totalStock = await ProductStock.sum("qty", { where: { product_id: entry.product.id }, transaction });
+        await entry.product.update({ stock: totalStock || 0 }, { transaction });
+      }
+
       await SaleItem.create(
         {
           sale_id: sale.id,
@@ -542,24 +562,10 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
           stock_factor: entry.stockFactor || 1,
           unit_label: entry.unitLabel || null,
+          lot_allocations: lotAllocations,
         },
         { transaction }
       );
-
-      if (entry.isService) {
-        // no-op
-      } else if (entry.isCombo) {
-        for (const ing of entry.ingredientsData) {
-          if (ing.servicio) continue;
-          await ing.stockEntry.decrement("qty", { by: ing.qtyNeeded, transaction });
-          const totalStock = await ProductStock.sum("qty", { where: { product_id: ing.ingredient.id }, transaction });
-          await ing.ingredient.update({ stock: totalStock || 0 }, { transaction });
-        }
-      } else {
-        await entry.stockEntry.decrement("qty", { by: entry.qtyToDeduct ?? entry.qty, transaction });
-        const totalStock = await ProductStock.sum("qty", { where: { product_id: entry.product.id }, transaction });
-        await entry.product.update({ stock: totalStock || 0 }, { transaction });
-      }
     }
 
     // Guardar registro del récipe (obligatorio en controlados, opcional en récipe común, o si hubo autorización PIN).
