@@ -212,6 +212,17 @@ const MODULES = [
     ],
   },
   {
+    // Módulo Farmacia: solo en empresas con companies.farmacia_enabled. Fuera de todo LEGACY_MAP:
+    // un cajero normal no puede despachar controlados sin la autorización (PIN) de un regente.
+    key: 'pharmacy',
+    label: 'Farmacia',
+    actions: [
+      { key: 'sell_recipe',        label: 'Vender medicamentos con récipe médico sin supervisión' },
+      { key: 'approve_controlled', label: 'Autorizar y despachar controlados / psicotrópicos (con PIN)' },
+      { key: 'reports',            label: 'Ver el libro de control de récipes y sus fotos' },
+    ],
+  },
+  {
     key: 'reports',
     label: 'Reportes',
     actions: [

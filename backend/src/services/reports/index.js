@@ -13,4 +13,5 @@ module.exports = {
   libroVentasReport: require("./libroVentasReport"),
   libroComprasReport: require("./libroComprasReport"),
   mermasReport:      require("./mermasReport"),
+  prescriptionsReport: require("./prescriptionsReport"),
 };

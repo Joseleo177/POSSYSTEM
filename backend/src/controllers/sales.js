@@ -2,6 +2,7 @@ const salesService = require("../services/sales");
 const { broadcast } = require("../services/sseService");
 const { scopeWarehouseIds, assertWarehouseAccess } = require("../middleware/auth");
 const { getReceivables, setSaleDueDate } = require("../services/sales/receivables");
+const { saveImage, imageUrl } = require("../utils/imageStorage");
 
 // PATCH /api/sales/:id
 const update = async (req, res) => {
@@ -220,4 +221,47 @@ const setDueDate = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, removeFxRate, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate };
+// POST /api/sales/prescription-photo — sube la foto del récipe médico (módulo Farmacia)
+const uploadPrescriptionPhoto = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, message: "Debes adjuntar la foto del récipe" });
+    const photo_filename = await saveImage(req.file, "recipe");
+    res.status(201).json({ ok: true, data: { photo_filename, photo_url: imageUrl(photo_filename) } });
+  } catch (err) {
+    res.status(err.status || 500).json({ ok: false, message: err.message });
+  }
+};
+
+// GET /api/sales/pharmacy-approvers — empleados activos con permiso pharmacy.approve_controlled
+// para que el cajero elija al farmacéutico/supervisor que ingresará su PIN en caja.
+const getPharmacyApprovers = async (req, res) => {
+  try {
+    const { Employee, Role } = require("../models");
+    const { effectivePermissions } = require("../config/permissions");
+    const { hasPermission } = require("../middleware/auth");
+    const emps = await Employee.findAll({
+      where: { active: true },
+      attributes: ["id", "full_name", "username", "permission_overrides", "approval_pin_hash"],
+      include: [{ model: Role, attributes: ["permissions", "label"] }],
+      order: [["full_name", "ASC"]],
+    });
+    const data = emps
+      .filter(e => {
+        const perms = effectivePermissions(e.Role?.permissions, e.permission_overrides);
+        return hasPermission(perms, "pharmacy.approve_controlled");
+      })
+      .map(e => ({
+        id: e.id,
+        full_name: e.full_name,
+        username: e.username,
+        role_label: e.Role?.label || null,
+        has_pin: !!e.approval_pin_hash,
+      }));
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ ok: false, message: "Error al obtener autorizadores" });
+  }
+};
+
+module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, removeFxRate, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate, uploadPrescriptionPhoto, getPharmacyApprovers };

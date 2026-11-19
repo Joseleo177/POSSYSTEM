@@ -20,6 +20,8 @@ export default function ProductGrid({
     loadMore, loadingMore, hasMore,
     notify,
     activePromos = [],
+    farmaciaEnabled = false,
+    onOpenEquivalents,
 }) {
     const sentinelRef = useRef(null);
     const scrollRef = useRef(null);
@@ -102,7 +104,7 @@ export default function ProductGrid({
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         onKeyDown={onSearchKeyDown}
-                        placeholder="Buscar producto... (F1)"
+                        placeholder={farmaciaEnabled ? "Buscar producto, principio activo, laboratorio... (F1)" : "Buscar producto... (F1)"}
                         className="input !pl-10 w-full"
                         // Sin esto el navegador despliega su historial de formularios encima
                         // de la grilla y tapa los productos.
@@ -181,6 +183,14 @@ export default function ProductGrid({
                                         </div>
                                     )}
 
+                                    {/* Señal de control sanitario (módulo Farmacia): mismo lenguaje sobrio que StockBand/StatusMark */}
+                                    {farmaciaEnabled && (p.prescription_type === "controlado" || p.prescription_type === "recipe") && (
+                                        <div className="absolute top-1.5 left-1.5 lg:top-2.5 lg:left-2.5 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-black/65 backdrop-blur-sm ring-1 ring-inset ring-white/10 text-white text-[9px] lg:text-[10.5px] font-semibold pointer-events-none">
+                                            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${p.prescription_type === "controlado" ? "bg-red-500 ring-2 ring-red-500/30" : "bg-amber-400 ring-2 ring-amber-400/30"}`} />
+                                            {p.prescription_type === "controlado" ? "Controlado" : "Récipe"}
+                                        </div>
+                                    )}
+
                                     {/* Existencia en franja al pie de la foto, como en Inventario y
                                         Catálogo: oscura para todo, roja si se agotó, punto ámbar si
                                         está bajo el mínimo (ver ui/StockQty). */}
@@ -199,6 +209,11 @@ export default function ProductGrid({
                                         {p.is_variant_parent && ` · ${p.variant_count} ${p.variant_count === 1 ? "opción" : "opciones"}`}
                                     </div>
                                     <div className="text-[9px] lg:text-xs font-bold uppercase line-clamp-2 dark:text-white tracking-tight leading-none h-4 lg:h-8">{p.name}</div>
+                                    {farmaciaEnabled && (p.active_ingredient || p.shelf_location) && (
+                                        <div className="text-[8.5px] lg:text-[11px] text-content-subtle truncate leading-tight">
+                                            {[p.active_ingredient, p.concentration, p.shelf_location].filter(Boolean).join(" · ")}
+                                        </div>
+                                    )}
                                     <div className="mt-0.5">
                                         <div className="text-[10px] lg:text-lg font-bold dark:text-white font-display tabular-nums leading-none">{fmt(convertToDisplay(p.price), currSym)}</div>
                                         {secondaryCurrency && (
@@ -207,6 +222,19 @@ export default function ProductGrid({
                                             </div>
                                         )}
                                     </div>
+                                    {farmaciaEnabled && p.active_ingredient && onOpenEquivalents && (
+                                        <div className="mt-1.5 pt-1.5 border-t border-black/5 dark:border-white/5">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => { e.stopPropagation(); onOpenEquivalents(p); }}
+                                                className={`w-full px-2 py-1 rounded-lg text-[9px] lg:text-[10.5px] font-bold transition-colors ${agotado(p)
+                                                    ? "bg-brand-500 text-brand-ink hover:brightness-105"
+                                                    : "bg-surface-2 dark:bg-white/10 text-content-subtle hover:text-content dark:hover:text-white"}`}
+                                            >
+                                                Equivalentes
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             );

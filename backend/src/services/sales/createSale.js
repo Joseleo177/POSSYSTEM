@@ -14,7 +14,11 @@ const {
   sequelize,
   PAYMENT_METHODS,
 } = require("./shared");
-const { Quotation, QuotationItem, Seller } = require("../../models");
+const bcrypt = require("bcryptjs");
+const { Quotation, QuotationItem, Seller, Company, SalePrescription, Role } = require("../../models");
+const { effectivePermissions } = require("../../config/permissions");
+const { hasPermission } = require("../../middleware/auth");
+const { imageUrl } = require("../../utils/imageStorage");
 const { cargarPromosActivas, calcLineDiscount } = require("./promoDiscounts");
 const { cargarMayor, decidirMayor } = require("./precioMayor");
 const { leerDescuentoLinea, calcDescuentoLinea, assertDescuentosPermitidos } = require("./lineDiscount");
@@ -36,11 +40,15 @@ async function formatSale(saleId) {
       { model: Warehouse, attributes: ["name"] },
       { model: Serie, attributes: ["name", "prefix", "padding"] },
       { model: Seller, as: "Seller", attributes: ["name", "code"], required: false },
+      { model: SalePrescription, as: "prescription", required: false },
       { model: SaleItem },
     ],
   });
 
   const data = fullSale.toJSON();
+  if (data.prescription) {
+    data.prescription.photo_url = imageUrl(data.prescription.photo_filename);
+  }
   data.customer_name = data.Customer?.name ?? null;
   data.customer_rif  = data.Customer?.rif ?? null;
   data.employee_name = data.Employee?.full_name ?? null;
@@ -130,6 +138,13 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
     if (almacenVenta && almacenVenta.sells === false) {
       throw new Error(`${almacenVenta.name} es un depósito: no se puede facturar desde ahí`);
     }
+    const companyIdVenta = almacenVenta?.company_id ?? req?.company_id ?? req?.employee?.company_id ?? null;
+    const empresaVenta = companyIdVenta
+      ? await Company.findByPk(companyIdVenta, { attributes: ["farmacia_enabled"], transaction })
+      : null;
+    const farmaciaActiva = !!empresaVenta?.farmacia_enabled;
+    let hasControlado = false;
+    let hasRecipe = false;
     if (!serie_id) throw new Error("La serie es requerida");
 
     const serie = await Serie.findByPk(serie_id, { transaction });
@@ -248,12 +263,30 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         ...(descuentaStock ? { lock: true } : {}),
       });
 
-      // Orden: lo pactado en la cotización, si no el precio de esta sucursal, si no el general.
-      // Sin conexión manda el precio con que se cobró.
+      // Venta por caja (módulo Farmacia): si la línea viene como caja y el producto tiene
+      // empaque (> 1 unidad mínima), se usa el precio por caja de la sucursal (o el general)
+      // y se descuenta `quantity * package_size` unidades exactas del inventario.
+      const pkgSize = parseFloat(product.package_size);
+      const boxPriceSuc = fichaSucursal?.box_price ?? product.box_price;
+      const esCaja = !product.is_service && !product.is_combo && item.sell_as === 'box' && pkgSize > 1;
+      const stockFactor = offline
+        ? (parseFloat(item.stock_factor) > 0 ? parseFloat(item.stock_factor) : (esCaja ? pkgSize : 1))
+        : (esCaja ? pkgSize : 1);
+      const unitLabel = item.unit_label
+        ? String(item.unit_label).trim().slice(0, 40)
+        : (esCaja ? `${product.package_unit || 'Caja'} x${pkgSize}` : (product.unit || null));
+
+      if (product.prescription_type === 'controlado') hasControlado = true;
+      if (product.prescription_type === 'recipe') hasRecipe = true;
+
+      // Orden: lo pactado en la cotización, si no el precio por caja (si aplica), si no el
+      // precio de esta sucursal, si no el general. Sin conexión manda el precio con que se cobró.
       let rawPrice;
       if (offline) {
         rawPrice = parseFloat(item.price);
         if (!Number.isFinite(rawPrice) || rawPrice < 0) throw new Error(`Precio inválido para "${product.name}"`);
+      } else if (esCaja && boxPriceSuc != null) {
+        rawPrice = parseFloat(boxPriceSuc);
       } else {
         rawPrice = precioPactado.has(product.id)
           ? precioPactado.get(product.id)
@@ -266,7 +299,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
       if (offline) {
         const lp = parseFloat(item.list_price);
         if (item.wholesale === true && Number.isFinite(lp) && lp >= 0) { alMayor = true; listPrice = lp; }
-      } else if (mayorDe[idx]) {
+      } else if (!esCaja && mayorDe[idx]) {
         alMayor = true;
         listPrice = rawPrice;
         rawPrice = mayorDe[idx].price;
@@ -335,14 +368,72 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
 
         const currentQty = parseFloat(stockEntry?.qty || 0);
+        const qtyToDeduct = parseFloat((item.quantity * stockFactor).toFixed(3));
         if (offline) {
-          if (currentQty < item.quantity) stockNegativo.push(product.name);
-        } else if (currentQty < item.quantity) {
-          throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}`);
+          if (currentQty < qtyToDeduct) stockNegativo.push(product.name);
+        } else if (currentQty < qtyToDeduct) {
+          throw new Error(`Stock insuficiente para "${product.name}" en este almacén. Disponible: ${currentQty}, Requerido: ${qtyToDeduct}`);
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
+        enrichedItems.push({ product, qty: item.quantity, stockFactor, unitLabel, qtyToDeduct, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
+      }
+    }
+
+    // Control de récipes y psicotrópicos (módulo Farmacia):
+    // - Controlado: siempre exige foto + datos + permiso `pharmacy.approve_controlled` (propio
+    //   del cajero o autorizado con PIN/clave de un Farmacéutico Regente / supervisor).
+    // - Con récipe: si el cajero no tiene `pharmacy.sell_recipe` ni `pharmacy.approve_controlled`,
+    //   también exige autorización por PIN del farmacéutico/supervisor.
+    const rx = body.prescription && typeof body.prescription === 'object' ? body.prescription : null;
+    let approvedById = null;
+    if (farmaciaActiva && (hasControlado || hasRecipe) && !hold && !offline) {
+      const empPerms = req?.employee?.permissions || {};
+      const canApprove = hasPermission(empPerms, "pharmacy.approve_controlled");
+      const canSellRecipe = canApprove || hasPermission(empPerms, "pharmacy.sell_recipe");
+
+      if (hasControlado) {
+        const faltaPaciente = !String(rx?.patient_name || "").trim() || !String(rx?.patient_id_doc || "").trim();
+        const faltaMedico = !String(rx?.doctor_name || "").trim();
+        if (faltaPaciente || faltaMedico) {
+          const e = new Error("Esta venta incluye medicamentos controlados/psicotrópicos: debes indicar los datos del paciente y médico");
+          e.status = 400;
+          throw e;
+        }
+      }
+
+      const needsSupervisorPin = (hasControlado && !canApprove) || (!hasControlado && hasRecipe && !canSellRecipe);
+      if (needsSupervisorPin) {
+        const approverPin = String(rx?.approver_pin || "").trim();
+        if (!approverPin) {
+          const e = new Error("Se requiere el PIN de autorización de un Farmacéutico / Supervisor para despachar este medicamento");
+          e.status = 403;
+          throw e;
+        }
+        // Se busca entre los empleados activos de la empresa con permiso de autorizar quién es el dueño del PIN.
+        const candidatos = await Employee.findAll({
+          where: { active: true },
+          include: [{ model: Role, attributes: ["permissions"] }],
+          transaction,
+        });
+        let matched = null;
+        for (const emp of candidatos) {
+          const perms = effectivePermissions(emp.Role?.permissions, emp.permission_overrides);
+          if (!hasPermission(perms, "pharmacy.approve_controlled")) continue;
+          const hashToCheck = emp.approval_pin_hash || emp.password_hash;
+          if (hashToCheck && await bcrypt.compare(approverPin, hashToCheck)) {
+            matched = emp;
+            break;
+          }
+        }
+        if (!matched) {
+          const e = new Error("PIN de autorización inválido");
+          e.status = 403;
+          throw e;
+        }
+        approvedById = matched.id;
+      } else if (hasControlado && canApprove) {
+        approvedById = req?.employee?.id || employee_id || null;
       }
     }
 
@@ -427,7 +518,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         unitCost = entry.qty > 0 ? parseFloat((comboCost / entry.qty).toFixed(5)) : null;
       } else {
         const costo = entry.stockEntry?.cost_price ?? entry.product.cost_price;
-        if (costo != null) unitCost = parseFloat(costo);
+        if (costo != null) unitCost = parseFloat((parseFloat(costo) * (entry.stockFactor || 1)).toFixed(5));
       }
 
       await SaleItem.create(
@@ -449,6 +540,8 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           note: entry.note,
           seat: entry.seat ?? null,
           components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
+          stock_factor: entry.stockFactor || 1,
+          unit_label: entry.unitLabel || null,
         },
         { transaction }
       );
@@ -463,10 +556,28 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           await ing.ingredient.update({ stock: totalStock || 0 }, { transaction });
         }
       } else {
-        await entry.stockEntry.decrement("qty", { by: entry.qty, transaction });
+        await entry.stockEntry.decrement("qty", { by: entry.qtyToDeduct ?? entry.qty, transaction });
         const totalStock = await ProductStock.sum("qty", { where: { product_id: entry.product.id }, transaction });
         await entry.product.update({ stock: totalStock || 0 }, { transaction });
       }
+    }
+
+    // Guardar registro del récipe (obligatorio en controlados, opcional en récipe común, o si hubo autorización PIN).
+    if ((rx && (String(rx.patient_name || "").trim() || String(rx.photo_filename || "").trim())) || approvedById) {
+      await SalePrescription.create({
+        company_id: companyIdVenta,
+        sale_id: sale.id,
+        patient_name: String(rx?.patient_name || "No indicado").trim().slice(0, 150),
+        patient_id_doc: String(rx?.patient_id_doc || "N/A").trim().slice(0, 30),
+        doctor_name: String(rx?.doctor_name || "No indicado").trim().slice(0, 150),
+        doctor_license: String(rx?.doctor_license || "").trim().slice(0, 50) || null,
+        prescription_number: String(rx?.prescription_number || "").trim().slice(0, 60) || null,
+        photo_filename: String(rx?.photo_filename || "").trim().slice(0, 255) || null,
+        prescription_date: rx?.prescription_date || null,
+        notes: String(rx?.notes || "").trim() || null,
+        approved_by: approvedById,
+        approved_at: approvedById ? new Date() : null,
+      }, { transaction });
     }
 
     await transaction.commit();

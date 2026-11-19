@@ -18,6 +18,7 @@ import { useApp } from "../../context/AppContext";
 import { printPurchaseOrderDoc } from "../../helpers/printPurchaseOrder";
 import { printPurchaseLetter } from "../../helpers/printPurchaseLetter";
 import SupplierInvoiceCard from "./SupplierInvoice";
+import CustomerModal from "../Customers/CustomerModal";
 
 const fmt2 = (num) => Number(num || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 // En claro el fondo de página ya es surface-2 (#f9fafb), así que un panel surface-2 era
@@ -78,6 +79,26 @@ export default function PurchaseDetails({ state }) {
   // Supplier search
   const [supQuery, setSupQuery] = useState("");
   const [supHits, setSupHits]   = useState([]);
+  const [supModal, setSupModal] = useState(null);
+  const [savingSup, setSavingSup] = useState(false);
+
+  const handleCreateSupplier = async (form) => {
+    setSavingSup(true);
+    try {
+      const res = await api.customers.create(form);
+      const created = res.data || res;
+      setLocalSupplier(created);
+      setSupQuery("");
+      setSupHits([]);
+      setSupModal(null);
+      setIsDirty(true);
+      notify("Proveedor creado");
+    } catch (e) {
+      notify(e.message || "Error al crear proveedor", "err");
+    } finally {
+      setSavingSup(false);
+    }
+  };
 
   // Init local state
   useEffect(() => {
@@ -417,11 +438,12 @@ export default function PurchaseDetails({ state }) {
                       autoComplete="off"
                       className="input h-10 pl-9 text-[13px]"
                     />
-                    {supQuery.trim() && supHits.length > 0 && (
-                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/10 rounded-xl shadow-[0_16px_40px_-12px_rgb(0_0_0/0.3)] p-1 max-h-[200px] overflow-y-auto popover-in">
+                    {supQuery.trim() && (supHits.length > 0 || can("customers.create")) && (
+                      <div className="absolute z-50 w-full mt-1 bg-white dark:bg-surface-dark-2 border border-border dark:border-white/10 rounded-xl shadow-[0_16px_40px_-12px_rgb(0_0_0/0.3)] p-1 max-h-[220px] overflow-y-auto popover-in">
                         {supHits.map(s => (
                           <button
                             key={s.id}
+                            type="button"
                             onClick={() => { setLocalSupplier(s); setSupQuery(""); setSupHits([]); setIsDirty(true); }}
                             className="w-full text-left px-3 py-2 hover:bg-surface-2 dark:hover:bg-white/[0.05] rounded-lg transition-colors"
                           >
@@ -429,6 +451,15 @@ export default function PurchaseDetails({ state }) {
                             {s.rif && <div className="text-[12px] text-content-subtle tabular-nums">{s.rif}</div>}
                           </button>
                         ))}
+                        {can("customers.create") && (
+                          <button
+                            type="button"
+                            onClick={() => setSupModal({ _newType: "proveedor", _newName: supQuery.trim() })}
+                            className={`w-full text-left px-3 py-2 text-[12.5px] font-semibold text-brand-600 dark:text-brand-400 hover:bg-brand-500/10 rounded-lg transition-colors ${supHits.length > 0 ? "border-t border-border/40 dark:border-white/[0.06] mt-1 pt-2" : ""}`}
+                          >
+                            + Crear proveedor «{supQuery.trim()}»
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -593,7 +624,7 @@ export default function PurchaseDetails({ state }) {
                 onClick={() => localWarehouseId && setAddModalOpen(true)}
                 disabled={!localWarehouseId}
                 title={!localWarehouseId ? "Selecciona primero el almacén destino" : undefined}
-                className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 whitespace-nowrap shrink-0 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
+                className="btn-accent h-8 px-3 rounded-lg text-[12px] font-semibold flex items-center gap-1.5 whitespace-nowrap shrink-0 active:scale-95 disabled:opacity-40 disabled:pointer-events-none"
               >
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4"/></svg>
                 Agregar<span className="hidden sm:inline"> producto</span>
@@ -922,6 +953,14 @@ export default function PurchaseDetails({ state }) {
           onSuccess={handlePaySuccess}
         />
       )}
+
+      <CustomerModal
+        open={!!supModal}
+        onClose={() => setSupModal(null)}
+        onSave={handleCreateSupplier}
+        editData={supModal}
+        loading={savingSup}
+      />
 
       <ConfirmModal
         isOpen={!!deleteConfirm}

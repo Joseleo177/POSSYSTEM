@@ -46,6 +46,13 @@ export const ACTIVE_STATUS = {
     inactivo: { label: "Inactivo", tone: "neutral", quiet: "void" },
 };
 
+// Control sanitario (módulo Farmacia): controlado pide atención (rojo), récipe avisa (ámbar).
+export const PRESCRIPTION_STATUS = {
+    controlado: { label: "Controlado", tone: "danger",  flag: true },
+    recipe:     { label: "Récipe",     tone: "warning" },
+    libre:      { label: "Libre",      tone: "neutral", quiet: "check" },
+};
+
 export const statusTone = (status, map = SALE_STATUS) => {
     const s = map[status];
     return s?.flag ? TONES[s.tone].toneVar : undefined;

@@ -54,6 +54,7 @@ const tenantModels = [
   'AgendaResource', 'AgendaHour', 'AgendaBlock', 'AgendaResourceService', 'Appointment', 'AppointmentItem',
   'IvaDeclaration', 'IvaPriceAdjustment',
   'TipPayout', 'TipReassignment',
+  'SalePrescription',
 ];
 
 const applyTenantFilter = (modelName, options) => {

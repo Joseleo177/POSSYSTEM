@@ -8,7 +8,9 @@ const { Op } = Sequelize;
 
 const safeEmp = (e) => {
   const data = e.toJSON ? e.toJSON() : { ...e };
+  data.has_approval_pin = !!data.approval_pin_hash;
   delete data.password_hash;
+  delete data.approval_pin_hash;
   return data;
 };
 
@@ -69,6 +71,8 @@ const getAll = async (req, res) => {
     const data = employees
       .map(e => {
         const emp = e.toJSON();
+        emp.has_approval_pin = !!emp.approval_pin_hash;
+        delete emp.approval_pin_hash;
         emp.role_id    = emp.Role?.id    ?? emp.role_id;
         emp.role_name  = emp.Role?.name  ?? null;
         emp.role_label = emp.Role?.label ?? null;
@@ -113,11 +117,11 @@ const getAll = async (req, res) => {
 // Fábrica y Cocina solo se ofrecen a la empresa que tiene el módulo: en las demás serían
 // casillas que no abren nada.
 const getPermissionCatalog = async (req, res) => {
-  let fabrica = false, cocina = false, pedidosWeb = false, comisiones = false, citas = false, cobranza = false, propinas = false;
+  let fabrica = false, cocina = false, pedidosWeb = false, comisiones = false, citas = false, cobranza = false, propinas = false, farmacia = false;
   try {
     if (req.company_id) {
       const { Company } = require("../models");
-      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'citas_enabled', 'cobranza_enabled', 'propinas_enabled'] });
+      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'citas_enabled', 'cobranza_enabled', 'propinas_enabled', 'farmacia_enabled'] });
       propinas = !!c?.propinas_enabled;
       fabrica = !!c?.fabrica_enabled;
       cocina = !!c?.cocina_enabled;
@@ -125,10 +129,11 @@ const getPermissionCatalog = async (req, res) => {
       comisiones = !!c?.comisiones_enabled;
       citas = !!c?.citas_enabled;
       cobranza = !!c?.cobranza_enabled;
+      farmacia = !!c?.farmacia_enabled;
     }
   } catch { /* sin la empresa, el catálogo sale sin los módulos extra */ }
   const data = MODULES
-    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables'].includes(m.key) || cocina) && (m.key !== 'commissions' || comisiones) && (m.key !== 'tips' || propinas) && (m.key !== 'agenda' || citas) && (m.key !== 'cobranza' || cobranza))
+    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables', 'production'].includes(m.key) || cocina) && (m.key !== 'commissions' || comisiones) && (m.key !== 'tips' || propinas) && (m.key !== 'agenda' || citas) && (m.key !== 'cobranza' || cobranza) && (m.key !== 'pharmacy' || farmacia))
     // Confirmar pagos reportados es del extra de pedidos web: sin él la casilla no abriría nada.
     .map(m => (m.key === 'accounting' && !pedidosWeb ? { ...m, actions: m.actions.filter(a => a.key !== 'confirm') } : m));
   res.json({ ok: true, data });
@@ -175,11 +180,22 @@ async function syncWarehouses(req, employeeId, warehouseIds) {
 // POST /api/employees
 const create = async (req, res) => {
   try {
-    const { username, password, full_name, email, phone, role_id, warehouse_ids } = req.body;
+    const { username, password, full_name, email, phone, role_id, warehouse_ids, approval_pin } = req.body;
     if (!username || !password || !full_name || !role_id)
       return res.status(400).json({ ok: false, message: "username, password, full_name y role_id son requeridos" });
     if (password.length < 6)
       return res.status(400).json({ ok: false, message: "La contraseña debe tener al menos 6 caracteres" });
+    const pinClean = String(approval_pin || "").trim();
+    if (pinClean && !/^\d{4,6}$/.test(pinClean))
+      return res.status(400).json({ ok: false, message: "El PIN de autorización debe tener entre 4 y 6 dígitos" });
+    if (pinClean) {
+      const others = await Employee.findAll({ where: { approval_pin_hash: { [Op.ne]: null } }, attributes: ["id", "approval_pin_hash"] });
+      for (const o of others) {
+        if (await bcrypt.compare(pinClean, o.approval_pin_hash)) {
+          return res.status(409).json({ ok: false, message: "Ese PIN ya está asignado a otro usuario; elige otro" });
+        }
+      }
+    }
 
     const role = await Role.findByPk(role_id);
     if (!role) return res.status(400).json({ ok: false, message: "Rol no encontrado" });
@@ -192,9 +208,11 @@ const create = async (req, res) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
+    const pinHash = pinClean ? await bcrypt.hash(pinClean, 10) : null;
     const employee = await Employee.create({
       username,
       password_hash: hash,
+      approval_pin_hash: pinHash,
       full_name,
       email: email || null,
       phone: phone || null,
@@ -215,7 +233,7 @@ const create = async (req, res) => {
 // PUT /api/employees/:id
 const update = async (req, res) => {
   try {
-    const { full_name, email, phone, role_id, active, password, warehouse_ids } = req.body;
+    const { full_name, email, phone, role_id, active, password, warehouse_ids, approval_pin, clear_approval_pin } = req.body;
 
     if (req.employee.id === parseInt(req.params.id) && !req.employee.permissions?.all)
       return res.status(403).json({ ok: false, message: "No puedes editar tu propio perfil de esta forma" });
@@ -237,6 +255,23 @@ const update = async (req, res) => {
       if (password.length < 6)
         return res.status(400).json({ ok: false, message: "Contraseña debe tener al menos 6 caracteres" });
       updates.password_hash = await bcrypt.hash(password, 10);
+    }
+    if (clear_approval_pin) {
+      updates.approval_pin_hash = null;
+    } else if (approval_pin !== undefined && String(approval_pin).trim() !== "") {
+      const pinClean = String(approval_pin).trim();
+      if (!/^\d{4,6}$/.test(pinClean))
+        return res.status(400).json({ ok: false, message: "El PIN de autorización debe tener entre 4 y 6 dígitos" });
+      const others = await Employee.findAll({
+        where: { id: { [Op.ne]: employee.id }, approval_pin_hash: { [Op.ne]: null } },
+        attributes: ["id", "approval_pin_hash"],
+      });
+      for (const o of others) {
+        if (await bcrypt.compare(pinClean, o.approval_pin_hash)) {
+          return res.status(409).json({ ok: false, message: "Ese PIN ya está asignado a otro usuario; elige otro" });
+        }
+      }
+      updates.approval_pin_hash = await bcrypt.hash(pinClean, 10);
     }
 
     await employee.update(updates);

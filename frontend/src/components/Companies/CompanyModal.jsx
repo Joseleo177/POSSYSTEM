@@ -14,7 +14,7 @@ const vacio = () => ({
     name: "", tax_id: "", address: "", phone: "", email: "",
     plan_name: "Básico", subscription_status: "Demo",
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
-    max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, propinas_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, seo_enabled: true,
+    max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, propinas_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, farmacia_enabled: false, seo_enabled: true,
     admin_username: "", admin_password: "",
 });
 
@@ -182,6 +182,8 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                                 checked={!!form.fabrica_enabled} onChange={v => set("fabrica_enabled", v)} />
                             <Interruptor titulo="Agenda de citas" detalle="Citas por profesional o puesto, horarios y cobro desde la cita."
                                 checked={!!form.citas_enabled} onChange={v => set("citas_enabled", v)} />
+                            <Interruptor titulo="Farmacia" detalle="Principio activo, equivalentes en caja, venta por caja/unidad y control de récipes con foto."
+                                checked={!!form.farmacia_enabled} onChange={v => set("farmacia_enabled", v)} />
                         </Grupo>
                     </div>
                 </section>

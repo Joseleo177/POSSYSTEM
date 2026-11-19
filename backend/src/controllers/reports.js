@@ -14,6 +14,7 @@ const {
   libroVentasReport,
   libroComprasReport,
   mermasReport,
+  prescriptionsReport,
 } = require("../services/reports");
 
 const wrap = (fn, errMsg) => async (req, res) => {
@@ -116,8 +117,14 @@ const getMermasReport = async (req, res) => {
   }
 };
 
+const getPrescriptionsReport = wrap(
+  async req => prescriptionsReport({ ...req.query, ...(await buildTenantContext(req)) }),
+  "Error al generar reporte de control de récipes"
+);
+
 module.exports = {
   getMermasReport,
+  getPrescriptionsReport,
   getFinanceReport,
   getLibroVentasReport,
   getLibroComprasReport,

@@ -12,6 +12,7 @@ import DateRangePicker from "../ui/DateRangePicker";
 import CustomSelect from "../ui/CustomSelect";
 import Pagination from "../ui/Pagination";
 import { api } from "../../services/api";
+import { useApp } from "../../context/AppContext";
 
 // Filas de la tabla: una cabecera por día y debajo sus facturas. El servidor ya las manda
 // por created_at descendente, así que basta con cortar cuando cambia el día local.
@@ -37,6 +38,8 @@ const ICON_RETURN  = "M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6";
 const ICON_TRASH   = "M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16";
 
 export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, setReceiptSale }) {
+    const { company } = useApp();
+    const conMesonero = !!company?.cocina_enabled;
     const {
         sales, total, sumTotal, sumPaid, sumPending, sumForgiven, page, setPage, loading, LIMIT,
         histDateFrom, setHistDateFrom, histDateTo, setHistDateTo,
@@ -180,7 +183,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 />
             )}
 
-            {visibleEmployees.length > 0 && (
+            {conMesonero && visibleEmployees.length > 0 && (
                 <CustomSelect
                     value={waiterId}
                     onChange={setWaiterId}
@@ -255,7 +258,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                     />
                                 </div>
                             )}
-                            {visibleEmployees.length > 0 && (
+                            {conMesonero && visibleEmployees.length > 0 && (
                                 <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[12px] font-medium text-content-subtle mb-2">Atendió (Mesonero)</div>
                                     <CustomSelect

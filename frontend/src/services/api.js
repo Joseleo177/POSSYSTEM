@@ -259,7 +259,7 @@ async function requestServidor(path, options = {}) {
 // producto—, pero en estos vaciar la caja es justamente cómo se quita el dato, y sin esto no
 // habría manera de borrarlo desde el modal. El código de barras va aquí porque uno mal
 // cargado (o repetido) tiene que poder quitarse: el servidor guarda el vacío como NULL.
-const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode", "piece_mode", "piece_width_mm", "wholesale_price", "wholesale_min_qty", "net_content", "subcategory"];
+const CAMPOS_VACIABLES = ["brand", "short_description", "description", "benefits", "barcode", "piece_mode", "piece_width_mm", "wholesale_price", "wholesale_min_qty", "net_content", "subcategory", "active_ingredient", "concentration", "therapeutic_action", "shelf_location", "box_price"];
 
 function buildProductForm(body, imageFile, removeImage) {
   const fd = new FormData();
@@ -337,6 +337,10 @@ export const api = {
     remove:  (id)                  => request(`/products/${id}`,{ method: "DELETE" }),
     // Variantes de un modelo; con warehouse_id, existencias y precio de esa sucursal.
     variants: (id, params = {}) => request(`/products/${id}/variants?` + new URLSearchParams(params)),
+    // Equivalentes farmacéuticos (mismo principio activo).
+    equivalents: (id, params = {}) => request(`/products/${id}/equivalents?` + new URLSearchParams(params)),
+    // Opciones farmacéuticas ya usadas en la empresa (comboboxes de la ficha).
+    pharmacyOptions: () => request("/products/pharmacy-options"),
     // Foto de todas las variantes que llevan ese valor (la de "Negro" para Negro/S, M, L).
     setVariantImage: (id, attributeValueId, imageFile) => {
       const fd = new FormData();
@@ -433,6 +437,12 @@ export const api = {
     // Con tope de espera: si la base se congela, la caja pasa a vender sin conexión con la
     // misma clave de idempotencia en vez de quedarse colgada (ver servidorCaido).
     create:      (body)      => request("/sales",        { method: "POST",   body: JSON.stringify(body), timeout: 20_000 }),
+    uploadPrescriptionPhoto: (file) => {
+      const fd = new FormData();
+      fd.append("photo", file);
+      return request("/sales/prescription-photo", { method: "POST", body: fd });
+    },
+    pharmacyApprovers: () => request("/sales/pharmacy-approvers"),
     // Venta hecha sin conexión, enviada desde la cola del equipo (ver offline/sync.js).
     syncOffline: (body)      => request("/sales/offline", { method: "POST",  body: JSON.stringify(body), timeout: 30_000 }),
     update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
@@ -686,6 +696,7 @@ export const api = {
     finance:            (params = {}) => request("/reports/finance?"            + new URLSearchParams(params)),
     libroVentas:        (params = {}) => request("/reports/libro-ventas?"       + new URLSearchParams(params)),
     libroCompras:       (params = {}) => request("/reports/libro-compras?"      + new URLSearchParams(params)),
+    prescriptions:      (params = {}) => request("/reports/prescriptions?"      + new URLSearchParams(params)),
   },
 
   // Declaración de IVA del período (forma 30). Ver backend services/fiscal/declaracionIva.js.

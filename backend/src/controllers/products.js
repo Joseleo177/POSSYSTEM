@@ -1,7 +1,7 @@
-const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode, setVariantImage } = require("../services/products");
+const { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, backfillImagesByBarcode, setVariantImage, getEquivalents, getPharmacyOptions } = require("../services/products");
 const { importProducts } = require("../services/products/importProducts");
 const { broadcast } = require("../services/sseService");
-const { assertWarehouseAccess, visibleWarehouseIds, scopeWarehouseIds, isAdmin } = require("../middleware/auth");
+const { assertWarehouseAccess, visibleWarehouseIds, scopeWarehouseIds, isAdmin, hasPermission } = require("../middleware/auth");
 const { assertProductAccess, idsVisibles, noEncontrado } = require("../services/products/productAccess");
 const { ProductStock, Sequelize } = require("../models");
 const catalogoIva = require("../services/fiscal/catalogoIva");
@@ -126,6 +126,16 @@ module.exports = {
     const visibles = await assertProductAccess(req, req.params.id);
     return getOne(req.params.id, req.employee?.company_id ?? null, visibles);
   }),
+  equivalents: wrap(async req => {
+    const wid = parseInt(req.query.warehouse_id, 10) || null;
+    if (wid) await assertWarehouseAccess(req, wid);
+    return getEquivalents({
+      productId: parseInt(req.params.id, 10),
+      warehouse_id: wid,
+      company_id: req.employee?.company_id ?? null,
+    });
+  }),
+  pharmacyOptions: wrap(async req => getPharmacyOptions(req.employee?.company_id ?? null)),
   create:  wrap(async req => {
     const result = await createProduct({ body: req.body, file: req.file, company_id: req.employee?.company_id ?? null });
     broadcast(req.employee?.company_id ?? 0, 'products:updated', {});
@@ -149,6 +159,7 @@ module.exports = {
       id: req.params.id,
       body: req.body,
       file: req.file,
+      canEditSanitario: hasPermission(req.employee?.permissions, "pharmacy.approve_controlled"),
       company_id: req.employee?.company_id ?? null,
       warehouse_id: wid,
       // Al guardar un modelo, las variantes que este usuario no ve (las de otras sucursales)

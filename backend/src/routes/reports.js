@@ -24,5 +24,7 @@ router.get("/finance",            auth, permit("reports.view", "journals.view"),
 router.get("/libro-ventas",       auth, permit("reports.view"), ctrl.getLibroVentasReport);
 // Libro de compras: facturas de proveedor (compras y gastos con factura fiscal).
 router.get("/libro-compras",      auth, permit("reports.view"), ctrl.getLibroComprasReport);
+// Control de récipes y psicotrópicos (módulo Farmacia).
+router.get("/prescriptions",      auth, permit("pharmacy.reports"), ctrl.getPrescriptionsReport);
 
 module.exports = router;

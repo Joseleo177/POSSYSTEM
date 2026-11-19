@@ -172,7 +172,8 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
             defaults: { qty: 0 },
             transaction, lock: true,
           });
-          await stockEntry.increment("qty", { by: line.qty, transaction });
+          const qtyToRestore = parseFloat((parseFloat(line.qty) * parseFloat(vendida?.stock_factor || 1)).toFixed(3));
+          await stockEntry.increment("qty", { by: qtyToRestore, transaction });
           const totalStock = await ProductStock.sum("qty", { where: { product_id: line.product_id }, transaction });
           await Product.update({ stock: totalStock || 0 }, { where: { id: line.product_id }, transaction });
         }

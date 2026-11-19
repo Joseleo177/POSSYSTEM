@@ -1,11 +1,15 @@
 const router = require("express").Router();
 const ctrl   = require("../controllers/sales");
 const { permit, warehouseAccess } = require("../middleware/auth");
+const { upload } = require("../middleware/upload");
 
 router.get("/", permit("sales.view"),          ctrl.getAll);
 router.get("/stats",     permit("sales.view"), ctrl.getStats);
 // Cuentas por cobrar: antes de "/:id", o "receivables" se tomaría por un id.
 router.get("/receivables", permit("sales.view", "accounting.view"), ctrl.receivables);
+// Subir foto de récipe médico y consultar autorizadores (módulo Farmacia): antes de "/:id".
+router.post("/prescription-photo", permit("sales.create"), upload.single("photo"), ctrl.uploadPrescriptionPhoto);
+router.get("/pharmacy-approvers",  permit("sales.create"), ctrl.getPharmacyApprovers);
 router.get("/:id", permit("sales.view"),       ctrl.getOne);
 // El vencimiento lo ajusta quien da crédito o edita ventas.
 router.patch("/:id/due-date", permit("sales.credit", "sales.edit"), ctrl.setDueDate);

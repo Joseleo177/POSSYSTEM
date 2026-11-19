@@ -16,7 +16,7 @@ import EmployeePermissionsModal from "./EmployeePermissionsModal";
 const CLOCK = "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z";
 const KEY   = "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z";
 
-const EMPTY = { username: "", password: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
+const EMPTY = { username: "", password: "", approval_pin: "", full_name: "", email: "", phone: "", role_id: "", warehouse_ids: [] };
 
 const TABS = [
     { id: "employees", label: "Empleados" },
@@ -24,7 +24,8 @@ const TABS = [
 ];
 
 export default function EmployeesTab({ notify }) {
-    const { employee: me } = useApp();
+    const { employee: me, company } = useApp();
+    const farmaciaEnabled = !!company?.farmacia_enabled;
     // Solo el admin reparte permisos entre roles; un encargado gestiona personas, no llaves.
     const iAmAdmin = !!me?.permissions?.all;
     const [activeTab, setActiveTab] = useState("employees");
@@ -69,7 +70,7 @@ export default function EmployeesTab({ notify }) {
         setTimeout(() => nameRef.current?.focus(), 80);
     };
     const openEdit = (e) => {
-        setForm({ username: e.username, password: "", full_name: e.full_name, email: e.email || "", phone: e.phone || "", role_id: e.role_id, active: e.active, warehouse_ids: (e.warehouses || []).map(w => w.id) });
+        setForm({ username: e.username, password: "", approval_pin: "", full_name: e.full_name, email: e.email || "", phone: e.phone || "", role_id: e.role_id, active: e.active, warehouse_ids: (e.warehouses || []).map(w => w.id), has_approval_pin: !!e.has_approval_pin });
         setEditId(e.id); setModal(true);
         setTimeout(() => nameRef.current?.focus(), 80);
     };
@@ -552,6 +553,33 @@ export default function EmployeesTab({ notify }) {
                             );
                         })()}
                     </Campo>
+
+                    {farmaciaEnabled && (() => {
+                        const rolSel = roles.find(r => String(r.id) === String(form.role_id));
+                        const empEdit = editId ? employees.find(x => x.id === editId) : null;
+                        const puedeAutorizar = !!(
+                            rolSel?.permissions?.all ||
+                            rolSel?.permissions?.["pharmacy.approve_controlled"] ||
+                            empEdit?.permission_overrides?.["pharmacy.approve_controlled"]
+                        );
+                        if (!puedeAutorizar) return null;
+                        return (
+                            <Campo
+                                label="PIN de autorización farmacéutica"
+                                hint={editId && form.has_approval_pin ? "PIN activo · vacío no cambia" : "Opcional · 4 a 6 dígitos"}
+                            >
+                                <input
+                                    value={form.approval_pin || ""}
+                                    onChange={e => setForm(p => ({ ...p, approval_pin: e.target.value.replace(/\D/g, "").slice(0, 6) }))}
+                                    type="password"
+                                    inputMode="numeric"
+                                    autoComplete="off"
+                                    className={`${INPUT} tabular-nums`}
+                                    placeholder={editId && form.has_approval_pin ? "••••" : "Ej. 1234"}
+                                />
+                            </Campo>
+                        );
+                    })()}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Campo label="Teléfono" hint="Opcional">

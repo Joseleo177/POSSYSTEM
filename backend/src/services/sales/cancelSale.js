@@ -69,7 +69,8 @@ module.exports = async function cancelSale(id, req) {
           transaction,
           lock: true,
         });
-        await stockEntry.increment("qty", { by: item.quantity, transaction });
+        const qtyToRestore = parseFloat((parseFloat(item.quantity) * parseFloat(item.stock_factor || 1)).toFixed(3));
+        await stockEntry.increment("qty", { by: qtyToRestore, transaction });
 
         const totalStock = await ProductStock.sum("qty", {
           where: { product_id: item.product_id },

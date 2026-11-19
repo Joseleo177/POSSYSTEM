@@ -40,7 +40,11 @@ module.exports = (sequelize, DataTypes) => {
     // Alícuota de IVA de la línea (16, 8, 31 o 0), congelada al crearla. Null = la empresa no
     // facturaba con IVA. El precio ya la incluye: solo dice cómo se desglosa el total. La pone
     // un hook (services/fiscal/iva.js), así que ningún camino que cree líneas la olvida.
-    iva_rate: { type: DataTypes.DECIMAL(5, 2), allowNull: true }
+    iva_rate: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
+    // Factor de descuento en inventario (módulo Farmacia): 1 = unidad mínima, package_size = caja.
+    // Anulaciones y devoluciones multiplican quantity * stock_factor para reponer exactamente.
+    stock_factor: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 1 },
+    unit_label: { type: DataTypes.STRING(40), allowNull: true }
   }, {
     sequelize,
     tableName: 'sale_items',

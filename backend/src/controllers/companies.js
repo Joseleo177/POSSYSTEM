@@ -47,7 +47,7 @@ const create = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
 
-    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, admin_username, admin_password } = req.body;
+    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled, admin_username, admin_password } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "Nombre es requerido" });
 
     const wantedUser = admin_username?.trim() || null;
@@ -95,6 +95,7 @@ const create = async (req, res) => {
         iva_enabled: !!iva_enabled,
         catalogo_pdf_enabled: !!catalogo_pdf_enabled,
         mayor_enabled: !!mayor_enabled,
+        farmacia_enabled: !!farmacia_enabled,
         seo_enabled: seo_enabled !== false
       }, { transaction });
 
@@ -178,6 +179,7 @@ const create = async (req, res) => {
     });
 
     if (company.citas_enabled) await asegurarRolProfesional(company.id);
+    if (company.farmacia_enabled) await asegurarRolFarmaceutico(company.id);
 
     const responseCompany = company.toJSON();
     responseCompany.default_credentials = { username, password: rawPassword };
@@ -221,11 +223,32 @@ async function asegurarRolProfesional(companyId) {
   }));
 }
 
+// Rol Farmacéutico / Regente (módulo Farmacia): supervisa y autoriza con PIN los medicamentos
+// controlados y revisa el libro de control de récipes.
+const ROL_FARMACEUTICO = "farmaceutico";
+async function asegurarRolFarmaceutico(companyId) {
+  const existe = await runWithoutTenant(() => Role.findOne({ where: { company_id: companyId, name: ROL_FARMACEUTICO } }));
+  if (existe) return;
+  await runWithoutTenant(() => Role.create({
+    name: ROL_FARMACEUTICO,
+    label: "Farmacéutico / Regente",
+    permissions: {
+      "pharmacy.sell_recipe": true,
+      "pharmacy.approve_controlled": true,
+      "pharmacy.reports": true,
+      "sales.view": true,
+      "sales.create": true,
+      "products.view": true,
+    },
+    company_id: companyId,
+  }));
+}
+
 const update = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
     const { id } = req.params;
-    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled } = req.body;
+    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled } = req.body;
 
     const company = await Company.findByPk(id);
     if (!company) return res.status(404).json({ ok: false, message: "Empresa no encontrada" });
@@ -245,11 +268,13 @@ const update = async (req, res) => {
       iva_enabled: iva_enabled === undefined ? company.iva_enabled : !!iva_enabled,
       catalogo_pdf_enabled: catalogo_pdf_enabled === undefined ? company.catalogo_pdf_enabled : !!catalogo_pdf_enabled,
       mayor_enabled: mayor_enabled === undefined ? company.mayor_enabled : !!mayor_enabled,
+      farmacia_enabled: farmacia_enabled === undefined ? company.farmacia_enabled : !!farmacia_enabled,
       // Sin el campo (un cliente viejo del panel) se conserva lo que había.
       seo_enabled: seo_enabled === undefined ? company.seo_enabled : !!seo_enabled
     });
     if (company.cocina_enabled) await asegurarRolMesonero(company.id);
     if (company.citas_enabled) await asegurarRolProfesional(company.id);
+    if (company.farmacia_enabled) await asegurarRolFarmaceutico(company.id);
     // Suspender o reactivar tiene que notarse ya: sin esto, la caché del middleware seguiría
     // dejando pasar (o bloqueando) a esa empresa hasta que venciera el TTL.
     invalidateCompanyStatus(company.id);
@@ -281,6 +306,7 @@ const DELETE_ORDER = [
   'Expense', 'Income', 'PurchasePayment',        // bloquean employees, currencies, journals y categorías
   'ProductComboItem',                            // RESTRICT sobre products
   'Payment', 'ReturnItem', 'Return',
+  'SalePrescription',
   'Sale', 'Purchase',
   'KitchenTicket',                               // sus líneas caen en cascada; antes de sales
   'TableOrder',                                  // pedidos del QR; antes de las mesas

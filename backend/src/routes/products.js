@@ -19,8 +19,12 @@ router.post("/backfill-images", auth, permit("products.edit"), ctrl.backfillImag
 router.post("/import", auth, permit("products.create"), permit("products.edit"), ctrl.importar);
 // Datos del catálogo en PDF para mayoristas (lo arma el navegador). Literal, antes de "/:id".
 router.get("/catalog-pdf", auth, permit("products.view"), ctrl.catalogPdf);
+// Opciones farmacéuticas ya usadas en la empresa (comboboxes de la ficha). Literal, antes de "/:id".
+router.get("/pharmacy-options", auth, permit("products.view", "products.create", "products.edit"), ctrl.pharmacyOptions);
 // Variantes de un modelo (talla × color). También la caja, que arma la grilla con esto.
 router.get("/:id/variants", auth, permit("products.view", "sales.create"), require("../controllers/productAttributes").variants);
+// Equivalentes farmacéuticos (mismo principio activo). También accesible desde caja.
+router.get("/:id/equivalents", auth, permit("products.view", "sales.create"), ctrl.equivalents);
 // Foto por color de un modelo con variantes.
 router.put("/:id/variant-image", auth, permit("products.edit"), upload.single("image"), ctrl.variantImage);
 // Fotos adicionales (la principal va con el producto). "order" antes de ":imageId".

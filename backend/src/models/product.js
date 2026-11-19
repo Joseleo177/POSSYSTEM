@@ -73,6 +73,16 @@ module.exports = (sequelize, DataTypes) => {
     piece_mode: { type: DataTypes.STRING(10), allowNull: true },
     piece_width_mm: { type: DataTypes.INTEGER, allowNull: true },
     piece_length_mm: { type: DataTypes.INTEGER, allowNull: true },
+    // Ficha farmacéutica y venta por caja/empaque (módulo Farmacia).
+    active_ingredient: { type: DataTypes.STRING(200), allowNull: true },
+    concentration: { type: DataTypes.STRING(80), allowNull: true },
+    therapeutic_action: { type: DataTypes.STRING(120), allowNull: true },
+    shelf_location: { type: DataTypes.STRING(60), allowNull: true },
+    // 'libre' | 'recipe' | 'controlado' (psicotrópico / estupefaciente / antibiótico controlado)
+    prescription_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'libre' },
+    // Precio general por caja/empaque completo (package_size unidades mínimas). Cada sucursal
+    // puede fijar el suyo en product_stock.box_price (NULL = hereda).
+    box_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

@@ -3,6 +3,7 @@ import Modal from "./ui/Modal";
 import { Button } from "./ui/Button";
 import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
+import SuggestInput from "./ui/SuggestInput";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl, toNameCase } from "../helpers";
 import { api } from "../services/api";
 import { Spinner } from "./ui/Spinner";
@@ -21,6 +22,7 @@ import { monedaLocal } from "../helpers/currency";
 const PIECE_UNIT = { area: "M2", length: "METRO" };
 
 const UNITS = ["UNIDAD", "KG", "LITRO", "METRO", "M2"];
+const PHARMACY_UNITS = ["CAJA", "BLISTER", "TABLETA", "CAPSULA", "FRASCO", "AMPOLLA", "SOBRE", "TUBO"];
 const EMPTY = {
     name: "", price: "", stock: "", category_id: "", subcategory: "", unit: "UNIDAD", qty_step: "1",
     package_unit: "", package_size: "", cost_price: "", profit_margin: "", min_stock: "0",
@@ -34,6 +36,9 @@ const EMPTY = {
     // Control por piezas (módulo Fábrica). Las medidas van como se escriben; al guardar se
     // pasan a milímetros.
     piece_mode: "", piece_w: "", piece_l: "",
+    // Ficha farmacéutica y venta por caja (módulo Farmacia).
+    active_ingredient: "", concentration: "", therapeutic_action: "", shelf_location: "",
+    prescription_type: "libre", box_price: "",
 };
 
 // onPickExisting: quien abre el modal para usar un producto (la compra) recibe el que ya existe
@@ -51,6 +56,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
     const conPrecioMayor = mayorEnabled;
     const fabricaEnabled = !!company?.fabrica_enabled;
     const ivaEnabled = !!company?.iva_enabled;
+    const farmaciaEnabled = !!company?.farmacia_enabled;
+    const canEditSanitario = can("pharmacy.approve_controlled");
+    const [pharmacyOpts, setPharmacyOpts] = useState({
+        active_ingredients: [], concentrations: [], brands: [], therapeutic_actions: [], shelf_locations: [],
+    });
+    useEffect(() => {
+        if (!open || !farmaciaEnabled) return;
+        let alive = true;
+        api.products.pharmacyOptions()
+            .then(r => { if (alive && r?.data) setPharmacyOpts(r.data); })
+            .catch(() => {});
+        return () => { alive = false; };
+    }, [open, farmaciaEnabled]);
     const [pieceUnit, setPieceUnit] = useMeasureUnit();
     const localCurrency = monedaLocal(activeCurrencies) ?? null;
     const exchangeRate = parseFloat(localCurrency?.exchange_rate || 0);
@@ -146,6 +164,12 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     piece_mode: editData.piece_mode || "",
                     piece_w: editData.piece_width_mm ? fromMm(editData.piece_width_mm, pieceUnit) : "",
                     piece_l: editData.piece_length_mm ? fromMm(editData.piece_length_mm, pieceUnit) : "",
+                    active_ingredient: editData.active_ingredient || "",
+                    concentration: editData.concentration || "",
+                    therapeutic_action: editData.therapeutic_action || "",
+                    shelf_location: editData.shelf_location || "",
+                    prescription_type: editData.prescription_type || "libre",
+                    box_price: editData.box_price != null && editData.box_price !== "" ? String(parseFloat(editData.box_price)) : "",
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -403,6 +427,10 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             setTab("costos");
             return notify("La cantidad para el precio al mayor tiene que ser mayor que cero", "err");
         }
+        if (farmaciaEnabled && form.box_price !== "" && !(parseFloat(form.box_price) >= 0)) {
+            setTab("farmacia");
+            return notify("El precio por caja tiene que ser un número válido", "err");
+        }
         const submissionForm = { ...form };
         // Hay pantallas que abren la ficha con un producto a medias (una línea de compra). Si
         // no traía estos campos, mandarlos vacíos borraría el precio al mayor sin que nadie lo
@@ -410,6 +438,17 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         if (!conPrecioMayor || (editData && !("wholesale_price" in editData))) delete submissionForm.wholesale_price;
         if (!mayorEnabled || (editData && !("wholesale_min_qty" in editData))) delete submissionForm.wholesale_min_qty;
         if (!pdfEnabled || (editData && !("net_content" in editData))) delete submissionForm.net_content;
+        if (!farmaciaEnabled) {
+            delete submissionForm.active_ingredient;
+            delete submissionForm.concentration;
+            delete submissionForm.therapeutic_action;
+            delete submissionForm.shelf_location;
+            delete submissionForm.prescription_type;
+            delete submissionForm.box_price;
+        } else {
+            if (editData && !("box_price" in editData)) delete submissionForm.box_price;
+            if (editData && !canEditSanitario) delete submissionForm.prescription_type;
+        }
         if (form.has_variants) {
             // Sin abrir la pestaña no hay nada que mandar: el servidor deja las variantes como
             // están y solo les pasa lo que cambió en el modelo (nombre, precio, categoría).
@@ -583,17 +622,19 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
         if (u === "KG") return "Kg";
         if (u === "M2") return "m²";
         if (u === "PORCION") return "Porción (und)";
+        if (u === "CAPSULA") return "Cápsula";
+        if (u === "BLISTER") return "Blíster";
         return u.charAt(0) + u.slice(1).toLowerCase();
     };
 
     // Si el producto trae una unidad no estándar (ej. PORCION de recetas viejas), se suma
     // a la lista para que el selector nunca quede vacío ni deseleccionado.
     const unitOptions = useMemo(() => {
-        const list = [...UNITS];
+        const list = farmaciaEnabled ? ["UNIDAD", ...PHARMACY_UNITS, "KG", "LITRO", "METRO", "M2"] : [...UNITS];
         const cur = (form.unit || "").toUpperCase();
         if (cur && !list.includes(cur)) list.push(cur);
         return list.map(u => ({ value: u, label: unidadLabel(u) }));
-    }, [form.unit]);
+    }, [form.unit, farmaciaEnabled]);
 
     // Acciones fijas al pie del modal: el formulario es largo (y con variantes, mucho) y había
     // que bajar hasta el final para guardar.
@@ -835,6 +876,7 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                 <div className="flex items-center gap-1 border-b border-border/40 dark:border-white/10 overflow-x-auto scrollbar-hide">
                     {[
                         ["general", "General"],
+                        ...(farmaciaEnabled ? [["farmacia", "Farmacia"]] : []),
                         ["receta", "Receta"],
                         ["variantes", "Variantes"],
                         ["costos", "Costos"],
@@ -855,6 +897,91 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         </button>
                     ))}
                 </div>
+
+                {/* ── Pestaña Farmacia ── */}
+                {tab === "farmacia" && farmaciaEnabled && (
+                    <div className="space-y-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="sm:col-span-2">
+                                <label className="label">Principio activo (Genérico)</label>
+                                <SuggestInput
+                                    value={form.active_ingredient}
+                                    onChange={v => set("active_ingredient", v)}
+                                    options={pharmacyOpts.active_ingredients}
+                                    placeholder="Ej. Losartán Potásico, Amoxicilina, Ibuprofeno"
+                                />
+                                <p className="mt-1 text-[11px] text-content-subtle">Se usa en caja para buscar y sugerir equivalentes con stock.</p>
+                            </div>
+                            <div>
+                                <label className="label">Concentración / Presentación</label>
+                                <SuggestInput
+                                    value={form.concentration}
+                                    onChange={v => set("concentration", v)}
+                                    options={pharmacyOpts.concentrations}
+                                    placeholder="Ej. 50 mg Tabletas, 500 mg Cápsulas"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Laboratorio</label>
+                                <SuggestInput
+                                    value={form.brand}
+                                    onChange={v => set("brand", v)}
+                                    options={pharmacyOpts.brands}
+                                    placeholder="Ej. Calox, Leti, Genfar, Behrens"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Acción terapéutica</label>
+                                <SuggestInput
+                                    value={form.therapeutic_action}
+                                    onChange={v => set("therapeutic_action", v)}
+                                    options={pharmacyOpts.therapeutic_actions}
+                                    placeholder="Ej. Antihipertensivo, Analgésico, Antibiótico"
+                                />
+                            </div>
+                            <div>
+                                <label className="label">Ubicación / Anaquel</label>
+                                <SuggestInput
+                                    value={form.shelf_location}
+                                    onChange={v => set("shelf_location", v)}
+                                    options={pharmacyOpts.shelf_locations}
+                                    placeholder="Ej. Pasillo B · Estante 3"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="label flex items-center justify-between gap-2">
+                                <span>Control sanitario / Tipo de récipe</span>
+                                {isEdit && !canEditSanitario && (
+                                    <span className="text-[11px] font-normal text-content-subtle">Solo Regente o Admin</span>
+                                )}
+                            </label>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                {[
+                                    { v: "libre", label: "Venta libre", desc: "Sin récipe" },
+                                    { v: "recipe", label: "Con récipe", desc: "Aviso en caja (opcional)" },
+                                    { v: "controlado", label: "Controlado", desc: "Datos + PIN obligatorios" },
+                                ].map(opt => {
+                                    const active = form.prescription_type === opt.v;
+                                    const locked = isEdit && !canEditSanitario;
+                                    const tone = opt.v === "controlado"
+                                        ? (active ? "border-danger bg-danger/10 text-danger" : "")
+                                        : opt.v === "recipe"
+                                            ? (active ? "border-warning bg-warning/10 text-amber-700 dark:text-amber-300" : "")
+                                            : (active ? "border-brand-500 bg-brand-500/10 text-brand-700 dark:text-brand-300" : "");
+                                    return (
+                                        <button key={opt.v} type="button" disabled={locked} onClick={() => !locked && set("prescription_type", opt.v)}
+                                            className={`p-2.5 rounded-xl border text-left transition-all ${locked ? "opacity-55 cursor-not-allowed" : ""} ${active ? tone : "border-border/70 dark:border-white/10 hover:bg-surface-2 dark:hover:bg-white/[0.04]"}`}>
+                                            <div className="text-[12.5px] font-semibold">{opt.label}</div>
+                                            <div className="text-[11px] opacity-75 mt-0.5">{opt.desc}</div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* ── Tipo y disponibilidad ──
                     Una lista agrupada, como los ajustes del teléfono: cada fila entera se toca

@@ -395,6 +395,9 @@ async function getAll({ search, barcode, category_id, subcategory, is_combo, is_
       [Op.or]: [
         { name: { [Op.iLike]: `%${safe}%` } },
         { barcode: { [Op.iLike]: `%${safe}%` } },
+        { active_ingredient: { [Op.iLike]: `%${safe}%` } },
+        { therapeutic_action: { [Op.iLike]: `%${safe}%` } },
+        { brand: { [Op.iLike]: `%${safe}%` } },
         Sequelize.literal(`"Product"."category_id" IN (SELECT id FROM categories WHERE name ILIKE '%${esc}%')`),
       ]
     });
@@ -416,7 +419,7 @@ async function getAll({ search, barcode, category_id, subcategory, is_combo, is_
       required: false,
       // price, min_stock, cost_price y profit_margin salen de la misma fila: viendo un
       // almacén, lo que vale es lo que esa sucursal tenga definido.
-      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin', 'wholesale_price', 'wholesale_min_qty']
+      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin', 'wholesale_price', 'wholesale_min_qty', 'box_price']
     });
   }
 
@@ -484,6 +487,9 @@ async function getAll({ search, barcode, category_id, subcategory, is_combo, is_
       if (prod.wholesale_own) prod.wholesale_price = ficha.wholesale_price;
       prod.wholesale_min_own = ficha.wholesale_min_qty != null;
       if (prod.wholesale_min_own) prod.wholesale_min_qty = ficha.wholesale_min_qty;
+      // Precio por caja (módulo Farmacia): misma herencia por sucursal.
+      prod.box_price_own = ficha.box_price != null;
+      if (prod.box_price_own) prod.box_price = ficha.box_price;
 
       // El margen se recalcula sobre el precio y el costo que acaban de quedar, que son los
       // de esta sucursal. Guardado en el producto es el del precio general, y mostrarlo junto
@@ -638,6 +644,27 @@ function cantidadMayor(valor) {
   return n;
 }
 
+// Precio por caja/empaque completo (módulo Farmacia). Igual que precioMayor.
+function precioCaja(valor) {
+  if (valor === undefined) return undefined;
+  if (valor === null || String(valor).trim() === "") return null;
+  const n = parseFloat(valor);
+  if (!Number.isFinite(n) || n < 0) {
+    const e = new Error("El precio por caja tiene que ser un número mayor o igual a cero");
+    e.status = 400; e.isOperational = true; throw e;
+  }
+  return n;
+}
+
+const PRESCRIPTION_TYPES = new Set(['libre', 'recipe', 'controlado']);
+function tipoRecipe(valor) {
+  if (valor === undefined) return undefined;
+  const v = String(valor || 'libre').trim().toLowerCase();
+  return PRESCRIPTION_TYPES.has(v) ? v : 'libre';
+}
+
+const textoCorto = (valor, max) => (valor === undefined ? undefined : (String(valor ?? "").trim().slice(0, max) || null));
+
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
@@ -710,6 +737,13 @@ async function createProduct({ body, file, company_id }) {
       // Se prepara en cocina (pedidos web): ver migración 20261101160000-pedidos-etapas.
       kitchen_prep: body.kitchen_prep === 'true' || body.kitchen_prep === true,
       iva_tipo: ivaTipo(body.iva_tipo) || 'G',
+      // Ficha farmacéutica y precio por caja (módulo Farmacia).
+      active_ingredient: textoCorto(body.active_ingredient, 200) ?? null,
+      concentration: textoCorto(body.concentration, 80) ?? null,
+      therapeutic_action: textoCorto(body.therapeutic_action, 120) ?? null,
+      shelf_location: textoCorto(body.shelf_location, 60) ?? null,
+      prescription_type: tipoRecipe(body.prescription_type) || 'libre',
+      box_price: precioCaja(body.box_price) ?? null,
       company_id,
     }, { transaction: t });
 
@@ -758,7 +792,7 @@ async function createProduct({ body, file, company_id }) {
   }
 }
 
-async function updateProduct({ id, body, file, company_id, warehouse_id = null, visible_ids = null }) {
+async function updateProduct({ id, body, file, company_id, warehouse_id = null, visible_ids = null, canEditSanitario = true }) {
   const { name, price, category_id, unit, qty_step,
     cost_price, profit_margin, package_size, package_unit, min_stock,
     is_combo, combo_items, is_service, barcode, bulk_price,
@@ -841,6 +875,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
     // Precio al mayor y su cantidad mínima, ya validados (undefined = no vinieron).
     const mayorNuevo = precioMayor(body.wholesale_price);
     const minMayorNuevo = cantidadMayor(body.wholesale_min_qty);
+    const cajaNueva = precioCaja(body.box_price);
     const precioFinal = opt(price, product.price, product.price);
     const costoFinal  = isComboBool ? null : opt(cost_price, product.cost_price);
     // El margen manda solo si viene escrito; si no, se recalcula. Conservar el anterior
@@ -917,6 +952,8 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       if (mayorPropio !== undefined) cambios.wholesale_price = mayorPropio;
       const minPropio = propio(minMayorNuevo, ficha?.wholesale_min_qty, product.wholesale_min_qty);
       if (minPropio !== undefined) cambios.wholesale_min_qty = minPropio;
+      const cajaPropia = propio(cajaNueva, ficha?.box_price, product.box_price);
+      if (cajaPropia !== undefined) cambios.box_price = cajaPropia;
 
       precioSeraPropio = (cambios.price !== undefined ? cambios.price : (ficha?.price ?? null)) != null;
 
@@ -987,6 +1024,26 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
         : (body.kitchen_prep === 'true' || body.kitchen_prep === true),
       // Solo lo manda el modal de una empresa con IVA; sin el campo se conserva.
       iva_tipo: ivaTipo(body.iva_tipo) || product.iva_tipo,
+      // Ficha farmacéutica y precio por caja (módulo Farmacia).
+      active_ingredient: textoCorto(body.active_ingredient, 200) === undefined ? product.active_ingredient : textoCorto(body.active_ingredient, 200),
+      concentration: textoCorto(body.concentration, 80) === undefined ? product.concentration : textoCorto(body.concentration, 80),
+      therapeutic_action: textoCorto(body.therapeutic_action, 120) === undefined ? product.therapeutic_action : textoCorto(body.therapeutic_action, 120),
+      shelf_location: textoCorto(body.shelf_location, 60) === undefined ? product.shelf_location : textoCorto(body.shelf_location, 60),
+      // Solo el Farmacéutico / Regente o Administrador (`pharmacy.approve_controlled`) puede
+      // cambiar el control sanitario de un medicamento existente: evita que alguien con
+      // `products.edit` baje un controlado a "libre" para venderlo sin PIN.
+      prescription_type: (() => {
+        const nuevoTipo = tipoRecipe(body.prescription_type);
+        if (nuevoTipo === undefined || nuevoTipo === product.prescription_type) return product.prescription_type;
+        if (!canEditSanitario) {
+          const e = new Error("Solo un Farmacéutico / Regente o Administrador puede cambiar el control sanitario de un medicamento");
+          e.status = 403;
+          e.isOperational = true;
+          throw e;
+        }
+        return nuevoTipo;
+      })(),
+      box_price: (alcanceSucursal && !esGlobalSinFicha) || cajaNueva === undefined ? product.box_price : cajaNueva,
     }, { transaction: t });
 
     // Control por piezas (Fábrica). Se valida después de escribir lo demás porque la unidad
@@ -1369,6 +1426,90 @@ async function setVariantImage({ modelId, attribute_value_id, file, remove, comp
   return { data: { image_url: imageUrl(nueva), variant_ids: variantes.map(v => v.id) } };
 }
 
+// Normalización sin tildes ni mayúsculas para comparar principios activos y deduplicar catálogos.
+const normKey = (s) => String(s || "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+// Catálogo auto-alimentado de valores farmacéuticos ya usados en la empresa (para comboboxes
+// sin errores de escritura ni duplicados por mayúsculas/tildes).
+async function getPharmacyOptions(company_id) {
+  const rows = await Product.findAll({
+    where: company_id ? { company_id } : {},
+    attributes: ['active_ingredient', 'concentration', 'brand', 'therapeutic_action', 'shelf_location'],
+    raw: true,
+  });
+  const collect = (field) => {
+    const map = new Map();
+    for (const r of rows) {
+      const val = String(r[field] || "").trim();
+      if (!val) continue;
+      const k = normKey(val);
+      if (!map.has(k)) map.set(k, val);
+    }
+    return [...map.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
+  };
+  return {
+    data: {
+      active_ingredients:  collect('active_ingredient'),
+      concentrations:      collect('concentration'),
+      brands:              collect('brand'),
+      therapeutic_actions: collect('therapeutic_action'),
+      shelf_locations:     collect('shelf_location'),
+    },
+  };
+}
+
+// Equivalentes farmacéuticos: otros productos de la misma empresa con el mismo principio activo
+// (comparación insensible a mayúsculas, tildes y espacios), ordenados por stock en la sucursal.
+async function getEquivalents({ productId, warehouse_id, company_id }) {
+  const base = await Product.findByPk(productId, {
+    attributes: ['id', 'name', 'active_ingredient', 'concentration', 'company_id'],
+  });
+  if (!base) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
+  const principio = String(base.active_ingredient || "").trim();
+  if (!principio) return { data: [], active_ingredient: null };
+  const principioNorm = normKey(principio);
+
+  const cid = company_id || base.company_id;
+  const wid = parseInt(warehouse_id, 10) || null;
+  const rows = await sequelize.query(`
+    SELECT
+      p.id, p.name, p.brand, p.active_ingredient, p.concentration,
+      p.therapeutic_action, p.shelf_location, p.prescription_type,
+      p.unit, p.qty_step, p.package_unit, p.package_size, p.barcode, p.iva_tipo, p.image_filename,
+      COALESCE(ps.price, p.price) AS price,
+      COALESCE(ps.box_price, p.box_price) AS box_price,
+      COALESCE(ps.wholesale_price, p.wholesale_price) AS wholesale_price,
+      COALESCE(ps.wholesale_min_qty, p.wholesale_min_qty) AS wholesale_min_qty,
+      ${wid ? 'COALESCE(ps.qty, 0)' : 'COALESCE(p.stock, 0)'} AS stock
+    FROM products p
+    ${wid ? 'LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.warehouse_id = :wid' : 'LEFT JOIN product_stock ps ON false'}
+    WHERE p.company_id = :cid
+      AND p.id <> :pid
+      AND p.sellable = true
+      AND p.is_variant_parent = false
+      AND TRANSLATE(LOWER(TRIM(COALESCE(p.active_ingredient, ''))), 'áéíóúàèìòùäëïöüñ', 'aeiouaeiouaeioun') = :principioNorm
+    ORDER BY stock DESC, p.name ASC
+    LIMIT 30
+  `, {
+    replacements: { cid, pid: base.id, wid, principioNorm },
+    type: Sequelize.QueryTypes.SELECT,
+  });
+
+  const data = rows.map(r => ({
+    ...r,
+    price: parseFloat(r.price),
+    box_price: r.box_price != null ? parseFloat(r.box_price) : null,
+    wholesale_price: r.wholesale_price != null ? parseFloat(r.wholesale_price) : null,
+    wholesale_min_qty: r.wholesale_min_qty != null ? parseFloat(r.wholesale_min_qty) : null,
+    package_size: r.package_size != null ? parseFloat(r.package_size) : null,
+    qty_step: parseFloat(r.qty_step || 1),
+    stock: parseFloat(r.stock || 0),
+    image_url: imageUrl(r.image_filename),
+  }));
+
+  return { data, active_ingredient: principio };
+}
+
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
 // disponibilidad de un combo con la misma regla que el POS, en vez de duplicarla.
-module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, updateComboPricesForProduct, setVariantImage, inheritImageByBarcode, backfillImagesByBarcode };
+module.exports = { getAll, getOne, createProduct, updateProduct, deleteProduct, setCatalogVisibility, calculateComboStockAndCost, updateComboPricesForProduct, setVariantImage, inheritImageByBarcode, backfillImagesByBarcode, getEquivalents, getPharmacyOptions };

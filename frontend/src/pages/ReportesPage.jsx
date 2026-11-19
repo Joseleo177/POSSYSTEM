@@ -18,6 +18,7 @@ import ExpiryReport from "./reportes/ExpiryReport";
 import MermasReport from "./reportes/MermasReport";
 import LibroVentasReport from "./reportes/LibroVentasReport";
 import DeclaracionIvaReport from "./reportes/DeclaracionIvaReport";
+import PrescriptionsReport from "./reportes/PrescriptionsReport";
 
 const TABS = [
   { key: "ventas",        label: "Ventas" },
@@ -36,6 +37,7 @@ const TABS = [
   { key: "libro_ventas", label: "Libro de ventas" },
   { key: "libro_compras", label: "Libro de compras" },
   { key: "declaracion_iva", label: "Declaración de IVA" },
+  { key: "recipes",         label: "Control de récipes" },
 ];
 
 const NAV_GROUPS = [
@@ -53,12 +55,18 @@ export default function ReportesPage() {
   const [tab, setTab] = useState("ventas");
   const [openGroup, setOpenGroup] = useState(null);
   const navRef = useRef(null);
-  const { pendingAction, setPendingAction, company, settings } = useApp();
+  const { pendingAction, setPendingAction, company, settings, can } = useApp();
   const subcatEnabled = settings?.subcategorias_enabled === "true";
-  const baseGroups = NAV_GROUPS.map(g => g.label === "Comercial"
-    ? { ...g, items: subcatEnabled ? ["ventas", "subcategorias", "margenes", "cobrar", "clientes"] : ["ventas", "margenes", "cobrar", "clientes"] }
-    : g
-  );
+  const canFarmaciaReport = !!company?.farmacia_enabled && can("pharmacy.reports");
+  const baseGroups = NAV_GROUPS.map(g => {
+    if (g.label === "Comercial") {
+      return { ...g, items: subcatEnabled ? ["ventas", "subcategorias", "margenes", "cobrar", "clientes"] : ["ventas", "margenes", "cobrar", "clientes"] };
+    }
+    if (g.label === "Operaciones" && canFarmaciaReport) {
+      return { ...g, items: ["recipes", ...g.items] };
+    }
+    return g;
+  });
   const grupos = company?.iva_enabled ? [...baseGroups, FISCAL_GROUP] : baseGroups;
 
   useEffect(() => {
@@ -129,6 +137,7 @@ export default function ReportesPage() {
         {tab === "libro_ventas" && company?.iva_enabled && <LibroVentasReport key="ventas" tipo="ventas" />}
         {tab === "libro_compras" && company?.iva_enabled && <LibroVentasReport key="compras" tipo="compras" />}
         {tab === "declaracion_iva" && company?.iva_enabled && <DeclaracionIvaReport />}
+        {tab === "recipes"         && canFarmaciaReport && <PrescriptionsReport />}
       </div>
     </Page>
   );

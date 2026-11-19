@@ -151,7 +151,8 @@ module.exports = async function annulReturn(returnId, { employeeId }, req) {
         continue;
       }
       if (!product || product.is_service) continue;
-      aDescontar.set(line.product_id, (aDescontar.get(line.product_id) || 0) + parseFloat(line.qty));
+      const qtyBase = parseFloat((parseFloat(line.qty) * parseFloat(vendida?.stock_factor || 1)).toFixed(3));
+      aDescontar.set(line.product_id, (aDescontar.get(line.product_id) || 0) + qtyBase);
     }
     const sinInsumo = deReceta.size ? await vendeSinInsumo(sale.warehouse_id, t) : false;
 

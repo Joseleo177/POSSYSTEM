@@ -87,6 +87,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const reqRef    = useRef(0);
     const listRef   = useRef(null);
     const [form, setForm]           = useState(EMPTY_FORM);
+    // Modo de captura de costo: "unit" = costo por empaque/caja, "total" = monto total de la línea.
+    const [costMode, setCostMode]   = useState("unit");
+    const [totalInput, setTotalInput] = useState("");
     const factorIva = useFactorIva();
     const [stockFilter, setStockFilter]         = useState("todos");
     const [showProductModal, setShowProductModal] = useState(false);
@@ -98,6 +101,8 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     // Reset / init al abrir
     useEffect(() => {
         if (!open) return;
+        setCostMode("unit");
+        setTotalInput("");
         if (editItem) {
             // El unit/stock puede venir plano (backend) o anidado en .product (ítem agregado en esta sesión, aún sin guardar)
             const editUnit  = editItem.unit  ?? editItem.product?.unit  ?? "";
@@ -261,8 +266,24 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
         setPieceUnit(u);
     };
 
-    const pkgPriceBase = parseFloat(form.package_price) / invoiceRate;
+    const qtyNum = parseFloat(form.package_qty) || 0;
+    const effectivePkgPrice = costMode === "total"
+        ? (qtyNum > 0 ? (parseFloat(totalInput) || 0) / qtyNum : 0)
+        : (parseFloat(form.package_price) || 0);
+    const pkgPriceBase = effectivePkgPrice / invoiceRate;
     const calc = selected ? calcPurchaseItem({ ...form, package_price: pkgPriceBase, product: selected }, factorIva(selected)) : null;
+
+    const switchCostMode = (next) => {
+        if (next === costMode) return;
+        if (next === "total") {
+            const cur = (parseFloat(form.package_price) || 0) * qtyNum;
+            setTotalInput(cur > 0 ? cur.toFixed(2) : "");
+        } else {
+            const unit = qtyNum > 0 ? (parseFloat(totalInput) || 0) / qtyNum : 0;
+            setF("package_price", unit > 0 ? String(parseFloat(unit.toFixed(5))) : "");
+        }
+        setCostMode(next);
+    };
 
     // Cómo se nombra la presentación en los rótulos. "UNIDAD" no es una presentación sino la ausencia
     // de uno: ahí se compra suelto y los rótulos hablan de unidades, no de cajas.
@@ -306,7 +327,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     // también es 0 — el producto queda a la venta regalado.
     const lineaValida = !!selected
         && parseFloat(form.package_qty) > 0
-        && parseFloat(form.package_price) > 0
+        && effectivePkgPrice > 0
         // Por piezas: medidas completas y piezas enteras (media lámina no se numera).
         && (!pieceMode || (parseFloat(form.package_size) > 0 && Number.isInteger(parseFloat(form.package_qty))));
 
@@ -346,7 +367,9 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
     const precioAntes = parseFloat(selected?.price) || 0;
     const precioNuevo = calc && !calc.keepsPrice ? parseFloat(calc.sale_price) || 0 : 0;
     const cambiaPrecio = selected?.sellable !== false && precioNuevo > 0 && precioAntes > 0 && Math.abs(precioNuevo - precioAntes) >= 0.005;
-    const totalLinea  = (parseFloat(form.package_qty) || 0) * (parseFloat(form.package_price) || 0);
+    const totalLinea  = costMode === "total"
+        ? (parseFloat(totalInput) || 0)
+        : (parseFloat(form.package_qty) || 0) * (parseFloat(form.package_price) || 0);
 
     return (
         <div
@@ -594,19 +617,54 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                 <p className="text-[13px] font-semibold text-content dark:text-white mb-2.5">Costo y precio</p>
                                 <div className={selected.sellable === false ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}>
                                     <div className="space-y-1.5">
-                                        <label className="text-[12px] text-content-subtle">Costo por {pkgNombre}</label>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <label className="text-[12px] text-content-subtle truncate">
+                                                {costMode === "total" ? "Costo total" : `Costo por ${pkgNombre}`}
+                                            </label>
+                                            <div className="inline-flex rounded-full bg-surface-2 dark:bg-white/[0.06] p-0.5 text-[10.5px] font-semibold shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => switchCostMode("unit")}
+                                                    className={`px-2 py-0.5 rounded-full transition-colors ${costMode === "unit" ? "bg-white dark:bg-white/15 text-content dark:text-white shadow-sm" : "text-content-subtle hover:text-content dark:hover:text-white"}`}
+                                                >
+                                                    Por {pkgNombre}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => switchCostMode("total")}
+                                                    className={`px-2 py-0.5 rounded-full transition-colors ${costMode === "total" ? "bg-white dark:bg-white/15 text-content dark:text-white shadow-sm" : "text-content-subtle hover:text-content dark:hover:text-white"}`}
+                                                >
+                                                    Total
+                                                </button>
+                                            </div>
+                                        </div>
                                         <div className="relative">
                                             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">{invoiceSym}</span>
-                                            <input
-                                                type="text" inputMode="decimal"
-                                                value={form.package_price}
-                                                onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
-                                                placeholder="0.00"
-                                                className="input h-10 pl-11 text-right text-[14px] font-semibold tabular-nums"
-                                            />
+                                            {costMode === "total" ? (
+                                                <input
+                                                    type="text" inputMode="decimal"
+                                                    value={totalInput}
+                                                    onChange={e => setTotalInput(sanitizeDecimal(e.target.value, true))}
+                                                    placeholder="0.00"
+                                                    className="input h-10 pl-11 text-right text-[14px] font-semibold tabular-nums"
+                                                />
+                                            ) : (
+                                                <input
+                                                    type="text" inputMode="decimal"
+                                                    value={form.package_price}
+                                                    onChange={e => setF("package_price", sanitizeDecimal(e.target.value, true))}
+                                                    placeholder="0.00"
+                                                    className="input h-10 pl-11 text-right text-[14px] font-semibold tabular-nums"
+                                                />
+                                            )}
                                         </div>
+                                        {costMode === "total" && effectivePkgPrice > 0 && (
+                                            <p className="text-[12px] text-content-subtle tabular-nums">
+                                                ≈ {invoiceSym} {fmt2(effectivePkgPrice)} por {pkgNombre}
+                                            </p>
+                                        )}
                                         {invoiceRate > 1 && pkgPriceBase > 0 && (
-                                            <p className="text-[12px] text-content-subtle tabular-nums">≈ Ref. {fmt2(pkgPriceBase)}</p>
+                                            <p className="text-[12px] text-content-subtle tabular-nums">≈ Ref. {fmt2(pkgPriceBase)} por {pkgNombre}</p>
                                         )}
                                     </div>
                                     {/* Un insumo no se vende, así que no hay margen que fijar:
@@ -636,7 +694,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
 
                             {/* Resumen de la línea, como un recibo: lo que entra, lo que cuesta cada
                                 una y a cuánto se va a vender. Antes eran tres cajitas de colores. */}
-                            {calc && parseFloat(form.package_price) > 0 && (
+                            {calc && effectivePkgPrice > 0 && (
                                 <div className="rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]">
                                     {[
                                         ["Entran al stock", `${fmtQtyUnit(calc.total_units, selected.unit).toLowerCase()}`],
@@ -735,7 +793,7 @@ export default function ProductSelectorModal({ open, onClose, onAdd, existingIte
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d={editItem ? "M5 13l4 4L19 7" : "M12 4v16m8-8H4"} />
                                 </svg>
                                 {!lineaValida
-                                    ? (parseFloat(form.package_price) > 0 ? "Indica la cantidad" : "Indica el costo")
+                                    ? (effectivePkgPrice > 0 ? "Indica la cantidad" : "Indica el costo")
                                     : `${editItem ? "Guardar cambios" : "Agregar a la orden"} · ${invoiceSym} ${fmt2(totalLinea)}`}
                             </button>
                         </>

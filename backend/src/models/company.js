@@ -54,6 +54,9 @@ module.exports = (sequelize, DataTypes) => {
     // Factura con IVA (ver services/fiscal/iva.js): alícuota por producto, desglose en el papel
     // y Libro de ventas. Lo enciende el superusuario a la empresa que lo necesita.
     iva_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Módulo Farmacia: principio activo, equivalentes en caja, venta fraccionada por caja/unidad
+    // y control de récipes/psicotrópicos con foto. Extra que enciende el superusuario.
+    farmacia_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

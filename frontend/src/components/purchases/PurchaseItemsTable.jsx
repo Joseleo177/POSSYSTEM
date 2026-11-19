@@ -1,8 +1,12 @@
+import { useState } from "react";
 import { fmt2 } from "../../utils/purchaseUtils";
 import { fmtQty, toNameCase } from "../../helpers";
 import { fmtDateShort } from "../../helpers/dates";
 import { isIntegerUnit, fmtQtyUnit } from "../../helpers/unitFormatter";
 import EditablePriceInput from "../ui/EditablePriceInput";
+import Modal from "../ui/Modal";
+import DatePicker from "../ui/DatePicker";
+import { Button } from "../ui/Button";
 import { useFactorIva } from "../../hooks/useFactorIva";
 
 // Líneas de una compra. Las cifras van en tinta: antes cada columna tenía su color (costo
@@ -25,6 +29,22 @@ export default function PurchaseItemsTable({
     forceLots = false,
 }) {
     const factorIva = useFactorIva();
+    const [lotModal, setLotModal] = useState(null);
+    const openLotModal = (item) => setLotModal({
+        uid: item.id ?? item.key,
+        name: item.product_name || item.product?.name || "Producto",
+        lot_number: item.lot_number || "",
+        expiration_date: item.expiration_date ? String(item.expiration_date).slice(0, 10) : "",
+    });
+    const saveLotModal = (e) => {
+        e.preventDefault();
+        if (!lotModal) return;
+        onUpdate?.(lotModal.uid, {
+            lot_number: lotModal.lot_number.trim() || null,
+            expiration_date: lotModal.expiration_date || null,
+        });
+        setLotModal(null);
+    };
     // 'parcial' es una orden abierta con mercancía ya adentro: se sigue editando, con el
     // límite de que una línea no puede bajar de lo que ya entró (lo valida el backend).
     const isEditing = ["borrador", "pendiente", "parcial"].includes(orderStatus);
@@ -229,10 +249,33 @@ export default function PurchaseItemsTable({
                                 </div>
                             </td>
 
-                            {/* Lote / vence: el color solo si está vencido o por vencer. */}
+                            {/* Lote / vence: en edición abre modal propio para editar rápido; el color solo si está vencido o por vencer. */}
                             {showLots && (
                                 <td>
-                                    {item.lot_number || item.expiration_date ? (
+                                    {isEditing ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => openLotModal(item)}
+                                            className="text-left rounded-lg px-2 py-1 -mx-2 -my-1 hover:bg-surface-2 dark:hover:bg-white/[0.06] transition-colors group"
+                                            title="Editar lote y vencimiento"
+                                        >
+                                            {item.lot_number || item.expiration_date ? (
+                                                <>
+                                                    <div className="text-[13px] text-content dark:text-white truncate group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
+                                                        {item.lot_number || "Sin número"}
+                                                    </div>
+                                                    <div className={`text-[12px] tabular-nums ${dias != null && dias < 0 ? "text-red-600 dark:text-red-400 font-medium"
+                                                        : dias != null && dias <= 30 ? "text-amber-700 dark:text-amber-400 font-medium" : "text-content-subtle"}`}>
+                                                        {item.expiration_date ? `Vence ${fmtDateShort(item.expiration_date)}` : "Sin vencimiento"}
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <span className="text-[12px] text-content-subtle group-hover:text-brand-600 dark:group-hover:text-brand-300 transition-colors">
+                                                    + Agregar lote
+                                                </span>
+                                            )}
+                                        </button>
+                                    ) : item.lot_number || item.expiration_date ? (
                                         <>
                                             <div className="text-[13px] text-content dark:text-white truncate">{item.lot_number || "Sin número"}</div>
                                             <div className={`text-[12px] tabular-nums ${dias != null && dias < 0 ? "text-red-600 dark:text-red-400 font-medium"
@@ -449,6 +492,61 @@ export default function PurchaseItemsTable({
                 )}
             </table>
         </div>
+
+        {/* Modal rápido para editar lote y vencimiento de una línea sin abrir toda la ficha */}
+        <Modal
+            open={!!lotModal}
+            onClose={() => setLotModal(null)}
+            title="Lote y vencimiento"
+            width={420}
+            footer={(
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                    <button type="button" onClick={() => setLotModal(null)} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">
+                        Cancelar
+                    </button>
+                    <Button type="submit" form="purchase-lot-form" className="h-12 sm:h-10 px-5 text-[13px]">
+                        Guardar lote
+                    </Button>
+                </div>
+            )}
+        >
+            {lotModal && (
+                <form id="purchase-lot-form" onSubmit={saveLotModal} className="space-y-4">
+                    <div className="text-[13px] font-semibold text-content dark:text-white truncate">
+                        {toNameCase(lotModal.name)}
+                    </div>
+                    <div className="space-y-3">
+                        <div>
+                            <label className="flex items-baseline justify-between gap-2 text-[12px] text-content-subtle mb-1.5">
+                                <span>Número de lote</span>
+                                <span className="text-[11px] text-content-subtle/80">Opcional</span>
+                            </label>
+                            <input
+                                data-autofocus
+                                type="text"
+                                autoComplete="off"
+                                className="input h-10"
+                                value={lotModal.lot_number}
+                                onChange={e => setLotModal(prev => ({ ...prev, lot_number: e.target.value }))}
+                                placeholder="Ej. L-2026-08A"
+                            />
+                        </div>
+                        <div>
+                            <label className="flex items-baseline justify-between gap-2 text-[12px] text-content-subtle mb-1.5">
+                                <span>Fecha de vencimiento</span>
+                                <span className="text-[11px] text-content-subtle/80">Opcional</span>
+                            </label>
+                            <DatePicker
+                                value={lotModal.expiration_date}
+                                onChange={v => setLotModal(prev => ({ ...prev, expiration_date: v || "" }))}
+                                placeholder="Seleccionar fecha"
+                                className="w-full"
+                            />
+                        </div>
+                    </div>
+                </form>
+            )}
+        </Modal>
         </>
     );
 }

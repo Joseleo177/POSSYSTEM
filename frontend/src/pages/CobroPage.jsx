@@ -32,12 +32,17 @@ import QuotationConfirmModal  from "../components/cobro/QuotationConfirmModal";
 import QuantityModal          from "../components/cobro/QuantityModal";
 import CustomerDebtAlert      from "../components/cobro/CustomerDebtAlert";
 import VariantPickerModal     from "../components/cobro/VariantPickerModal";
+import EquivalentsModal       from "../components/cobro/EquivalentsModal";
+import PrescriptionModal      from "../components/cobro/PrescriptionModal";
 
 const fmt = fmtMoney;
 
 export default function CobroPage() {
     const { notify, employee, baseCurrency, activeCurrencies, categories, loadCategories, can, settings, company, pendingAction, setPendingAction, sucursalActual } = useApp();
     const conMesas = !!company?.cocina_enabled && can("tables.view");
+    const farmaciaEnabled = !!company?.farmacia_enabled;
+    const [equivProduct, setEquivProduct] = useState(null);
+    const [showRxModal, setShowRxModal] = useState(false);
     // Configuración → Punto de venta. Sin la clave (empresas de antes) sigue el modal de siempre.
     const revisarAntes = settings?.pos_review_checkout === "true";
 
@@ -203,7 +208,7 @@ export default function CobroPage() {
         // buscador de productos: lo que se teclea es para su propio buscador de clientes, y
         // si el foco se perdió (un clic en una tarjeta) las letras se colaban en la grilla
         // de fondo.
-        modalOpen: !!qtyModalItem || !!variantModel || !!addonPick || !!customer.debtAlert || showHeldModal || showTables || showReturns || showSellerPicker || showAdvance || showConfirmCheckout,
+        modalOpen: !!qtyModalItem || !!variantModel || !!addonPick || !!equivProduct || showRxModal || !!customer.debtAlert || showHeldModal || showTables || showReturns || showSellerPicker || showAdvance || showConfirmCheckout,
         notify,
         setShowHeldModal,
         // Sin sales.pending el F5 queda mudo: el hook lo llama con ?. y no abre nada.
@@ -232,6 +237,13 @@ export default function CobroPage() {
             notify("Abre el turno de caja para poder facturar", "error");
             session.setShowApertura(true);
             return;
+        }
+        if (farmaciaEnabled) {
+            const requiereRx = cart.some(i => i.prescription_type === "controlado" || i.prescription_type === "recipe");
+            if (requiereRx) {
+                setShowRxModal(true);
+                return;
+            }
         }
         checkout(cerrarRevision);
     };
@@ -378,6 +390,8 @@ export default function CobroPage() {
                 hasMore={products.hasMore}
                 notify={notify}
                 activePromos={activePromos}
+                farmaciaEnabled={farmaciaEnabled}
+                onOpenEquivalents={setEquivProduct}
             />
 
             {/* Modales */}
@@ -626,6 +640,35 @@ export default function CobroPage() {
                     }
                 }}
             />
+            {farmaciaEnabled && (
+                <>
+                    <EquivalentsModal
+                        open={!!equivProduct}
+                        onClose={() => setEquivProduct(null)}
+                        product={equivProduct}
+                        warehouseId={activeWarehouse?.id}
+                        onAddUnit={(eq) => addToCart(eq, 1)}
+                        convertToDisplay={convertToDisplay}
+                        currSym={currSym}
+                        fmt={fmt}
+                    />
+                    <PrescriptionModal
+                        open={showRxModal}
+                        onClose={() => setShowRxModal(false)}
+                        hasControlado={cart.some(i => i.prescription_type === "controlado")}
+                        controlledItems={cart.filter(i => i.prescription_type === "controlado")}
+                        recipeItems={cart.filter(i => i.prescription_type === "recipe")}
+                        canApprove={can("pharmacy.approve_controlled")}
+                        canSellRecipe={can("pharmacy.sell_recipe")}
+                        selectedCustomer={selectedCustomer}
+                        notify={notify}
+                        onConfirm={(rx) => {
+                            setShowRxModal(false);
+                            checkout(cerrarRevision, { prescription: rx });
+                        }}
+                    />
+                </>
+            )}
         </div>
     );
 }
