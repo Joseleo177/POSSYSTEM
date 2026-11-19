@@ -17,6 +17,7 @@ async function consumeLotsFEFO({ warehouse_id, product_id, qty, transaction }) {
 
   const lots = await ProductLot.findAll({
     where: { warehouse_id, product_id, qty: { [Op.gt]: 0 } },
+    attributes: ["id", "product_id", "warehouse_id", "lot_number", "expiration_date", "qty"],
     order: [["expiration_date", "ASC"], ["id", "ASC"]],
     transaction,
     lock: true,
@@ -35,7 +36,7 @@ async function consumeLotsFEFO({ warehouse_id, product_id, qty, transaction }) {
     const avail = round3(lot.qty);
     if (avail <= 0) continue;
     const take = round3(Math.min(avail, remaining));
-    await lot.decrement("qty", { by: take, transaction });
+    await lot.decrement("qty", { by: take, silent: true, transaction });
     allocations.push({
       lot_id: lot.id,
       lot_number: lot.lot_number,
@@ -59,7 +60,11 @@ async function restoreLots({ allocations, warehouse_id, product_id, ratio = 1, c
     if (qtyBack <= 0) continue;
 
     let lot = alloc.lot_id
-      ? await ProductLot.findByPk(alloc.lot_id, { transaction, lock: true })
+      ? await ProductLot.findByPk(alloc.lot_id, {
+          attributes: ["id", "product_id", "warehouse_id", "lot_number", "expiration_date", "qty"],
+          transaction,
+          lock: true,
+        })
       : null;
 
     if (!lot && warehouse_id && product_id && alloc.lot_number && alloc.expiration_date) {
@@ -78,7 +83,7 @@ async function restoreLots({ allocations, warehouse_id, product_id, ratio = 1, c
     }
 
     if (lot) {
-      await lot.increment("qty", { by: qtyBack, transaction });
+      await lot.increment("qty", { by: qtyBack, silent: true, transaction });
     }
   }
 }
@@ -103,7 +108,7 @@ async function receiveLots({ allocations, warehouse_id, product_id, ratio = 1, c
       transaction,
       lock: true,
     });
-    await destLot.increment("qty", { by: qtyIn, transaction });
+    await destLot.increment("qty", { by: qtyIn, silent: true, transaction });
   }
 }
 
