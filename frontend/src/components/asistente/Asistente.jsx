@@ -46,6 +46,7 @@ const CONSULTAS = {
     propinas: "Propinas",
     agenda_citas: "Agenda",
     cobranza_sectores: "Cobranza",
+    farmacia_recipes: "Récipes",
 };
 
 const PENSANDO = ["Pensando…", "Revisando tus números…", "Armando la respuesta…"];
@@ -279,6 +280,8 @@ export default function AsistentePanel({ safeTab }) {
         company?.cocina_enabled && (can("tables.view") || can("kitchen.view")) && { icono: "plato", titulo: "Restaurante", pregunta: "¿Qué mesas están abiertas ahora?" },
         company?.comisiones_enabled && can("commissions.view") && { icono: "cobranza", titulo: "Comisiones", pregunta: "¿Cuánto le debo a cada vendedor?" },
         company?.propinas_enabled && can("tips.view") && { icono: "cobranza", titulo: "Propinas", pregunta: "¿Cuánta propina le toca a cada uno?" },
+        company?.farmacia_enabled && can("pharmacy.reports") && { icono: "inventario", titulo: "Farmacia", pregunta: "¿Qué controlados se despacharon esta semana?" },
+        company?.farmacia_enabled && (can("products.view") || can("inventory.view")) && { icono: "inventario", titulo: "Farmacia", pregunta: "¿Qué equivalentes hay del acetaminofén?" },
         can("sales.cash") && !verReportes && { icono: "cobranza", titulo: "Caja", pregunta: "¿Cuánto debería tener en mi caja?" },
         verReportes && { icono: "ventas", titulo: "Ventas", pregunta: "¿Cuánto vendí hoy y cómo me pagaron?" },
         verReportes && { icono: "ideas", titulo: "Ideas para vender más", pregunta: "¿Qué me recomiendas hacer esta semana?" },

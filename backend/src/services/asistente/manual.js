@@ -306,9 +306,33 @@ En Catálogo, botón "Catálogo PDF": arma un catálogo de la marca con portada,
   farmacia_enabled: `
 # Farmacia
 
-- Cada medicamento puede tener su principio activo; en la caja se ofrecen equivalentes con el mismo principio activo y se puede vender por caja o por unidad.
-- Los medicamentos con récipe y los controlados (psicotrópicos) se venden con control: el récipe se registra con foto, y los controlados requieren la autorización con PIN de un regente (permiso "Autorizar y despachar controlados").
-- El libro de control de récipes, con sus fotos, se ve en Reportes (permiso "Ver el libro de control de récipes").
+## Ficha del medicamento
+En Catálogo, al crear o editar el producto, la sección de farmacia tiene:
+- "Principio activo (Genérico)": con él la caja busca y sugiere equivalentes con existencia.
+- "Concentración / Presentación" (por ejemplo 500 mg, caja x 10), "Acción terapéutica" y "Ubicación / Anaquel" (dónde está en la farmacia).
+- "Control sanitario / Tipo de récipe": Venta libre, Con récipe o Controlado (psicotrópicos). Una vez creado, solo el Regente o el administrador lo puede cambiar.
+
+## En la caja
+- El buscador (F1) encuentra por nombre, código, principio activo o laboratorio.
+- Las tarjetas de los medicamentos con récipe o controlados llevan su marca ("Récipe" o "Controlado").
+- Si el producto tiene principio activo, el botón "Equivalentes" de su tarjeta muestra los otros productos con el mismo principio activo y su existencia: sirve cuando no hay la marca que pide el cliente.
+
+## Vender con récipe o controlados
+Al facturar una venta que incluye medicamentos con récipe o controlados, se abre la ventana del récipe:
+1. Datos: "Nombre del paciente", "Cédula / Pasaporte", "Médico tratante", "MPPS / Colegio médico" (opcional), "N° de récipe / talonario" y "Fecha del récipe".
+2. "Foto del récipe": "Tomar foto o subir imagen del récipe" (JPG, PNG o WEBP, máximo 5 MB).
+3. Con controlados, el paciente, la cédula y el médico son obligatorios.
+4. Presiona "Registrar y facturar".
+Si el cajero no tiene permiso para despachar eso solo, el botón pasa a "Solicitar autorización": el Farmacéutico Regente (o un supervisor con el permiso) escribe su "PIN de autorización" en esa misma caja y la venta sigue. Queda registrado quién autorizó.
+- Un controlado siempre necesita a alguien con el permiso "Autorizar y despachar controlados / psicotrópicos (con PIN)".
+- Un medicamento con récipe lo despacha solo quien tiene "Vender medicamentos con récipe médico sin supervisión"; los demás piden el PIN.
+
+## PIN del regente
+Se asigna en Empleados, editando a la persona: campo "PIN de autorización farmacéutica", de 4 a 6 dígitos. Si ya tiene uno, dejarlo vacío no lo cambia. El PIN solo sirve si esa persona tiene el permiso de autorizar.
+
+## Libro de control y vencimientos
+- Reportes, "Control de récipes": cada despacho con fecha, factura, paciente, médico, número de récipe, quién autorizó y la foto del récipe. Se filtra por controlados o con récipe y se busca por paciente, cédula, médico o medicamento. Requiere "Ver el libro de control de récipes y sus fotos".
+- Los lotes y su vencimiento se cargan al recibir la compra (Recibir mercancía). Al vender, el sistema descuenta primero del lote que vence antes. Reportes, Vencimientos, muestra lo vencido y lo que está por vencer con su valor.
 `,
 };
 

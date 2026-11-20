@@ -129,9 +129,9 @@ const HERRAMIENTAS = [
   },
   {
     nombre: "existencia_producto",
-    descripcion: "Busca productos por nombre o código de barras y devuelve su existencia y precio en cada sucursal que el usuario ve.",
+    descripcion: "Busca productos por nombre, código de barras o principio activo y devuelve su existencia y precio en cada sucursal que el usuario ve. En farmacias trae además principio activo, concentración, anaquel y si es de venta libre, con récipe o controlado: buscar por el principio activo da los equivalentes.",
     parametros: {
-      buscar: { type: "string", description: "Nombre (o parte) o código de barras del producto." },
+      buscar: { type: "string", description: "Nombre (o parte), código de barras o principio activo (genérico) del producto." },
     },
     requeridos: ["buscar"],
     permisos: ["products.view", "inventory.view"],
@@ -144,13 +144,15 @@ const HERRAMIENTAS = [
       const whFiltro = Array.isArray(permitidas) ? `AND ps.warehouse_id IN (${permitidas.filter(Number.isInteger).join(",")})` : "";
       const filas = await sequelize.query(
         `SELECT p.id, p.name, p.unit, p.barcode, p.is_service, p.is_combo,
+                p.active_ingredient, p.concentration, p.shelf_location, p.prescription_type,
                 w.name AS sucursal, ps.qty, COALESCE(ps.price, p.price)::float AS precio
            FROM products p
            LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.company_id = p.company_id ${whFiltro}
            LEFT JOIN warehouses w ON w.id = ps.warehouse_id
           WHERE p.company_id = :cid
             AND p.is_variant_parent = false
-            AND (translate(lower(p.name), 'áéíóúüñàèìòù', 'aeiouunaeiou') LIKE :like OR p.barcode = :exacto)
+            AND (translate(lower(p.name), 'áéíóúüñàèìòù', 'aeiouunaeiou') LIKE :like OR p.barcode = :exacto
+                 OR translate(lower(COALESCE(p.active_ingredient, '')), 'áéíóúüñàèìòù', 'aeiouunaeiou') LIKE :like)
           ORDER BY (p.barcode IS NOT DISTINCT FROM :exacto) DESC, p.name ASC, w.name ASC
           LIMIT 60`,
         { replacements: { cid: req.company_id, like: `%${String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[%_]/g, "")}%`, exacto: texto }, type: Sequelize.QueryTypes.SELECT }
@@ -162,6 +164,11 @@ const HERRAMIENTAS = [
           porProducto.set(f.id, {
             producto: f.name, unidad: f.unit, codigo: f.barcode,
             tipo: f.is_service ? "servicio" : f.is_combo ? "combo" : "producto",
+            // Ficha farmacéutica: solo cuando existe (en las demás tiendas va vacía y se omite).
+            ...(f.active_ingredient ? { principio_activo: f.active_ingredient } : {}),
+            ...(f.concentration ? { concentracion: f.concentration } : {}),
+            ...(f.shelf_location ? { anaquel: f.shelf_location } : {}),
+            ...(f.prescription_type && f.prescription_type !== "libre" ? { venta: f.prescription_type === "controlado" ? "controlado" : "con récipe" } : {}),
             sucursales: [],
           });
         }
@@ -456,7 +463,10 @@ HERRAMIENTAS.push(
         ventana_dias: dias,
         vencidos: cerca.filter(l => l.days_left < 0).length,
         por_vencer: cerca.filter(l => l.days_left >= 0).length,
-        lotes: cerca.slice(0, 25).map(l => ({ producto: l.product, lote: l.lot, vence: l.expiry, dias: l.days_left, cantidad: l.stock, unidad: l.unit, valor_en_riesgo: l.value_at_risk, sucursal: l.warehouse })),
+        lotes: cerca.slice(0, 25).map(l => ({
+          producto: l.product, lote: l.lot, vence: l.expiry, dias: l.days_left, cantidad: l.stock, unidad: l.unit, valor_en_riesgo: l.value_at_risk, sucursal: l.warehouse,
+          ...(l.active_ingredient ? { principio_activo: l.active_ingredient } : {}), ...(l.shelf_location ? { anaquel: l.shelf_location } : {}),
+        })),
       };
     },
   },
@@ -647,6 +657,59 @@ HERRAMIENTAS.push(
     },
   },
 );
+
+// ── Farmacia (20-11-2026). El libro de control asocia pacientes con medicamentos (también
+// psicotrópicos): es dato de salud y NO sale hacia el proveedor de IA. Van cantidades,
+// medicamentos, médicos, quién autorizó y qué falta (foto, número); el paciente se ve en
+// Reportes, en el libro.
+HERRAMIENTAS.push({
+  nombre: "farmacia_recipes",
+  descripcion: "Libro de control de récipes y controlados de un período, SIN datos de pacientes: cuántos récipes y controlados se despacharon, por medicamento y principio activo, por médico, quién autorizó, y cuáles quedaron sin foto o sin número de récipe.",
+  parametros: {
+    ...PARAM_RANGO,
+    tipo: { type: "string", enum: ["todos", "controlado", "recipe"], description: "Solo controlados, solo con récipe, o todos (por defecto)." },
+  },
+  permisos: ["pharmacy.reports"],
+  modulo: "farmacia_enabled",
+  async ejecutar(req, args) {
+    const { desde, hasta } = rango(args);
+    const ctx = await buildTenantContext(req);
+    const filas = await reportes.prescriptionsReport({
+      ...ctx, from: desde, to: hasta, warehouse_id: await sucursal(req, args),
+      prescription_type: ["controlado", "recipe"].includes(args.tipo) ? args.tipo : undefined,
+    });
+    const recipes = new Map();
+    for (const f of filas) if (!recipes.has(f.prescription_id)) recipes.set(f.prescription_id, f);
+    const contar = (lista, clave) => Object.entries(lista.reduce((m, x) => { const k = clave(x) || "Sin dato"; m[k] = (m[k] || 0) + 1; return m; }, {}))
+      .sort((a, b) => b[1] - a[1]).slice(0, 10).map(([nombre, veces]) => ({ nombre, veces }));
+    const porMedicamento = Object.values(filas.reduce((m, f) => {
+      const k = f.product_name;
+      m[k] = m[k] || { medicamento: k, principio_activo: f.active_ingredient, tipo: f.prescription_type, despachos: 0, cantidad: 0 };
+      m[k].despachos += 1; m[k].cantidad += f.quantity;
+      return m;
+    }, {})).sort((a, b) => b.despachos - a.despachos).slice(0, 15);
+    const lista = [...recipes.values()];
+    return {
+      periodo: { desde, hasta },
+      recipes_registrados: lista.length,
+      lineas_despachadas: filas.length,
+      controlados: filas.filter(f => f.prescription_type === "controlado").length,
+      con_recipe: filas.filter(f => f.prescription_type === "recipe").length,
+      sin_foto: lista.filter(r => !r.photo_filename).length,
+      sin_numero_de_recipe: lista.filter(r => !r.prescription_number).length,
+      autorizados_con_pin: lista.filter(r => r.approved_by).length,
+      por_medicamento: porMedicamento,
+      por_medico: contar(lista, r => r.doctor_name),
+      autorizo: contar(lista.filter(r => r.approved_by), r => r.approver_name),
+      ultimos: lista.slice(0, 10).map(r => ({
+        factura: r.invoice_number, fecha: r.sale_date, medico: r.doctor_name, autorizo: r.approver_name || null,
+        tiene_foto: !!r.photo_filename, numero_recipe: r.prescription_number || null,
+        medicamentos: filas.filter(f => f.prescription_id === r.prescription_id).map(f => f.product_name).join(", "),
+      })),
+      nota: "Los datos de los pacientes no se muestran aquí: están en Reportes, libro de control de récipes.",
+    };
+  },
+});
 
 // Sin permisos en la lista = cualquiera que tenga el asistente (las tasas, por ejemplo).
 const puede = (req, h) => !h.permisos.length || h.permisos.some(p => hasPermission(req.employee?.permissions, p));
