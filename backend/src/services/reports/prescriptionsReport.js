@@ -71,8 +71,7 @@ module.exports = async function prescriptionsReport({
       si.id AS sale_item_id,
       si.name AS product_name,
       si.quantity,
-      si.unit_label,
-      si.stock_factor,
+      p.unit AS unit_label,
       p.active_ingredient,
       p.concentration,
       p.prescription_type
@@ -92,7 +91,6 @@ module.exports = async function prescriptionsReport({
   return rows.map(r => ({
     ...r,
     quantity: parseFloat(r.quantity || 0),
-    stock_factor: parseFloat(r.stock_factor || 1),
     photo_url: imageUrl(r.photo_filename),
   }));
 };

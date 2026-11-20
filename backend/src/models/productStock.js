@@ -59,11 +59,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DECIMAL(10, 3),
       allowNull: true
     },
-    // Precio por caja/empaque completo de esta sucursal (módulo Farmacia). NULL = hereda del producto.
-    box_price: {
-      type: DataTypes.DECIMAL(14, 5),
-      allowNull: true
-    },
+    // product_stock.box_price queda en la base sin uso (venta por caja quitada el 20-11-2026).
     company_id: {
       type: DataTypes.INTEGER,
       allowNull: true

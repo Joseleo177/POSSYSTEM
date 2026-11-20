@@ -41,10 +41,8 @@ module.exports = (sequelize, DataTypes) => {
     // facturaba con IVA. El precio ya la incluye: solo dice cómo se desglosa el total. La pone
     // un hook (services/fiscal/iva.js), así que ningún camino que cree líneas la olvida.
     iva_rate: { type: DataTypes.DECIMAL(5, 2), allowNull: true },
-    // Factor de descuento en inventario (módulo Farmacia): 1 = unidad mínima, package_size = caja.
-    // Anulaciones y devoluciones multiplican quantity * stock_factor para reponer exactamente.
-    stock_factor: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 1 },
-    unit_label: { type: DataTypes.STRING(40), allowNull: true },
+    // sale_items.stock_factor (siempre 1) y unit_label quedan en la base sin uso: la venta por
+    // caja se quitó el 20-11-2026. Una caja se vende como combo, que ya descuenta sus unidades.
     // Lotes descontados en FEFO al vender: [{ lot_id, lot_number, expiration_date, qty }].
     lot_allocations: { type: DataTypes.JSONB, allowNull: true }
   }, {

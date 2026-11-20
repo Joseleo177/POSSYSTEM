@@ -36,9 +36,9 @@ const EMPTY = {
     // Control por piezas (módulo Fábrica). Las medidas van como se escriben; al guardar se
     // pasan a milímetros.
     piece_mode: "", piece_w: "", piece_l: "",
-    // Ficha farmacéutica y venta por caja (módulo Farmacia).
+    // Ficha farmacéutica (módulo Farmacia). Una caja se vende como combo, no con precio aparte.
     active_ingredient: "", concentration: "", therapeutic_action: "", shelf_location: "",
-    prescription_type: "libre", box_price: "",
+    prescription_type: "libre",
 };
 
 // onPickExisting: quien abre el modal para usar un producto (la compra) recibe el que ya existe
@@ -169,7 +169,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                     therapeutic_action: editData.therapeutic_action || "",
                     shelf_location: editData.shelf_location || "",
                     prescription_type: editData.prescription_type || "libre",
-                    box_price: editData.box_price != null && editData.box_price !== "" ? String(parseFloat(editData.box_price)) : "",
                     combo_items: editData.comboItems ? editData.comboItems.map(c => ({
                         product_id: c.ingredient.id,
                         name: c.ingredient.name,
@@ -427,10 +426,6 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             setTab("costos");
             return notify("La cantidad para el precio al mayor tiene que ser mayor que cero", "err");
         }
-        if (farmaciaEnabled && form.box_price !== "" && !(parseFloat(form.box_price) >= 0)) {
-            setTab("farmacia");
-            return notify("El precio por caja tiene que ser un número válido", "err");
-        }
         const submissionForm = { ...form };
         // Hay pantallas que abren la ficha con un producto a medias (una línea de compra). Si
         // no traía estos campos, mandarlos vacíos borraría el precio al mayor sin que nadie lo
@@ -444,10 +439,8 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
             delete submissionForm.therapeutic_action;
             delete submissionForm.shelf_location;
             delete submissionForm.prescription_type;
-            delete submissionForm.box_price;
-        } else {
-            if (editData && !("box_price" in editData)) delete submissionForm.box_price;
-            if (editData && !canEditSanitario) delete submissionForm.prescription_type;
+        } else if (editData && !canEditSanitario) {
+            delete submissionForm.prescription_type;
         }
         if (form.has_variants) {
             // Sin abrir la pestaña no hay nada que mandar: el servidor deja las variantes como

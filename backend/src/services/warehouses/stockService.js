@@ -260,8 +260,6 @@ async function getProducts(req) {
       p.is_combo, p.is_service, p.barcode, p.is_variant_parent, p.parent_id, p.is_addon, p.iva_tipo,
       p.brand, p.active_ingredient, p.concentration, p.therapeutic_action, p.shelf_location,
       p.prescription_type, p.package_unit, p.package_size,
-      COALESCE(ps.box_price, p.box_price) AS box_price,
-      (ps.box_price IS NOT NULL) AS box_price_own,
       COALESCE(ps.cost_price, p.cost_price) AS cost_price,
       -- Precio y mínimo son los de esta sucursal si los definió. De acá come la caja, así que
       -- con esto el POS cobra el precio de la tienda sin saber que existe una herencia detrás.
@@ -426,8 +424,6 @@ async function getProducts(req) {
     prescription_type:  p.prescription_type || 'libre',
     package_unit:       p.package_unit || null,
     package_size:       p.package_size != null ? parseFloat(p.package_size) : null,
-    box_price:          p.box_price != null ? parseFloat(p.box_price) : null,
-    box_price_own:      !!p.box_price_own,
     image_url:    p.image_filename ? (p.image_filename.startsWith('http') ? p.image_filename : `/uploads/${p.image_filename}`) : null
   }));
 

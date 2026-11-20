@@ -342,8 +342,7 @@ export function CartProvider({ children }) {
         if (!usage[item.id]) {
           usage[item.id] = { used: 0, maxStock: parseFloat(item.stock) || 0 };
         }
-        const factor = parseFloat(item.stock_factor) || 1;
-        usage[item.id].used += parseFloat(item.qty) * factor;
+        usage[item.id].used += parseFloat(item.qty);
       }
     }
     for (const id in usage) {
@@ -352,7 +351,7 @@ export function CartProvider({ children }) {
     return true;
   }, []);
 
-  const addToCart = useCallback((product, customQty = null, silentError = false, options = null) => {
+  const addToCart = useCallback((product, customQty = null, silentError = false) => {
     if (!activeWarehouse) { if (!silentError) notify("Selecciona una sucursal antes de cobrar", "err"); return false; }
     // Plato con adicionales (término, extras): se eligen en su ficha antes de entrar al carrito.
     // Pasa por aquí venga de donde venga —toque en la grilla, lector de código, cantidad—, así
@@ -362,33 +361,17 @@ export function CartProvider({ children }) {
     const hasUnlimitedStock = product.is_service || (product.is_combo && product.stock === null);
     if (!hasUnlimitedStock && parseFloat(product.stock) <= 0) { if (!silentError) notify("Sin stock disponible", "err"); return false; }
 
-    // Venta por caja (módulo Farmacia): línea separada con clave `${id}:box`, precio de caja
-    // y stock_factor = package_size para descontar exactas las unidades mínimas del inventario.
-    const pkgSize = parseFloat(product.package_size);
-    const asBox = options?.sellAs === 'box' && !product.is_service && !product.is_combo && pkgSize > 1 && product.box_price != null;
-
-    const step = asBox ? 1 : (parseFloat(product.qty_step) || 1);
+    // Una caja de farmacia no es una línea especial: se vende como combo ("Caja x 10"), con su
+    // precio y su código, y el combo descuenta las unidades (venta por caja quitada el 20-11-2026).
+    const step = parseFloat(product.qty_step) || 1;
     const initialQty = customQty !== null ? parseFloat(customQty) : step;
 
-    const boxKey = asBox ? `${product.id}:box` : null;
-    const matchLine = (i) => asBox ? i.key === boxKey : (!i.key && i.id === product.id);
+    const matchLine = (i) => !i.key && i.id === product.id;
     const ex = cart.find(matchLine);
     let newCart;
     if (ex) {
       const nq = parseFloat((ex.qty + initialQty).toFixed(3));
       newCart = cart.map(i => matchLine(i) ? { ...i, qty: nq } : i);
-    } else if (asBox) {
-      const unitLabel = `${product.package_unit || "Caja"} x${pkgSize}`;
-      newCart = [...cart, {
-        ...product,
-        key: boxKey,
-        sell_as: 'box',
-        stock_factor: pkgSize,
-        unit_label: unitLabel,
-        price: parseFloat(product.box_price),
-        name: `${product.name} (${unitLabel})`,
-        qty: initialQty,
-      }];
     } else {
       newCart = [...cart, { ...product, qty: initialQty }];
     }
@@ -424,7 +407,7 @@ export function CartProvider({ children }) {
         i = { ...i, wholesale_price: p.wholesale_price, wholesale_min_qty: p.wholesale_min_qty };
       }
       if (i.price_locked) return i;
-      const precioFuente = i.sell_as === 'box' ? p?.box_price : p?.price;
+      const precioFuente = p?.price;
       if (!p || precioFuente == null) return i;
       const nuevo = parseFloat(precioFuente);
       if (!isFinite(nuevo) || Math.abs(nuevo - parseFloat(i.price)) < 1e-9) return i;
@@ -1505,7 +1488,6 @@ export function CartProvider({ children }) {
           line_discount: ldPayload(i),
           note: i.note,
           seat: i.seat ?? null,
-          ...(i.sell_as === 'box' ? { sell_as: 'box', stock_factor: i.stock_factor, unit_label: i.unit_label } : {}),
         })),
         paid: 0,
         customer_id: selectedCustomer?.id || null,

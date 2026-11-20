@@ -264,30 +264,18 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         ...(descuentaStock ? { lock: true } : {}),
       });
 
-      // Venta por caja (módulo Farmacia): si la línea viene como caja y el producto tiene
-      // empaque (> 1 unidad mínima), se usa el precio por caja de la sucursal (o el general)
-      // y se descuenta `quantity * package_size` unidades exactas del inventario.
-      const pkgSize = parseFloat(product.package_size);
-      const boxPriceSuc = fichaSucursal?.box_price ?? product.box_price;
-      const esCaja = !product.is_service && !product.is_combo && item.sell_as === 'box' && pkgSize > 1;
-      const stockFactor = offline
-        ? (parseFloat(item.stock_factor) > 0 ? parseFloat(item.stock_factor) : (esCaja ? pkgSize : 1))
-        : (esCaja ? pkgSize : 1);
-      const unitLabel = item.unit_label
-        ? String(item.unit_label).trim().slice(0, 40)
-        : (esCaja ? `${product.package_unit || 'Caja'} x${pkgSize}` : (product.unit || null));
-
+      // La venta "por caja" con precio y factor propios se quitó (20-11-2026, decisión del
+      // usuario): una caja se vende como producto compuesto (combo "Caja x 10" que descuenta 10
+      // unidades), con su precio, código y existencia, sin un segundo mecanismo de precio.
       if (product.prescription_type === 'controlado') hasControlado = true;
       if (product.prescription_type === 'recipe') hasRecipe = true;
 
-      // Orden: lo pactado en la cotización, si no el precio por caja (si aplica), si no el
-      // precio de esta sucursal, si no el general. Sin conexión manda el precio con que se cobró.
+      // Orden: lo pactado en la cotización, si no el precio de esta sucursal, si no el
+      // general. Sin conexión manda el precio con que se cobró.
       let rawPrice;
       if (offline) {
         rawPrice = parseFloat(item.price);
         if (!Number.isFinite(rawPrice) || rawPrice < 0) throw new Error(`Precio inválido para "${product.name}"`);
-      } else if (esCaja && boxPriceSuc != null) {
-        rawPrice = parseFloat(boxPriceSuc);
       } else {
         rawPrice = precioPactado.has(product.id)
           ? precioPactado.get(product.id)
@@ -300,7 +288,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
       if (offline) {
         const lp = parseFloat(item.list_price);
         if (item.wholesale === true && Number.isFinite(lp) && lp >= 0) { alMayor = true; listPrice = lp; }
-      } else if (!esCaja && mayorDe[idx]) {
+      } else if (mayorDe[idx]) {
         alMayor = true;
         listPrice = rawPrice;
         rawPrice = mayorDe[idx].price;
@@ -369,7 +357,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         const stockEntry = fichaSucursal || (offline ? await fichaEnCero(warehouse_id, product.id, transaction) : null);
 
         const currentQty = parseFloat(stockEntry?.qty || 0);
-        const qtyToDeduct = parseFloat((item.quantity * stockFactor).toFixed(3));
+        const qtyToDeduct = parseFloat(item.quantity);
         if (offline) {
           if (currentQty < qtyToDeduct) stockNegativo.push(product.name);
         } else if (currentQty < qtyToDeduct) {
@@ -377,7 +365,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         }
 
         total += roundedPrice * item.quantity - lineDiscountUsd;
-        enrichedItems.push({ product, qty: item.quantity, stockFactor, unitLabel, qtyToDeduct, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
+        enrichedItems.push({ product, qty: item.quantity, qtyToDeduct, isCombo: false, stockEntry, lineDiscountBs, unitPrice: rawPrice, manual, note: notaLinea(item.note), seat: puestoLinea(item.seat), alMayor, listPrice });
       }
     }
 
@@ -519,7 +507,7 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
         unitCost = entry.qty > 0 ? parseFloat((comboCost / entry.qty).toFixed(5)) : null;
       } else {
         const costo = entry.stockEntry?.cost_price ?? entry.product.cost_price;
-        if (costo != null) unitCost = parseFloat((parseFloat(costo) * (entry.stockFactor || 1)).toFixed(5));
+        if (costo != null) unitCost = parseFloat(parseFloat(costo).toFixed(5));
       }
 
       let lotAllocations = null;
@@ -560,8 +548,6 @@ module.exports = async function createSale(body, req, { offline = null, waiterId
           note: entry.note,
           seat: entry.seat ?? null,
           components: entry.isCombo ? fotoConsumo(entry.ingredientsData, entry.qty) : null,
-          stock_factor: entry.stockFactor || 1,
-          unit_label: entry.unitLabel || null,
           lot_allocations: lotAllocations,
         },
         { transaction }

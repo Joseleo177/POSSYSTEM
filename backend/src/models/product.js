@@ -80,9 +80,8 @@ module.exports = (sequelize, DataTypes) => {
     shelf_location: { type: DataTypes.STRING(60), allowNull: true },
     // 'libre' | 'recipe' | 'controlado' (psicotrópico / estupefaciente / antibiótico controlado)
     prescription_type: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'libre' },
-    // Precio general por caja/empaque completo (package_size unidades mínimas). Cada sucursal
-    // puede fijar el suyo en product_stock.box_price (NULL = hereda).
-    box_price: { type: DataTypes.DECIMAL(14, 5), allowNull: true },
+    // La columna products.box_price queda en la base sin uso: la venta por caja se quitó
+    // (20-11-2026); una caja se vende como combo.
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {
     sequelize,

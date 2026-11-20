@@ -173,7 +173,7 @@ async function createReturn({ saleId, items, reason, employee_id, refund, surplu
             defaults: { qty: 0 },
             transaction, lock: true,
           });
-          const qtyToRestore = parseFloat((parseFloat(line.qty) * parseFloat(vendida?.stock_factor || 1)).toFixed(3));
+          const qtyToRestore = parseFloat(line.qty);
           await stockEntry.increment("qty", { by: qtyToRestore, transaction });
           if (vendida?.lot_allocations?.length && parseFloat(vendida.quantity) > 0) {
             await restoreLots({

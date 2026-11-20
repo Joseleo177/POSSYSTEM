@@ -317,6 +317,9 @@ En Catálogo, al crear o editar el producto, la sección de farmacia tiene:
 - Las tarjetas de los medicamentos con récipe o controlados llevan su marca ("Récipe" o "Controlado").
 - Si el producto tiene principio activo, el botón "Equivalentes" de su tarjeta muestra los otros productos con el mismo principio activo y su existencia: sirve cuando no hay la marca que pide el cliente.
 
+## Vender por caja o por blíster
+El medicamento se carga por su unidad mínima (la pastilla, el sobre). Para vender la caja completa con su propio precio, se crea un producto Combo, por ejemplo "Acetaminofén 500 mg caja x 10", que lleva 10 unidades del producto suelto: tiene su precio, su código de barras y su foto, y al venderlo descuenta las 10 unidades del inventario. Igual para un blíster. Así se puede vender suelto o por caja sin que el inventario se descuadre.
+
 ## Vender con récipe o controlados
 Al facturar una venta que incluye medicamentos con récipe o controlados, se abre la ventana del récipe:
 1. Datos: "Nombre del paciente", "Cédula / Pasaporte", "Médico tratante", "MPPS / Colegio médico" (opcional), "N° de récipe / talonario" y "Fecha del récipe".

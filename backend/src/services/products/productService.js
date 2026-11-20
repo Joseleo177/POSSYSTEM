@@ -419,7 +419,7 @@ async function getAll({ search, barcode, category_id, subcategory, is_combo, is_
       required: false,
       // price, min_stock, cost_price y profit_margin salen de la misma fila: viendo un
       // almacén, lo que vale es lo que esa sucursal tenga definido.
-      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin', 'wholesale_price', 'wholesale_min_qty', 'box_price']
+      attributes: ['qty', 'price', 'min_stock', 'cost_price', 'profit_margin', 'wholesale_price', 'wholesale_min_qty']
     });
   }
 
@@ -487,9 +487,6 @@ async function getAll({ search, barcode, category_id, subcategory, is_combo, is_
       if (prod.wholesale_own) prod.wholesale_price = ficha.wholesale_price;
       prod.wholesale_min_own = ficha.wholesale_min_qty != null;
       if (prod.wholesale_min_own) prod.wholesale_min_qty = ficha.wholesale_min_qty;
-      // Precio por caja (módulo Farmacia): misma herencia por sucursal.
-      prod.box_price_own = ficha.box_price != null;
-      if (prod.box_price_own) prod.box_price = ficha.box_price;
 
       // El margen se recalcula sobre el precio y el costo que acaban de quedar, que son los
       // de esta sucursal. Guardado en el producto es el del precio general, y mostrarlo junto
@@ -644,18 +641,6 @@ function cantidadMayor(valor) {
   return n;
 }
 
-// Precio por caja/empaque completo (módulo Farmacia). Igual que precioMayor.
-function precioCaja(valor) {
-  if (valor === undefined) return undefined;
-  if (valor === null || String(valor).trim() === "") return null;
-  const n = parseFloat(valor);
-  if (!Number.isFinite(n) || n < 0) {
-    const e = new Error("El precio por caja tiene que ser un número mayor o igual a cero");
-    e.status = 400; e.isOperational = true; throw e;
-  }
-  return n;
-}
-
 const PRESCRIPTION_TYPES = new Set(['libre', 'recipe', 'controlado']);
 function tipoRecipe(valor) {
   if (valor === undefined) return undefined;
@@ -737,13 +722,12 @@ async function createProduct({ body, file, company_id }) {
       // Se prepara en cocina (pedidos web): ver migración 20261101160000-pedidos-etapas.
       kitchen_prep: body.kitchen_prep === 'true' || body.kitchen_prep === true,
       iva_tipo: ivaTipo(body.iva_tipo) || 'G',
-      // Ficha farmacéutica y precio por caja (módulo Farmacia).
+      // Ficha farmacéutica (módulo Farmacia). Una caja se vende como combo, no con precio aparte.
       active_ingredient: textoCorto(body.active_ingredient, 200) ?? null,
       concentration: textoCorto(body.concentration, 80) ?? null,
       therapeutic_action: textoCorto(body.therapeutic_action, 120) ?? null,
       shelf_location: textoCorto(body.shelf_location, 60) ?? null,
       prescription_type: tipoRecipe(body.prescription_type) || 'libre',
-      box_price: precioCaja(body.box_price) ?? null,
       company_id,
     }, { transaction: t });
 
@@ -875,7 +859,6 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
     // Precio al mayor y su cantidad mínima, ya validados (undefined = no vinieron).
     const mayorNuevo = precioMayor(body.wholesale_price);
     const minMayorNuevo = cantidadMayor(body.wholesale_min_qty);
-    const cajaNueva = precioCaja(body.box_price);
     const precioFinal = opt(price, product.price, product.price);
     const costoFinal  = isComboBool ? null : opt(cost_price, product.cost_price);
     // El margen manda solo si viene escrito; si no, se recalcula. Conservar el anterior
@@ -952,8 +935,6 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       if (mayorPropio !== undefined) cambios.wholesale_price = mayorPropio;
       const minPropio = propio(minMayorNuevo, ficha?.wholesale_min_qty, product.wholesale_min_qty);
       if (minPropio !== undefined) cambios.wholesale_min_qty = minPropio;
-      const cajaPropia = propio(cajaNueva, ficha?.box_price, product.box_price);
-      if (cajaPropia !== undefined) cambios.box_price = cajaPropia;
 
       precioSeraPropio = (cambios.price !== undefined ? cambios.price : (ficha?.price ?? null)) != null;
 
@@ -1024,7 +1005,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
         : (body.kitchen_prep === 'true' || body.kitchen_prep === true),
       // Solo lo manda el modal de una empresa con IVA; sin el campo se conserva.
       iva_tipo: ivaTipo(body.iva_tipo) || product.iva_tipo,
-      // Ficha farmacéutica y precio por caja (módulo Farmacia).
+      // Ficha farmacéutica (módulo Farmacia). Una caja se vende como combo, no con precio aparte.
       active_ingredient: textoCorto(body.active_ingredient, 200) === undefined ? product.active_ingredient : textoCorto(body.active_ingredient, 200),
       concentration: textoCorto(body.concentration, 80) === undefined ? product.concentration : textoCorto(body.concentration, 80),
       therapeutic_action: textoCorto(body.therapeutic_action, 120) === undefined ? product.therapeutic_action : textoCorto(body.therapeutic_action, 120),
@@ -1043,7 +1024,6 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
         }
         return nuevoTipo;
       })(),
-      box_price: (alcanceSucursal && !esGlobalSinFicha) || cajaNueva === undefined ? product.box_price : cajaNueva,
     }, { transaction: t });
 
     // Control por piezas (Fábrica). Se valida después de escribir lo demás porque la unidad
@@ -1477,7 +1457,6 @@ async function getEquivalents({ productId, warehouse_id, company_id }) {
       p.therapeutic_action, p.shelf_location, p.prescription_type,
       p.unit, p.qty_step, p.package_unit, p.package_size, p.barcode, p.iva_tipo, p.image_filename,
       COALESCE(ps.price, p.price) AS price,
-      COALESCE(ps.box_price, p.box_price) AS box_price,
       COALESCE(ps.wholesale_price, p.wholesale_price) AS wholesale_price,
       COALESCE(ps.wholesale_min_qty, p.wholesale_min_qty) AS wholesale_min_qty,
       ${wid ? 'COALESCE(ps.qty, 0)' : 'COALESCE(p.stock, 0)'} AS stock
@@ -1498,7 +1477,6 @@ async function getEquivalents({ productId, warehouse_id, company_id }) {
   const data = rows.map(r => ({
     ...r,
     price: parseFloat(r.price),
-    box_price: r.box_price != null ? parseFloat(r.box_price) : null,
     wholesale_price: r.wholesale_price != null ? parseFloat(r.wholesale_price) : null,
     wholesale_min_qty: r.wholesale_min_qty != null ? parseFloat(r.wholesale_min_qty) : null,
     package_size: r.package_size != null ? parseFloat(r.package_size) : null,

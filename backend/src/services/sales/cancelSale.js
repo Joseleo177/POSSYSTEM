@@ -70,7 +70,7 @@ module.exports = async function cancelSale(id, req) {
           transaction,
           lock: true,
         });
-        const qtyToRestore = parseFloat((parseFloat(item.quantity) * parseFloat(item.stock_factor || 1)).toFixed(3));
+        const qtyToRestore = parseFloat(item.quantity);
         await stockEntry.increment("qty", { by: qtyToRestore, transaction });
         if (item.lot_allocations?.length) {
           await restoreLots({
