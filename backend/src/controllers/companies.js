@@ -47,7 +47,7 @@ const create = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
 
-    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled, admin_username, admin_password } = req.body;
+    const { name, tax_id, address, phone, email, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled, print_format, fiscal_enabled, admin_username, admin_password } = req.body;
     if (!name) return res.status(400).json({ ok: false, message: "Nombre es requerido" });
 
     const wantedUser = admin_username?.trim() || null;
@@ -96,6 +96,8 @@ const create = async (req, res) => {
         catalogo_pdf_enabled: !!catalogo_pdf_enabled,
         mayor_enabled: !!mayor_enabled,
         farmacia_enabled: !!farmacia_enabled,
+        print_format: print_format || 'ticket',
+        fiscal_enabled: !!fiscal_enabled,
         seo_enabled: seo_enabled !== false
       }, { transaction });
 
@@ -248,7 +250,7 @@ const update = async (req, res) => {
   try {
     if (!req.is_superuser) return res.status(403).json({ ok: false, message: "Acceso denegado" });
     const { id } = req.params;
-    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled } = req.body;
+    const { name, tax_id, address, phone, email, active, plan_name, subscription_status, expires_at, max_users, catalog_enabled, fabrica_enabled, cocina_enabled, pedidos_web_enabled, seo_enabled, comisiones_enabled, propinas_enabled, citas_enabled, cobranza_enabled, iva_enabled, catalogo_pdf_enabled, mayor_enabled, farmacia_enabled, print_format, fiscal_enabled } = req.body;
 
     const company = await Company.findByPk(id);
     if (!company) return res.status(404).json({ ok: false, message: "Empresa no encontrada" });
@@ -269,6 +271,8 @@ const update = async (req, res) => {
       catalogo_pdf_enabled: catalogo_pdf_enabled === undefined ? company.catalogo_pdf_enabled : !!catalogo_pdf_enabled,
       mayor_enabled: mayor_enabled === undefined ? company.mayor_enabled : !!mayor_enabled,
       farmacia_enabled: farmacia_enabled === undefined ? company.farmacia_enabled : !!farmacia_enabled,
+      print_format: print_format !== undefined ? print_format : (company.print_format || 'ticket'),
+      fiscal_enabled: fiscal_enabled === undefined ? company.fiscal_enabled : !!fiscal_enabled,
       // Sin el campo (un cliente viejo del panel) se conserva lo que había.
       seo_enabled: seo_enabled === undefined ? company.seo_enabled : !!seo_enabled
     });

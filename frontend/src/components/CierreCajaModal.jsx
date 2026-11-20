@@ -6,6 +6,8 @@ import { fmtMoney, toNameCase, fmtDuracion } from "../helpers";
 import { Spinner } from "./ui/Spinner";
 import Money from "./ui/Money";
 import CobrosDelTurno from "./CobrosDelTurno";
+import { useApp } from "../context/AppContext";
+import { emitirReporteZ } from "../services/fiscalBridge";
 
 const fmt$ = (n) => fmtMoney(parseFloat(n) || 0);
 
@@ -18,6 +20,9 @@ const Linea = ({ label, value, strong }) => (
 );
 
 export default function CierreCajaModal({ session, onClosed, onCancel }) {
+    const { company, settings, notify } = useApp();
+    const fiscalEnabled = !!company?.fiscal_enabled || settings?.fiscal_enabled === "true";
+    const [emitirZ, setEmitirZ]           = useState(false);
     const [summary, setSummary]           = useState(null);
     const [loadingSummary, setLoadingSummary] = useState(true);
     const [closingAmounts, setClosingAmounts] = useState({});
@@ -61,6 +66,20 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
                 return;
             }
             const res = await api.cashSessions.close(session.id, { journals, notes });
+
+            // Si el cajero marcó emitir Reporte Z fiscal de cierre diario
+            if (fiscalEnabled && emitirZ) {
+                try {
+                    const z = await emitirReporteZ();
+                    if (notify) notify(z.modo === "REAL_FISCAL"
+                        ? "Reporte Z impreso en la máquina fiscal"
+                        : "Reporte Z de PRUEBA: el agente está en modo prueba, la máquina no cerró el día", z.modo === "REAL_FISCAL" ? "ok" : "err");
+                } catch (err) {
+                    console.warn("No se pudo emitir el Reporte Z automático:", err);
+                    if (notify) notify("El turno se cerró, pero la máquina fiscal no hizo el Reporte Z: " + err.message, "err");
+                }
+            }
+
             onClosed(res.data);
         } catch (e) {
             setError(e.message || "Error al cerrar caja");
@@ -210,6 +229,28 @@ export default function CierreCajaModal({ session, onClosed, onCancel }) {
                                         Devoluciones en el turno · {summary.returns.count}
                                     </span>
                                     <Money value={`-${fmt$(summary.returns.total)}`} className="text-[13px] font-semibold text-red-600 dark:text-red-400" />
+                                </div>
+                            )}
+
+                            {/* Cierre Fiscal SENIAT (Reporte Z) */}
+                            {fiscalEnabled && (
+                                <div className="mx-6 mt-4 p-3.5 rounded-xl bg-surface-2 dark:bg-white/[0.04] border border-border/70 dark:border-white/[0.08]">
+                                    <label className="flex items-start gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={emitirZ}
+                                            onChange={e => setEmitirZ(e.target.checked)}
+                                            className="mt-0.5 w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-border"
+                                        />
+                                        <div>
+                                            <span className="block text-[13px] text-content dark:text-white font-medium select-none">
+                                                🏁 Emitir Cierre Fiscal SENIAT (Reporte Z)
+                                            </span>
+                                            <span className="block text-[11px] text-content-subtle mt-0.5 select-none">
+                                                Asienta las ventas del día en la memoria fiscal de la máquina y reinicia los acumuladores diarios.
+                                            </span>
+                                        </div>
+                                    </label>
                                 </div>
                             )}
 

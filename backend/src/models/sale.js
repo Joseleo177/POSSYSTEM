@@ -46,6 +46,8 @@ module.exports = (sequelize, DataTypes) => {
     serie_range_id:     { type: DataTypes.INTEGER },
     correlative_number: { type: DataTypes.INTEGER },
     invoice_number:     { type: DataTypes.STRING(50) },
+    fiscal_number:      { type: DataTypes.STRING(50), allowNull: true },
+    fiscal_serial:      { type: DataTypes.STRING(50), allowNull: true },
     idempotency_key:    { type: DataTypes.STRING(64), allowNull: true, unique: true },
     credit_applied:     { type: DataTypes.DECIMAL(14, 6), allowNull: false, defaultValue: 0 },
     // Saldo perdonado. No es un cobro: no entra a la tabla payments porque ese dinero nunca

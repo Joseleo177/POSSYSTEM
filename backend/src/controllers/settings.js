@@ -1,4 +1,4 @@
-const { Setting, sequelize } = require("../models");
+const { Setting, Company, sequelize } = require("../models");
 const path = require("path");
 const fs   = require("fs");
 
@@ -23,7 +23,7 @@ const getAll = async (req, res) => {
     if (company_id) {
       const { Company, Employee } = require("../models");
       const company = await Company.findByPk(company_id, {
-        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users', 'catalog_enabled', 'fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'propinas_enabled', 'citas_enabled', 'cobranza_enabled', 'iva_enabled', 'catalogo_pdf_enabled', 'mayor_enabled', 'farmacia_enabled']
+        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users', 'catalog_enabled', 'fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'propinas_enabled', 'citas_enabled', 'cobranza_enabled', 'iva_enabled', 'catalogo_pdf_enabled', 'mayor_enabled', 'farmacia_enabled', 'print_format', 'fiscal_enabled']
       });
       if (company) {
         const userCount = await Employee.count({ where: { company_id, active: true } });
@@ -50,6 +50,17 @@ const update = async (req, res) => {
 
     for (const [key, value] of entries) {
       await Setting.upsert({ key, value: value ?? "", company_id }, { transaction });
+    }
+
+    if (company_id && (req.body.fiscal_enabled !== undefined || req.body.print_format !== undefined)) {
+      const companyUpdates = {};
+      if (req.body.fiscal_enabled !== undefined) {
+        companyUpdates.fiscal_enabled = req.body.fiscal_enabled === true || req.body.fiscal_enabled === "true";
+      }
+      if (req.body.print_format !== undefined) {
+        companyUpdates.print_format = req.body.print_format;
+      }
+      await Company.update(companyUpdates, { where: { id: company_id }, transaction });
     }
 
     await transaction.commit();

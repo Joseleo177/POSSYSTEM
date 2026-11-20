@@ -6,6 +6,11 @@ import CustomSelect from "../ui/CustomSelect";
 
 const PLANS = ["Básico", "Premium", "Ilimitado"];
 const STATUSES = ["Demo", "Activa", "Suspendida", "Vencida"];
+const PRINT_FORMATS = [
+    { value: "ticket", label: "Tickera térmica (58mm / 80mm)" },
+    { value: "carta", label: "Documento Carta / PDF" },
+    { value: "digital", label: "Solo digital (sin impresora)" }
+];
 
 const LABEL = "flex items-baseline justify-between gap-2 text-[12px] text-content-subtle mb-1.5";
 const Opcional = () => <span className="text-[11px] text-content-subtle/80">Opcional</span>;
@@ -15,6 +20,7 @@ const vacio = () => ({
     plan_name: "Básico", subscription_status: "Demo",
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, propinas_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, farmacia_enabled: false, seo_enabled: true,
+    print_format: "ticket", fiscal_enabled: false,
     admin_username: "", admin_password: "",
 });
 
@@ -26,6 +32,8 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
         setForm(editData
             ? {
                 ...editData,
+                print_format: editData.print_format || "ticket",
+                fiscal_enabled: !!editData.fiscal_enabled,
                 expires_at: editData.expires_at ? new Date(editData.expires_at).toISOString().split("T")[0] : "",
                 admin_username: "", admin_password: "",
             }
@@ -172,6 +180,17 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                                 desglose y el Libro de ventas desde la próxima venta. */}
                             <Interruptor titulo="Factura con IVA" detalle="Alícuota por producto, IVA desglosado en el papel y Libro de ventas. Los precios ya lo incluyen."
                                 checked={!!form.iva_enabled} onChange={v => set("iva_enabled", v)} />
+                        </Grupo>
+
+                        <Grupo titulo="Comprobantes y Facturación">
+                            <div className="mb-2">
+                                <label className={LABEL}>Formato de entrega habitual</label>
+                                <CustomSelect value={form.print_format || "ticket"} onChange={v => set("print_format", v)}
+                                    options={PRINT_FORMATS} className="w-full" />
+                                <p className="mt-1 text-[11px] text-content-subtle">Adapta la pantalla de cobro para evitar botones de tickera si la empresa no la usa.</p>
+                            </div>
+                            <Interruptor titulo="Máquina fiscal SENIAT" detalle="Conexión con impresora fiscal física The Factory HKA (Bixolon, HKA-112, Dascom) mediante NXUS Bridge."
+                                checked={!!form.fiscal_enabled} onChange={v => set("fiscal_enabled", v)} />
                         </Grupo>
 
                         <Grupo titulo="Rubros">

@@ -57,6 +57,10 @@ module.exports = (sequelize, DataTypes) => {
     // Módulo Farmacia: principio activo, equivalentes en caja, venta fraccionada por caja/unidad
     // y control de récipes/psicotrópicos con foto. Extra que enciende el superusuario.
     farmacia_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Formato de comprobante habitual: 'ticket' (58/80mm), 'carta' (Hoja Carta/PDF), 'digital' (Solo digital/Sin impresora).
+    print_format: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'ticket' },
+    // Módulo Máquina Fiscal (The Factory HKA / NXUS Bridge). Extra que enciende el superusuario.
+    fiscal_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

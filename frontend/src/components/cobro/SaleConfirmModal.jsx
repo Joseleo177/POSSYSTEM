@@ -1,5 +1,7 @@
 import { Button } from "../ui/Button";
 import ReceiptModal, { printReceipt } from "../ReceiptModal";
+import FiscalReceiptModal from "./FiscalReceiptModal";
+import { emitirFacturaFiscal, esFiscalReal } from "../../services/fiscalBridge";
 import PaymentFormModal from "../PaymentFormModal";
 import ImmediatePayPicker from "./ImmediatePayPicker";
 import CasheaModal from "./CasheaModal";
@@ -26,6 +28,8 @@ function KeyHint({ n }) {
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
     const { notify, activeCurrencies, monedasCobro = activeCurrencies, activeJournals, companyInfo, printerWidth, company, settings } = useApp();
+    const printFormat = company?.print_format || "ticket";
+    const fiscalEnabled = !!company?.fiscal_enabled || settings?.fiscal_enabled === "true";
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
@@ -40,6 +44,12 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // Venta con Cashea (ver CasheaModal): `casheaHecho` = ya se anotó lo financiado.
     const [showCashea, setShowCashea] = useState(false);
     const [casheaHecho, setCasheaHecho] = useState(false);
+
+    // Facturación con impresora fiscal (NXUS Bridge)
+    const [fiscalLoading, setFiscalLoading] = useState(false);
+    const [fiscalData, setFiscalData] = useState(null);
+    const [fiscalError, setFiscalError] = useState(null);
+    const [showFiscalModal, setShowFiscalModal] = useState(false);
 
     // Entrega a crédito: el backend asigna el correlativo fiscal y deja la venta en
     // 'pendiente'. Sin esto la venta fiada se quedaba en borrador y no aparecía ni en el
@@ -137,6 +147,98 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
     // La factura en bolívares, para decir cuánto se pasa por el punto con el avance encima.
     const avanceFacturaBs = !receiptIsBase ? totalMain : (altCurrency && !altCurrency.is_base ? totalAlt : null);
     const fmtTotal    = (t, sym) => `${sym}${t.toFixed(2)}`;
+
+    // Tasa y total en Bolívares oficiales para máquina fiscal SENIAT
+    const vesCurrency = (activeCurrencies || []).find(c => c.code === "VES" || c.symbol?.includes("Bs") || parseFloat(c.exchange_rate) > 1);
+    const tasaBsCalculada = parseFloat(receipt?.exchange_rate) > 1
+        ? parseFloat(receipt.exchange_rate)
+        : (parseFloat(vesCurrency?.exchange_rate) > 1 ? parseFloat(vesCurrency.exchange_rate) : (altRate > 1 ? altRate : (mainRate > 1 ? mainRate : 1)));
+    const totalBsOficial = Math.max(totalMain, totalAlt);
+
+    const handleEmitirFiscal = async () => {
+        if (fiscalLoading) return;
+        setFiscalLoading(true);
+        setFiscalError(null);
+        try {
+            // 1. Si la venta sigue como borrador/espera y no tiene número de factura del sistema (ej: Orden A-0009),
+            // la publicamos primero para que consuma su correlativo oficial de la serie y se guarde.
+            let currentSale = receipt;
+            if (!currentSale?.invoice_number && currentSale?.id) {
+                try {
+                    const pubRes = await api.sales.publish(currentSale.id);
+                    if (pubRes?.data?.invoice_number) {
+                        currentSale = {
+                            ...currentSale,
+                            invoice_number: pubRes.data.invoice_number,
+                            status: pubRes.data.status
+                        };
+                        onRefresh?.(currentSale);
+                        onPay?.({
+                            sale_status: pubRes.data.status,
+                            invoice_number: pubRes.data.invoice_number,
+                            amount_paid: paidBase,
+                            balance: currentBalance,
+                        });
+                    }
+                } catch {
+                    // Si falla publicar, continuamos emitiendo con lo que haya
+                }
+            }
+
+            const res = await emitirFacturaFiscal(currentSale, {
+                cliente: {
+                    name: currentSale?.customer_name || currentSale?.customerName,
+                    rif: currentSale?.customer_rif || currentSale?.customerRif
+                },
+                company: companyInfo || company,
+                rateBs: tasaBsCalculada,
+                totalBs: totalBsOficial
+            });
+
+            // emitirFacturaFiscal lanza error si la máquina no confirmó; aquí solo llega un éxito
+            // real o una factura del modo prueba del agente. Lo que el cajero tiene que saber va
+            // en `aviso`, fijo en el modal: el toast dura 2,8 s y no tiene color de advertencia.
+            let aviso = null;
+            if (esFiscalReal(res)) {
+                // 2. Asociar el número de factura fiscal de la máquina a la venta en BD
+                if (currentSale?.id && res.numeroFacturaFiscal) {
+                    try {
+                        const r = await api.sales.setFiscal(currentSale.id, {
+                            fiscal_number: res.numeroFacturaFiscal,
+                            fiscal_serial: res.serialImpresora || null
+                        });
+                        if (r?.data) {
+                            currentSale = { ...currentSale, ...r.data };
+                            onRefresh?.(currentSale);
+                        }
+                        notify(`Factura fiscal ${res.numeroFacturaFiscal} emitida`);
+                    } catch (e) {
+                        aviso = `La máquina imprimió la factura ${res.numeroFacturaFiscal}, pero no se pudo guardar en la venta (${e.message}). No la vuelvas a emitir.`;
+                        notify("La factura fiscal se imprimió, pero no quedó guardada en la venta", "err");
+                    }
+                } else {
+                    aviso = "La máquina imprimió la factura, pero NXUS todavía no lee su número fiscal. Anótalo del papel. No la vuelvas a emitir.";
+                }
+            } else {
+                aviso = "El agente fiscal está en MODO PRUEBA: no se imprimió nada en la máquina y la venta no quedó con factura fiscal.";
+            }
+
+            setFiscalData({
+                ...res,
+                aviso,
+                rateBs: tasaBsCalculada,
+                totalBs: totalBsOficial,
+                sale: currentSale
+            });
+            setShowFiscalModal(true);
+        } catch (err) {
+            const msg = err.message || "Error al conectar con NXUS Fiscal Bridge";
+            setFiscalError(msg);
+            notify("No se emitió la factura fiscal", "err");
+        } finally {
+            setFiscalLoading(false);
+        }
+    };
     // El subtotal se reconstruye desde el total: se le devuelve el descuento y se le quita el
     // recargo, cada uno convertido con el mismo redondeo que usó saleTotalAtRate.
     //
@@ -595,26 +697,63 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                             )}
                         </div>
                     )}
-                    {/* Imprimir va solo y a ancho completo: es la acción que se repite en cada
-                        venta, y compartir fila con "Ver ticket" invitaba a confundirlas. */}
-                    <Button
-                        variant="ghost"
-                        onClick={printDirect}
-                        disabled={printing}
-                        className="h-12 sm:h-10"
-                        title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
-                    >
-                        <KeyHint n={numOf("print")} />
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                        {printing ? "Imprimiendo..." : "Imprimir ticket"}
-                    </Button>
+                    {/* Máquina Fiscal (The Factory HKA): si la empresa tiene el módulo activo */}
+                    {fiscalEnabled && (
+                        <Button
+                            variant="primary"
+                            onClick={handleEmitirFiscal}
+                            disabled={fiscalLoading}
+                            className="h-12 sm:h-10 border border-emerald-500/40 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
+                            title="Emite la Factura Fiscal oficial mediante la impresora fiscal The Factory HKA"
+                        >
+                            <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            {fiscalLoading ? "Emitiendo fiscal..." : "Factura Fiscal (SENIAT)"}
+                        </Button>
+                    )}
+                    {/* El error de la máquina se queda a la vista: si no confirmó, el cajero tiene
+                        que revisar el papel antes de reintentar, y un toast de 2,8 s no alcanza. */}
+                    {fiscalEnabled && fiscalError && (
+                        <p role="alert" className="flex items-start gap-2 rounded-lg bg-danger/10 text-danger px-3 py-2.5 text-[12px] leading-snug">
+                            <svg className="w-4 h-4 shrink-0 mt-px" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {fiscalError}
+                        </p>
+                    )}
+
+                    {/* Botón de impresión según el formato de la empresa */}
+                    {printFormat === "ticket" && (
+                        <Button
+                            variant="ghost"
+                            onClick={printDirect}
+                            disabled={printing}
+                            className="h-12 sm:h-10"
+                            title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
+                        >
+                            <KeyHint n={numOf("print")} />
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                            {printing ? "Imprimiendo..." : "Imprimir ticket"}
+                        </Button>
+                    )}
+
+                    {printFormat === "carta" && (
+                        <Button
+                            variant="ghost"
+                            onClick={() => setShowReceiptModal(true)}
+                            className="h-12 sm:h-10"
+                            title="Ver e imprimir comprobante en formato carta / PDF"
+                        >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            Factura Carta / PDF
+                        </Button>
+                    )}
 
                     <div className="flex flex-col sm:flex-row gap-2">
-                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="sm:flex-1 min-w-0 h-12 sm:h-10">
-                            <KeyHint n={numOf("ticket")} />
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Ver ticket
-                        </Button>
+                        {printFormat !== "digital" && (
+                            <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="sm:flex-1 min-w-0 h-12 sm:h-10">
+                                <KeyHint n={numOf("ticket")} />
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                {printFormat === "carta" ? "Ver detalle" : "Ver ticket"}
+                            </Button>
+                        )}
                         {/* Una venta ya no puede quedarse en borrador: o se cobra, o sale a
                             crédito con su factura. Salir de aquí sin resolver la dejaba sin
                             número, como un documento a medias en Pendientes. Ahora la salida
@@ -749,6 +888,18 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                     }}
                 />
             )}
+
+            <FiscalReceiptModal
+                open={showFiscalModal}
+                onClose={() => setShowFiscalModal(false)}
+                fiscalData={fiscalData}
+                sale={fiscalData?.sale || receipt}
+                company={company}
+                companyInfo={companyInfo}
+                settings={settings}
+                rateBs={tasaBsCalculada}
+                totalBs={totalBsOficial}
+            />
         </div>
     );
 }

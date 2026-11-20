@@ -446,6 +446,8 @@ export const api = {
     // Venta hecha sin conexión, enviada desde la cola del equipo (ver offline/sync.js).
     syncOffline: (body)      => request("/sales/offline", { method: "POST",  body: JSON.stringify(body), timeout: 30_000 }),
     update:      (id, body)  => request(`/sales/${id}`,  { method: "PATCH",  body: JSON.stringify(body) }),
+    publish:     (id)        => request(`/sales/${id}/publish`, { method: "POST" }),
+    setFiscal:   (id, body)  => request(`/sales/${id}/fiscal`, { method: "POST",   body: JSON.stringify(body) }),
     cancel:      (id)        => request(`/sales/${id}`,  { method: "DELETE" }),
     // Entrega a crédito: asigna correlativo y deja la venta en 'pendiente' (por cobrar)
     confirmCredit: (id)      => request(`/sales/${id}/credit`, { method: "POST" }),

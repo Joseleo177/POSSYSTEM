@@ -19,6 +19,8 @@ router.post("/",         permit("sales.create"), warehouseAccess(req => req.body
 // Ventas que una caja hizo sin internet: llegan con su precio cobrado y su hora real.
 router.post("/offline",  permit("sales.create"), warehouseAccess(req => req.body?.warehouse_id), ctrl.syncOffline);
 router.patch("/:id",     permit("sales.edit"), ctrl.update);
+router.post("/:id/publish", permit("sales.create"), ctrl.publish);
+router.post("/:id/fiscal", permit("sales.create"), ctrl.setFiscal);
 router.post("/:id/credit", permit("sales.credit"), ctrl.confirmCredit);
 // Quitar la tasa de divisas a una venta de contado que al final paga todo en Bs. Lo puede
 // quien cobra: solo devuelve la venta a su precio normal, nunca la rebaja.

@@ -839,6 +839,9 @@ export function CartProvider({ children }) {
       line_discount_mode: manual?.mode ?? null, line_discount_value: manual?.value ?? null,
       subtotal: parseFloat(((price - discount) * quantity).toFixed(5)),
       descUsd: descLinea(round2(price)),
+      iva_tipo: i.iva_tipo || (i.is_exempt ? "E" : "G"),
+      iva_rate: i.iva_rate != null ? parseFloat(i.iva_rate) : (i.iva_tipo === "E" || i.is_exempt ? 0 : 16),
+      is_exempt: i.iva_tipo === "E" || !!i.is_exempt,
     };
   });
 

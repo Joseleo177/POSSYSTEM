@@ -4,12 +4,15 @@ import Page from "./ui/Page";
 import { Button } from "./ui/Button";
 import Segmented from "./ui/Segmented";
 import StatusMark from "./ui/StatusMark";
+import ConfirmModal from "./ui/ConfirmModal";
+import FiscalReportModal from "./cobro/FiscalReportModal";
 import { RowIcon } from "./ui/Ledger";
 import { resolveImageUrl } from "../helpers";
 import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
 import { useApp } from "../context/AppContext";
 import StorefrontSettings from "./Settings/StorefrontSettings";
 import WebOrdersSettings from "./Settings/WebOrdersSettings";
+import { verificarAgenteFiscal, emitirReporteX, emitirReporteZ, configurarPuertoFiscal, probarImpresoraFiscal } from "../services/fiscalBridge";
 
 // El respaldo es de la base entera, no de una empresa: solo el superusuario. El backend
 // lo exige igual (ver routes/backup.js); esto es para no ofrecer una pestaña que va a
@@ -90,6 +93,82 @@ export default function SettingsTab({ notify }) {
     };
 
     useEffect(() => { load(); }, []);
+
+    // ── Estado y utilidades de la Máquina Fiscal SENIAT (The Factory HKA) ──
+    const [agenteStatus, setAgenteStatus] = useState(null);
+    const [loadingAgente, setLoadingAgente] = useState(false);
+    const [accionFiscalLoading, setAccionFiscalLoading] = useState(false);
+    const [confirmModalZ, setConfirmModalZ] = useState(false);
+    const [reporteModalData, setReporteModalData] = useState(null);
+
+    const checkAgente = useCallback(async () => {
+        setLoadingAgente(true);
+        try {
+            const st = await verificarAgenteFiscal();
+            setAgenteStatus(st);
+        } catch {
+            setAgenteStatus({ online: false });
+        } finally {
+            setLoadingAgente(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (section === "factura") {
+            checkAgente();
+        }
+    }, [section, checkAgente]);
+
+    // Resultado de preguntarle a la máquina (no solo al agente) si responde.
+    const [pruebaImpresora, setPruebaImpresora] = useState(null);
+    const [probandoImpresora, setProbandoImpresora] = useState(false);
+    const handleProbarImpresora = async () => {
+        setProbandoImpresora(true);
+        setPruebaImpresora(null);
+        try {
+            const res = await probarImpresoraFiscal();
+            setPruebaImpresora({ ok: true, msg: res.mensaje });
+        } catch (e) {
+            setPruebaImpresora({ ok: false, msg: e.message });
+        } finally {
+            setProbandoImpresora(false);
+        }
+    };
+
+    const handleCambiarPuerto = async (p) => {
+        try {
+            await configurarPuertoFiscal(p);
+            notify(`Puerto fiscal configurado a ${p}`);
+            checkAgente();
+        } catch (e) {
+            notify(e.message, "err");
+        }
+    };
+
+    const handleReporteX = async () => {
+        setAccionFiscalLoading(true);
+        try {
+            const res = await emitirReporteX();
+            setReporteModalData(res);
+        } catch (e) {
+            notify(e.message, "err");
+        } finally {
+            setAccionFiscalLoading(false);
+        }
+    };
+
+    const ejecutarReporteZ = async () => {
+        setAccionFiscalLoading(true);
+        try {
+            const res = await emitirReporteZ();
+            setConfirmModalZ(false);
+            setReporteModalData(res);
+        } catch (e) {
+            notify(e.message, "err");
+        } finally {
+            setAccionFiscalLoading(false);
+        }
+    };
 
     const saveSettings = async () => {
         setLoading(true);
@@ -211,6 +290,7 @@ export default function SettingsTab({ notify }) {
     );
 
     const headerOn = (settings.receipt_show_header || "true") === "true";
+    const fiscalOn = settings.fiscal_enabled === "true" || (settings.fiscal_enabled === undefined && !!companyInfo?.fiscal_enabled);
     // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
@@ -459,6 +539,164 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </Seccion>
                         </div>
+
+                        {/* ── Impresora Fiscal SENIAT (The Factory HKA) ── */}
+                        <div className="mt-4">
+                            <Seccion
+                                titulo="Impresora Fiscal SENIAT (The Factory HKA)"
+                                detalle="Control de hardware para impresoras fiscales Bixolon, Dascom y HKA enlazadas con NXUS Fiscal Bridge."
+                            >
+                                <div className="space-y-4">
+                                    <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
+                                        <Interruptor
+                                            titulo="Habilitar Facturación Fiscal (SENIAT)"
+                                            detalle="Muestra el botón «Factura Fiscal (SENIAT)» en la pantalla de cobro. Requiere que el agente nxus-bridge.exe esté en ejecución en la computadora de caja."
+                                            checked={fiscalOn}
+                                            onChange={() => setSettings(p => ({ ...p, fiscal_enabled: fiscalOn ? "false" : "true" }))}
+                                        />
+                                    </div>
+
+                                    {fiscalOn && (
+                                        <div className="p-4 rounded-xl bg-surface-2/60 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] space-y-4">
+                                            {/* Estado del Agente */}
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50 dark:border-white/[0.06]">
+                                                <div>
+                                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-content-subtle block">
+                                                        Estado del Agente Fiscal
+                                                    </span>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className={`w-2.5 h-2.5 rounded-full ${agenteStatus?.online ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
+                                                        <span className="text-[13px] font-medium text-content dark:text-white">
+                                                            {agenteStatus?.online
+                                                                ? `En línea en localhost:5050 · Puerto: ${agenteStatus.puerto || "COM4"}`
+                                                                : "Agente no detectado en esta computadora"}
+                                                        </span>
+                                                    </div>
+                                                    {agenteStatus?.online && agenteStatus.modoPrueba && (
+                                                        <p className="mt-2 text-[12px] font-medium text-amber-700 dark:text-amber-300">
+                                                            El agente está en MODO PRUEBA: no imprime nada en la máquina fiscal y las facturas no quedan en las ventas.
+                                                        </p>
+                                                    )}
+                                                    {pruebaImpresora && (
+                                                        <p role="status" className={`mt-2 text-[12px] font-medium ${pruebaImpresora.ok ? "text-success" : "text-danger"}`}>
+                                                            {pruebaImpresora.msg}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={checkAgente}
+                                                        disabled={loadingAgente}
+                                                        className="text-[12px]"
+                                                    >
+                                                        {loadingAgente ? "Verificando..." : "Verificar conexión"}
+                                                    </Button>
+                                                    {agenteStatus?.online && !agenteStatus.modoPrueba && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={handleProbarImpresora}
+                                                            disabled={probandoImpresora}
+                                                            className="text-[12px]"
+                                                            title="Le pregunta su estado a la máquina fiscal. Si no está conectada tarda unos 30 segundos en avisar."
+                                                        >
+                                                            {probandoImpresora ? "Probando impresora..." : "Probar impresora"}
+                                                        </Button>
+                                                    )}
+                                                    <a
+                                                        href="http://localhost:5050/descargar"
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-surface-1 dark:bg-white/10 hover:bg-surface-2 text-content dark:text-white border border-border dark:border-white/10 transition-colors"
+                                                    >
+                                                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                                        Descargar Agente (.exe)
+                                                    </a>
+                                                </div>
+                                            </div>
+
+                                            {/* Selector de Puerto COM y Botones de Reporte */}
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+                                                <div>
+                                                    <label className="block text-[13px] font-medium text-content dark:text-white mb-1">
+                                                        Puerto Serial de la Impresora
+                                                    </label>
+                                                    <span className="text-[12px] text-content-subtle block mb-2">
+                                                        Puerto COM asignado por Windows al cable USB-Serial.
+                                                    </span>
+                                                    <Segmented
+                                                        value={agenteStatus?.puerto || "COM4"}
+                                                        onChange={handleCambiarPuerto}
+                                                        options={[
+                                                            { key: "COM1", label: "COM1" },
+                                                            { key: "COM2", label: "COM2" },
+                                                            { key: "COM3", label: "COM3" },
+                                                            { key: "COM4", label: "COM4" },
+                                                            { key: "COM5", label: "COM5" },
+                                                        ]}
+                                                    />
+                                                </div>
+
+                                                {/* Botones de Control SENIAT: Reporte X y Reporte Z */}
+                                                <div>
+                                                    <label className="block text-[13px] font-medium text-content dark:text-white mb-1">
+                                                        Acciones y Cierres Fiscales SENIAT
+                                                    </label>
+                                                    <span className="text-[12px] text-content-subtle block mb-2">
+                                                        Reporte X (lectura parcial) y Reporte Z (cierre fiscal diario).
+                                                    </span>
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            variant="secondary"
+                                                            size="sm"
+                                                            onClick={handleReporteX}
+                                                            disabled={accionFiscalLoading}
+                                                            className="text-[12px] flex-1"
+                                                        >
+                                                            Reporte X
+                                                        </Button>
+                                                        <Button
+                                                            variant="primary"
+                                                            size="sm"
+                                                            onClick={() => setConfirmModalZ(true)}
+                                                            disabled={accionFiscalLoading}
+                                                            className="text-[12px] flex-1 bg-rose-600 hover:bg-rose-700 text-white"
+                                                        >
+                                                            Reporte Z (cierre)
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </Seccion>
+                        </div>
+
+                        {/* Modal de confirmación para Reporte Z */}
+                        <ConfirmModal
+                            isOpen={confirmModalZ}
+                            title="¿Emitir Cierre Fiscal Diario (Reporte Z)?"
+                            message="Este comando realiza el CIERRE FISCAL DIARIO obligatorio ante el SENIAT. Asienta todas las ventas del día en la memoria fiscal de la máquina y reinicia los acumuladores diarios para una nueva jornada."
+                            type="danger"
+                            confirmText={accionFiscalLoading ? "Emitiendo..." : "Emitir Reporte Z"}
+                            cancelText="Cancelar"
+                            loading={accionFiscalLoading}
+                            onConfirm={ejecutarReporteZ}
+                            onCancel={() => setConfirmModalZ(false)}
+                        />
+
+                        {/* Modal visual del comprobante fiscal (Reporte X o Reporte Z) */}
+                        <FiscalReportModal
+                            open={!!reporteModalData}
+                            onClose={() => setReporteModalData(null)}
+                            reportData={reporteModalData}
+                            company={company}
+                            companyInfo={companyInfo}
+                            settings={settings}
+                        />
                     </div>
                 )}
 

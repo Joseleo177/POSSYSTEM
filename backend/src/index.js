@@ -3,16 +3,25 @@ require("pg"); // Required for Vercel to bundle pg with Sequelize
 require("./config/envValidator"); // Joi env validation
 const express = require("express");
 const cors = require("cors");
+const helmet = require("helmet");
 const path = require("path");
 const rateLimit = require("express-rate-limit");
 const logger = require("./middleware/logger");
 const errorHandler = require("./middleware/errorHandler");
 const auditLog = require("./middleware/auditLog");
+const { PostgresStore } = require("./middleware/postgresStore");
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.set('trust proxy', 1);
+
+// ── Cabeceras de seguridad ────────────────────────────────────
+// El frontend vive en otro origen y carga las fotos de /uploads (o de Supabase): con el
+// crossOriginResourcePolicy 'same-origin' por defecto el navegador las bloquearía.
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+}));
 
 // ── CORS ─────────────────────────────────────────────────────
 const allowedOrigins = process.env.CORS_ORIGIN
@@ -62,11 +71,28 @@ const globalLimiter = rateLimit({
 
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,   // 15 min
-  max: 50,                      // 50 intentos / 15min
+  limit: 50,                    // 50 intentos / 15min
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, message: "Demasiados intentos de inicio de sesión. Intenta en 15 minutos." },
   skip: isLanIp,
+  // Store compartido: en Vercel la memoria de cada instancia no sirve para frenar la fuerza
+  // bruta repartida entre lambdas (ver middleware/postgresStore.js).
+  store: new PostgresStore("login:"),
+  // Un tropiezo de la base no debe dejar la caja sin poder entrar: si el store falla, se deja
+  // pasar la petición (el login de todos modos consulta la base y fallaría por su cuenta).
+  passOnStoreError: true,
+});
+
+const refreshLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,   // 15 min
+  limit: 100,                   // 100 renovaciones / 15min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, message: "Demasiadas solicitudes. Intenta en 15 minutos." },
+  skip: isLanIp,
+  store: new PostgresStore("refresh:"),
+  passOnStoreError: true,
 });
 
 // Sirve archivos estáticos (imágenes) antes del rate limiter para no agotar las peticiones
@@ -88,6 +114,7 @@ app.use(auditLog);
 
 // ── Public routes ─────────────────────────────────────────────
 app.use("/api/auth/login", loginLimiter);   // strict limiter on login
+app.use("/api/auth/refresh", refreshLimiter); // las renovaciones también van por el store compartido
 app.use("/api/auth", require("./routes/auth"));
 
 // Catálogo público: se accede por token, sin sesión. Lleva su propio rate limit y

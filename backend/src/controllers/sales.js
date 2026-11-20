@@ -264,4 +264,91 @@ const getPharmacyApprovers = async (req, res) => {
   }
 };
 
-module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, removeFxRate, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate, uploadPrescriptionPhoto, getPharmacyApprovers };
+// POST /api/sales/:id/publish — publica/confirma un borrador asignándole su correlativo oficial
+const publish = async (req, res) => {
+  const { sequelize, Sale } = require("../models");
+  const assignInvoiceNumber = require("../services/sales/assignInvoiceNumber");
+  const t = await sequelize.transaction();
+  try {
+    const sale = await Sale.findByPk(req.params.id, { transaction: t, lock: true });
+    if (!sale) {
+      await t.rollback();
+      return res.status(404).json({ ok: false, message: "Venta no encontrada" });
+    }
+    if (!sale.invoice_number) {
+      await assignInvoiceNumber(sale, t);
+    }
+    const newStatus = ["borrador", "espera"].includes(sale.status) ? "pendiente" : sale.status;
+    await sale.update({ status: newStatus }, { transaction: t });
+    await t.commit();
+    res.json({
+      ok: true,
+      data: {
+        id: sale.id,
+        invoice_number: sale.invoice_number,
+        status: sale.status
+      }
+    });
+  } catch (err) {
+    await t.rollback();
+    console.error(err);
+    res.status(500).json({ ok: false, message: err.message });
+  }
+};
+
+// POST /api/sales/:id/fiscal — guarda el número y serial impreso por la máquina fiscal
+const setFiscal = async (req, res) => {
+  const { sequelize, Sale } = require("../models");
+  const assignInvoiceNumber = require("../services/sales/assignInvoiceNumber");
+  const t = await sequelize.transaction();
+  try {
+    // Solo un número que imprimió la máquina: dígitos. Así no entra uno de prueba ("P-000001")
+    // ni un vacío, y el serial, si viene, es alfanumérico.
+    const fiscal_number = String(req.body?.fiscal_number ?? "").trim();
+    const fiscal_serial = req.body?.fiscal_serial ? String(req.body.fiscal_serial).trim() : null;
+    if (!/^\d{1,20}$/.test(fiscal_number)) {
+      await t.rollback();
+      return res.status(400).json({ ok: false, message: "Número de factura fiscal no válido" });
+    }
+    if (fiscal_serial && !/^[A-Za-z0-9]{1,30}$/.test(fiscal_serial)) {
+      await t.rollback();
+      return res.status(400).json({ ok: false, message: "Serial de máquina fiscal no válido" });
+    }
+    const sale = await Sale.findByPk(req.params.id, { transaction: t, lock: true });
+    if (!sale) {
+      await t.rollback();
+      return res.status(404).json({ ok: false, message: "Venta no encontrada" });
+    }
+    // Una venta lleva una sola factura fiscal: otra impresión de la misma venta no pisa la primera.
+    if (sale.fiscal_number && sale.fiscal_number !== fiscal_number) {
+      await t.rollback();
+      return res.status(409).json({ ok: false, message: `Esta venta ya tiene la factura fiscal ${sale.fiscal_number}` });
+    }
+    if (!sale.invoice_number) {
+      await assignInvoiceNumber(sale, t);
+    }
+    const newStatus = ["borrador", "espera"].includes(sale.status) ? "pendiente" : sale.status;
+    await sale.update({
+      fiscal_number,
+      fiscal_serial,
+      status: newStatus
+    }, { transaction: t });
+    await t.commit();
+    res.json({
+      ok: true,
+      data: {
+        id: sale.id,
+        invoice_number: sale.invoice_number,
+        fiscal_number: sale.fiscal_number,
+        fiscal_serial: sale.fiscal_serial,
+        status: sale.status
+      }
+    });
+  } catch (err) {
+    await t.rollback();
+    console.error(err);
+    res.status(500).json({ ok: false, message: err.message });
+  }
+};
+
+module.exports = { getOne, getAll, getStats, create, syncOffline, cancel, update, confirmCredit, removeFxRate, acceptOrder, claim, release, forgive, unforgive, receivables, setDueDate, uploadPrescriptionPhoto, getPharmacyApprovers, publish, setFiscal };

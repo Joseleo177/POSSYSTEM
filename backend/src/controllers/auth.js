@@ -49,19 +49,22 @@ const login = async (req, res) => {
     // Cada intento queda anotado, también los rechazados: lo que el dueño quiere saber de un
     // usuario inactivo es justamente si sigue intentando entrar. Al inactivo se le comprueba
     // la contraseña para distinguir a la persona de alguien que solo prueba su usuario.
+    // El mensaje es el mismo en los tres casos (usuario inexistente, inactivo o contraseña
+    // mala): distinguirlos le diría a un atacante si el usuario existe. El detalle se guarda
+    // igual en login_events para el dueño, pero no viaja al cliente.
     if (!emp) {
       await recordLoginEvent(req, { username, kind: "login", result: RESULT.UNKNOWN });
-      return res.status(401).json({ ok: false, message: "Usuario no encontrado o inactivo" });
+      return res.status(401).json({ ok: false, message: "Usuario o contraseña incorrectos" });
     }
 
     const valid = await bcrypt.compare(password, emp.password_hash);
     if (!emp.active) {
       await recordLoginEvent(req, { employee: emp, kind: "login", result: valid ? RESULT.INACTIVE : RESULT.BAD_PASSWORD });
-      return res.status(401).json({ ok: false, message: "Usuario no encontrado o inactivo" });
+      return res.status(401).json({ ok: false, message: "Usuario o contraseña incorrectos" });
     }
     if (!valid) {
       await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.BAD_PASSWORD });
-      return res.status(401).json({ ok: false, message: "Contraseña incorrecta" });
+      return res.status(401).json({ ok: false, message: "Usuario o contraseña incorrectos" });
     }
 
     // Verificación de suscripción de la empresa
