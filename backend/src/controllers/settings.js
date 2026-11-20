@@ -1,4 +1,4 @@
-const { Setting, Company, sequelize } = require("../models");
+const { Setting, sequelize } = require("../models");
 const path = require("path");
 const fs   = require("fs");
 
@@ -12,6 +12,10 @@ const getAll = async (req, res) => {
     const where = company_id ? { company_id } : {};
     const rows = await Setting.findAll({ where, order: [['key', 'ASC']] });
     const settings = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    // Claves que una versión anterior dejó guardadas aquí: lo que vale es la columna de
+    // companies (va en `company`). Se ocultan para que nadie las lea ni las reenvíe.
+    delete settings.fiscal_enabled;
+    delete settings.print_format;
     if (settings.logo_filename) {
       // Si es URL completa (Supabase) la usamos directo, si no construimos ruta local
       settings.logo_url = settings.logo_filename.startsWith("http")
@@ -23,7 +27,7 @@ const getAll = async (req, res) => {
     if (company_id) {
       const { Company, Employee } = require("../models");
       const company = await Company.findByPk(company_id, {
-        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users', 'catalog_enabled', 'fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'propinas_enabled', 'citas_enabled', 'cobranza_enabled', 'iva_enabled', 'catalogo_pdf_enabled', 'mayor_enabled', 'farmacia_enabled', 'print_format', 'fiscal_enabled']
+        attributes: ['id', 'name', 'tax_id', 'plan_name', 'subscription_status', 'expires_at', 'max_users', 'catalog_enabled', 'fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'propinas_enabled', 'citas_enabled', 'cobranza_enabled', 'iva_enabled', 'catalogo_pdf_enabled', 'mayor_enabled', 'farmacia_enabled', 'print_format', 'fiscal_enabled', 'asistente_enabled', 'asistente_plan']
       });
       if (company) {
         const userCount = await Employee.count({ where: { company_id, active: true } });
@@ -41,26 +45,37 @@ const getAll = async (req, res) => {
   }
 };
 
+// Formato de entrega por sucursal que elige la tienda: { "<warehouse_id>": "ticket" | "carta" |
+// "digital" }. Sin elección para una sucursal vale el de la empresa (companies.print_format).
+// Se guarda limpio: un valor desconocido haría que la caja no supiera qué imprimir.
+const FORMATOS_ENTREGA = new Set(["ticket", "carta", "digital"]);
+const limpiarFormatos = (v) => {
+  let m = v;
+  if (typeof v === "string") { try { m = JSON.parse(v || "{}"); } catch { m = {}; } }
+  if (!m || typeof m !== "object" || Array.isArray(m)) return "{}";
+  return JSON.stringify(Object.fromEntries(
+    Object.entries(m).filter(([id, f]) => /^\d+$/.test(id) && FORMATOS_ENTREGA.has(f))
+  ));
+};
+
 // PUT /api/settings
 const update = async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
     const company_id = req.employee?.company_id ?? null;
-    const entries = Object.entries(req.body).filter(([k]) => k !== "logo_filename" && k !== "logo_url");
+    // La máquina fiscal es un extra de la empresa y el formato de entrega por defecto también
+    // lo fija el superusuario (Empresas → controllers/companies.js). Desde aquí la tienda no los
+    // toca, ni en `companies` ni como clave suelta en `settings`; antes podía encenderse la
+    // máquina fiscal ella misma, y guardar cualquier ajuste reenviaba una clave vieja que la
+    // apagaba. Lo que la tienda sí elige es el formato de cada sucursal
+    // (print_format_by_warehouse), que manda sobre el de la empresa.
+    const SOLO_SUPERUSUARIO = new Set(["logo_filename", "logo_url", "fiscal_enabled", "print_format"]);
+    const entries = Object.entries(req.body)
+      .filter(([k]) => !SOLO_SUPERUSUARIO.has(k))
+      .map(([k, v]) => (k === "print_format_by_warehouse" ? [k, limpiarFormatos(v)] : [k, v]));
 
     for (const [key, value] of entries) {
       await Setting.upsert({ key, value: value ?? "", company_id }, { transaction });
-    }
-
-    if (company_id && (req.body.fiscal_enabled !== undefined || req.body.print_format !== undefined)) {
-      const companyUpdates = {};
-      if (req.body.fiscal_enabled !== undefined) {
-        companyUpdates.fiscal_enabled = req.body.fiscal_enabled === true || req.body.fiscal_enabled === "true";
-      }
-      if (req.body.print_format !== undefined) {
-        companyUpdates.print_format = req.body.print_format;
-      }
-      await Company.update(companyUpdates, { where: { id: company_id }, transaction });
     }
 
     await transaction.commit();

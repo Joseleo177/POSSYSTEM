@@ -645,8 +645,52 @@ export function printReceipt(sale, companyInfo, displayCurrency, printerWidth = 
     printHtml(html, { width: 300, height: 1200 });
 }
 
+// Comprobante en hoja carta con los mismos números que el térmico: misma moneda, mismos
+// totales y misma forma de pago (ver printInvoiceLetter).
+export function printReceiptLetter(sale, companyInfo, displayCurrency, baseCurrency = null) {
+    const s = normalizeSale(sale);
+    const cur = receiptCurrency(s, displayCurrency, baseCurrency);
+    const ratePagos = cur.ratePagos || cur.rate;
+    const totals = totalesDelPapel(s, cur);
+    const pago = paymentSummary(s, displayCurrency);
+    printInvoiceLetter({ sale: s, totals, companyInfo, pago: papelDePago(s, pago, totals, cur.sym, ratePagos, displayCurrency, baseCurrency) });
+}
+
+// Lo que "Imprimir" saca según el formato de entrega de la sucursal (printFormat de AppContext:
+// lo elige la tienda en Configuración → Factura; sin elección, el de la empresa): "carta" = hoja
+// carta; "ticket" (o sin dato) = rollo térmico. Toda impresión de una venta pasa por aquí para
+// que ningún botón saque el papel equivocado.
+export function printSaleDocument(sale, companyInfo, displayCurrency, printerWidth, baseCurrency, printFormat) {
+    if (printFormat === "carta") return printReceiptLetter(sale, companyInfo, displayCurrency, baseCurrency);
+    return printReceipt(sale, companyInfo, displayCurrency, printerWidth, baseCurrency);
+}
+
+// Bloque de forma de pago ya formateado para la hoja carta: los mismos renglones que el térmico.
+function papelDePago(s, pago, totals, sym, ratePagos, displayCurrency, baseCurrency) {
+    const bsSym = displayCurrency?.symbol || "Bs.";
+    const refSym = baseCurrency?.symbol || "Ref.";
+    const renglones = pago.multiTasa
+        ? pago.cobros.map(c => ({
+            label: `${c.nombre}${c.fecha ? ` ${c.fecha}` : ""}${c.enBs ? ` · Tasa ${fmtTasa(c.tasa)}` : ""}`,
+            valor: fmt(c.monto, c.enBs ? bsSym : refSym),
+        }))
+        : pago.canales.length > 1
+            ? pago.canales.map(c => ({ label: c.nombre, valor: fmt(c.amount * ratePagos, sym) }))
+            : [];
+    return {
+        metodo: pago.metodo,
+        renglones,
+        recibido: pago.vuelto > 0 ? fmt(pago.recibido * ratePagos, sym) : null,
+        vuelto: pago.vuelto > 0 ? fmt(pago.vuelto * ratePagos, sym) : null,
+        estado: pago.etiqueta,
+        abonado: s.amount_paid > 0 && pago.pendiente ? totals.fmtPaid : null,
+        debe: pago.pendiente && s.balance > 0 && totals.balanceBs > 0 ? totals.fmtBalance : null,
+    };
+}
+
 export default function ReceiptModal({ open, onClose, sale }) {
-    const { storeName, companyInfo, baseCurrency, activeCurrencies, monedasCobro = activeCurrencies, printerWidth } = useApp();
+    // printFormat: el formato de entrega de la sucursal en que se trabaja (ver AppContext).
+    const { storeName, companyInfo, baseCurrency, activeCurrencies, monedasCobro = activeCurrencies, printerWidth, printFormat } = useApp();
 
     // El ticket se abre desde tres sitios y cada uno entrega algo distinto:
     //   · caja        → la venta recién cobrada, con sus pagos ya compuestos
@@ -890,29 +934,44 @@ export default function ReceiptModal({ open, onClose, sale }) {
             {/* Footer */}
             <div className="text-center text-[12px] text-content-subtle mb-5">¡Gracias por su compra!</div>
 
-            {/* Botones. Imprimir saca el ticket térmico (rollo); PDF genera la misma factura
-                en tamaño carta, que es la que se le envía al cliente por WhatsApp o correo:
-                el ticket guardado como PDF sale como una tira angosta ilegible. */}
+            {/* Botones según el formato de entrega de la empresa:
+                · ticket  → Imprimir saca el rollo térmico; PDF, la hoja carta para enviar por
+                            WhatsApp (el ticket guardado como PDF es una tira ilegible).
+                · carta   → Imprimir saca la hoja carta; el PDF sobra, es el mismo documento.
+                · digital → sin impresora: solo el PDF, como acción principal. */}
             <div className="flex gap-2 pt-4 border-t border-border/60 dark:border-white/[0.06]">
                 <button onClick={onClose} className="btn-outline h-11 px-4 rounded-lg text-[13px] font-medium">
                     Cerrar
                 </button>
-                <button
-                    onClick={() => printInvoiceLetter({ sale: s, totals, companyInfo })}
-                    className="btn-outline h-11 px-4 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5"
-                    title="Factura tamaño carta, para enviar al cliente por WhatsApp o correo"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                    PDF
-                </button>
-                <button
-                    onClick={() => printReceipt(effectiveSale, companyInfo, displayCurrency, printerWidth, baseCurrency)}
-                    className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2"
-                    title="Ticket para la impresora térmica"
-                >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                    Imprimir
-                </button>
+                {printFormat === "ticket" && (
+                    <button
+                        onClick={() => printReceiptLetter(effectiveSale, companyInfo, displayCurrency, baseCurrency)}
+                        className="btn-outline h-11 px-4 rounded-lg text-[13px] font-medium inline-flex items-center justify-center gap-1.5"
+                        title="Documento tamaño carta, para enviar al cliente por WhatsApp o correo"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        PDF
+                    </button>
+                )}
+                {printFormat === "digital" ? (
+                    <button
+                        onClick={() => printReceiptLetter(effectiveSale, companyInfo, displayCurrency, baseCurrency)}
+                        className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2"
+                        title="Documento tamaño carta: guárdalo como PDF para enviarlo al cliente"
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Guardar PDF
+                    </button>
+                ) : (
+                    <button
+                        onClick={() => printSaleDocument(effectiveSale, companyInfo, displayCurrency, printerWidth, baseCurrency, printFormat)}
+                        className="btn-accent flex-1 h-11 rounded-lg text-[14px] font-semibold inline-flex items-center justify-center gap-2"
+                        title={printFormat === "carta" ? "Documento en hoja carta" : "Ticket para la impresora térmica"}
+                    >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
+                        Imprimir
+                    </button>
+                )}
             </div>
         </Modal>
     );

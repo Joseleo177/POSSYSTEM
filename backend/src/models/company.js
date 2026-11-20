@@ -61,6 +61,12 @@ module.exports = (sequelize, DataTypes) => {
     print_format: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'ticket' },
     // Módulo Máquina Fiscal (The Factory HKA / NXUS Bridge). Extra que enciende el superusuario.
     fiscal_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Asistente con IA (ver services/asistente). Extra cobrado en dos niveles con la misma
+    // función: 'basico' y 'full' solo cambian el tope de preguntas al mes. asistente_limite lo
+    // pisa por empresa; NULL = el tope del nivel.
+    asistente_enabled: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    asistente_plan: { type: DataTypes.STRING(10), allowNull: false, defaultValue: 'basico' },
+    asistente_limite: { type: DataTypes.INTEGER, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW }
   }, {

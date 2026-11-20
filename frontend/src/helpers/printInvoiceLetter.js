@@ -4,7 +4,8 @@ import { printHtml } from "./printDocument";
 // Segunda maqueta del ticket, en tamaño carta. La de caja (printReceipt, en ReceiptModal)
 // está hecha para rollo térmico — @page de 58/80mm y alto automático — y al guardarla como
 // PDF sale una tira larga y angosta que en WhatsApp se ve como una franja ilegible. Esta
-// versión existe solo para el envío digital: la impresión de caja sigue usando la térmica.
+// versión es el PDF para enviar y, en las empresas con formato de entrega "carta"
+// (companies.print_format), también lo que imprime la caja (ver printSaleDocument).
 //
 // Lleva exactamente los mismos campos que el ticket térmico, con las mismas etiquetas. Lo
 // que cambia es el reparto y el tono: la térmica apila todo centrado y en negritas porque
@@ -17,7 +18,10 @@ import { printHtml } from "./printDocument";
 
 const esc = v => String(v ?? "").replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
 
-export function printInvoiceLetter({ sale, totals, companyInfo }) {
+// `pago` (opcional): forma de pago ya formateada por ReceiptModal (papelDePago). Desde que la
+// empresa puede elegir hoja carta como formato de entrega, este es su comprobante de caja y
+// tiene que decir lo mismo que el térmico: cómo se pagó y cuánto queda debiendo.
+export function printInvoiceLetter({ sale, totals, companyInfo, pago = null }) {
     const s = sale;
     const storeName = companyInfo?.name || "MI TIENDA POS";
     // El rótulo del documento viene de Configuración: hasta homologarse esto no es una factura
@@ -118,6 +122,10 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
         /* Desglose del IVA: el precio ya lo incluye, así que va bajo el total, en gris. */
         .total-row.iva { font-size: 9.5px; color: #666; padding: 3px 12px; }
         .total-row.big + .total-row.iva { margin-top: 6px; }
+        /* Forma de pago: mismo bloque que el térmico, bajo los totales. */
+        .totals.pago { margin-top: 18px; }
+        .total-row.det { font-size: 9.5px; color: #666; padding: 3px 12px 3px 24px; }
+        .total-row.big.debe { background: #f6e3e3; color: #8a1f1f; }
 
         .footer { margin-top: 26px; padding-top: 12px; border-top: 1px solid #e5e5e5; text-align: center; font-size: 9.5px; color: #999; }
     </style>
@@ -172,11 +180,26 @@ export function printInvoiceLetter({ sale, totals, companyInfo }) {
 
     <div class="totals">
         <div class="total-row sub"><span>Subtotal:</span><span>${totals.fmtSubtotal}</span></div>
-        ${s.discount > 0 ? `<div class="total-row sub discount"><span>Descuento:</span><span>-${totals.fmtDiscount}</span></div>` : ""}
+        ${totals.discountBs > 0 ? (totals.fx
+            ? `${totals.fx.manual > 0.000001 ? `<div class="total-row sub discount"><span>Descuento:</span><span>-${totals.fx.fmtManual}</span></div>` : ""}<div class="total-row sub discount"><span>Pago en divisas:</span><span>-${totals.fx.fmtFx}</span></div>`
+            : `<div class="total-row sub discount"><span>Descuento:</span><span>-${totals.fmtDiscount}</span></div>`) : ""}
         ${s.charge > 0 ? `<div class="total-row sub"><span>${esc(s.chargeLabel || "Servicio")}:</span><span>+${totals.fmtCharge}</span></div>` : ""}
+        ${totals.fxPerdonBs > 0 ? `<div class="total-row sub discount"><span>Pago en divisas:</span><span>-${totals.fmtFxPerdon}</span></div>` : ""}
         <div class="total-row big"><span>TOTAL:</span><span>${totals.fmtTotal}</span></div>
+        ${totals.returnedBs > 0 ? `<div class="total-row sub"><span>Devuelto (N/C):</span><span>-${totals.fmtReturned}</span></div>` : ""}
         ${(totals.ivaRenglones || []).map(r => `<div class="total-row iva"><span>${esc(r.label)}:</span><span>${r.fmt}</span></div>`).join("")}
     </div>
+
+    ${pago ? `
+    <div class="totals pago">
+        <div class="total-row sub"><span>Forma de pago:</span><span>${esc(pago.metodo)}</span></div>
+        ${pago.renglones.map(r => `<div class="total-row det"><span>${esc(r.label)}</span><span>${r.valor}</span></div>`).join("")}
+        ${pago.recibido ? `<div class="total-row det"><span>Recibido</span><span>${pago.recibido}</span></div>` : ""}
+        ${pago.vuelto ? `<div class="total-row det"><span>Vuelto</span><span>${pago.vuelto}</span></div>` : ""}
+        ${pago.estado ? `<div class="total-row sub"><span>Estado:</span><span>${esc(pago.estado)}</span></div>` : ""}
+        ${pago.abonado ? `<div class="total-row sub"><span>Abonado:</span><span>${pago.abonado}</span></div>` : ""}
+        ${pago.debe ? `<div class="total-row big debe"><span>QUEDA DEBIENDO:</span><span>${pago.debe}</span></div>` : ""}
+    </div>` : ""}
 
 </div>
 

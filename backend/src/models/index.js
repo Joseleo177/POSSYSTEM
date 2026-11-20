@@ -422,4 +422,7 @@ require('../utils/journalMethod').installMethodHooks(db);
 // Toda línea de venta congela la alícuota de IVA de su producto (ver services/fiscal/iva.js).
 require('../services/fiscal/iva').installIvaHooks(db);
 
+// Ningún registro guarda ids de otra empresa (ver utils/tenantRefs.js).
+require('../utils/tenantRefs').installRefHooks(db, tenantModels);
+
 module.exports = db;

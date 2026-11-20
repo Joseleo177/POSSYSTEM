@@ -1,5 +1,5 @@
 const {
-  Warehouse, ProductStock, EmployeeWarehouse, StockTransfer, Sale, Purchase, Sequelize, sequelize
+  Warehouse, ProductStock, EmployeeWarehouse, StockTransfer, Sale, Purchase, Employee, Sequelize, sequelize
 } = require("../../models");
 const { isAdmin, employeeWarehouseIds, invalidateCompanyWarehouses } = require("../../middleware/auth");
 const { Op } = Sequelize;
@@ -177,11 +177,24 @@ async function deleteWarehouse(warehouseId) {
 }
 
 async function assignEmployees(warehouseId, employee_ids = []) {
+  // El almacén y los empleados se buscan con modelos que pasan por el filtro multi-empresa:
+  // un id de otra empresa no aparece. Antes se usaban tal cual llegaban y un admin podía colgar
+  // empleados en almacenes ajenos, o empleados ajenos en los suyos (auditoría 20-11-2026).
+  const warehouse = await Warehouse.findByPk(warehouseId, { attributes: ["id"] });
+  if (!warehouse) throw Object.assign(new Error("Almacén no encontrado"), { status: 404, isOperational: true });
+  const pedidos = [...new Set((Array.isArray(employee_ids) ? employee_ids : []).map(n => parseInt(n, 10)).filter(n => n > 0))];
+  const propios = pedidos.length
+    ? (await Employee.findAll({ where: { id: pedidos }, attributes: ["id"], raw: true })).map(e => e.id)
+    : [];
+  if (propios.length !== pedidos.length) {
+    throw Object.assign(new Error("Algún empleado no existe en esta empresa"), { status: 400, isOperational: true });
+  }
+
   const transaction = await sequelize.transaction();
   try {
-    await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouseId }, transaction });
-    for (const empId of employee_ids) {
-      await EmployeeWarehouse.create({ employee_id: empId, warehouse_id: warehouseId }, { transaction });
+    await EmployeeWarehouse.destroy({ where: { warehouse_id: warehouse.id }, transaction });
+    for (const empId of propios) {
+      await EmployeeWarehouse.create({ employee_id: empId, warehouse_id: warehouse.id }, { transaction });
     }
     await transaction.commit();
     return { message: "Empleados asignados correctamente" };

@@ -11,10 +11,13 @@ router.post("/login", [
 ], ctrl.login);
 router.post("/refresh", ctrl.refresh);
 router.get("/me",               auth, ctrl.me);
+// La regla de la contraseña nueva la aplica el controlador (utils/passwordPolicy.js). Antes este
+// validador pedía `currentPassword` y el controlador leía `current_password`: ninguna petición
+// pasaba las dos cosas y el endpoint nunca funcionó.
 router.post("/change-password", [
   auth,
-  body('currentPassword').notEmpty().withMessage('Current password required'),
-  body('newPassword').isLength({ min: 6 }).withMessage('New password must be at least 6 characters'),
+  body('current_password').notEmpty().withMessage('Escribe tu contraseña actual'),
+  body('new_password').notEmpty().withMessage('Escribe la contraseña nueva'),
   validateInput
 ], ctrl.changePassword);
 

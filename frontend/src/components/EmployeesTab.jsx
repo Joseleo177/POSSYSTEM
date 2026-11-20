@@ -12,6 +12,9 @@ import { useApp } from "../context/AppContext";
 import { toNameCase } from "../helpers";
 import EmployeeAccessModal, { haceCuanto } from "./EmployeeAccessModal";
 import EmployeePermissionsModal from "./EmployeePermissionsModal";
+import PasswordInput from "./ui/PasswordInput";
+import ReglasClave from "./ui/ReglasClave";
+import { claveCumple } from "../helpers/passwordPolicy";
 
 const CLOCK = "M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z";
 const KEY   = "M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z";
@@ -81,6 +84,8 @@ export default function EmployeesTab({ notify }) {
             return notify("Nombre, usuario y rol son requeridos", "err");
         if (!editId && !form.password)
             return notify("La contraseña es requerida para nuevos empleados", "err");
+        if (form.password && !claveCumple(form.password, form.username))
+            return notify("La contraseña no es segura: mira lo que le falta debajo del campo", "err");
         setLoading(true);
         // El input lleva la clase ``, que es solo CSS: se ve en mayúsculas pero
         // el valor viaja tal cual se tecleó. Se normaliza aquí para que también cubra
@@ -520,15 +525,15 @@ export default function EmployeesTab({ notify }) {
                         </Campo>
                     </div>
 
-                    <Campo label="Contraseña" hint={editId ? "Vacía, no se cambia" : "Mínimo 6 caracteres"}>
-                        <input
+                    <Campo label="Contraseña" hint={editId ? "Vacía, no se cambia" : "8 o más, con letras y números"}>
+                        <PasswordInput
                             value={form.password}
                             onChange={set("password")}
-                            type="password"
                             autoComplete="new-password"
                             className={INPUT}
                             placeholder={editId ? "••••••••" : ""}
                         />
+                        {form.password && <ReglasClave password={form.password} username={form.username} className="mt-2" />}
                     </Campo>
 
                     <Campo label="Rol">

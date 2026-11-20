@@ -1,0 +1,682 @@
+'use strict';
+
+// Herramientas del asistente: lo ÚNICO con que el modelo puede leer datos de la tienda. Nunca
+// escribe SQL: cada herramienta llama a un reporte que ya existe, con el mismo contexto del
+// usuario (buildTenantContext), así que el recorte por empresa y por sucursal es el de siempre.
+//
+// Permisos, dos veces:
+//  1. Al modelo solo se le ofrecen las herramientas que el usuario puede usar (disponibles). Un
+//     cajero sin "Ver reportes" no sabe que existe el resumen de ventas.
+//  2. Cada ejecución vuelve a comprobar el permiso (ejecutar), por si el modelo inventa una
+//     llamada.
+//
+// Lo que sale hacia DeepSeek pasa por `limpiar`: sin teléfonos, RIF, cédulas, correos ni
+// direcciones, y con los números redondeados. Los montos ya vienen totalizados de los reportes:
+// el modelo los copia, no los calcula (cero discrepancias con lo que muestra la pantalla).
+
+const { hasPermission, scopeWarehouseIds } = require("../../middleware/auth");
+const { buildTenantContext, TZ } = require("../reports/shared");
+const reportes = require("../reports");
+const { sequelize, Sequelize } = require("../../models");
+
+const hoy = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
+
+const fecha = (v) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+const fecha_ = fecha;   // para usarla donde una variable local se llama `fecha`
+
+// Rango pedido por el modelo; sin fechas, hoy. Un rango al revés se endereza en vez de devolver
+// vacío, y se limita a un año para que nadie pida diez años de ventas de una sola vez.
+function rango(args) {
+  let desde = fecha(args.desde) || fecha(args.hasta) || hoy();
+  let hasta = fecha(args.hasta) || desde;
+  if (desde > hasta) [desde, hasta] = [hasta, desde];
+  const unAnio = new Date(new Date(hasta).getTime() - 366 * 864e5).toISOString().slice(0, 10);
+  if (desde < unAnio) desde = unAnio;
+  return { desde, hasta };
+}
+
+const SENSIBLE = /(phone|telefono|rif|tax_id|doc_id|cedula|address|direccion|email|correo)/i;
+const ES_CANTIDAD = /(qty|stock|units|needed|min_stock|cantidad)/i;
+
+function limpiar(valor, clave = "") {
+  if (valor === null || valor === undefined) return valor;
+  // Fecha en hora de Caracas; con la hora cuando la tiene (un turno abierto, una comanda).
+  if (valor instanceof Date) {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+      .formatToParts(valor).map(x => [x.type, x.value]));
+    const dia = `${p.year}-${p.month}-${p.day}`;
+    return p.hour === "00" && p.minute === "00" ? dia : `${dia} ${p.hour}:${p.minute}`;
+  }
+  if (Array.isArray(valor)) return valor.map(v => limpiar(v, clave));
+  if (typeof valor === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(valor)) {
+      if (SENSIBLE.test(k)) continue;
+      if (k === "id" || k.endsWith("_id")) continue;   // ids internos: al modelo no le dicen nada
+      out[k] = limpiar(v, k);
+    }
+    return out;
+  }
+  // Los DECIMAL de Postgres llegan como texto ("6.00000"): se pasan a número para redondearlos.
+  if (typeof valor === "string" && /^-?\d+\.\d+$/.test(valor)) valor = parseFloat(valor);
+  if (typeof valor === "number" && !Number.isInteger(valor)) {
+    const d = ES_CANTIDAD.test(clave) ? 1000 : 100;
+    return Math.round(valor * d) / d;
+  }
+  return valor;
+}
+
+const primeros = (lista, n) => (Array.isArray(lista) ? lista.slice(0, n) : []);
+
+// Sucursal pedida por el modelo, validada contra las que el usuario puede ver. Los reportes
+// también la validan; esto solo da un mensaje más claro.
+async function sucursal(req, args) {
+  const id = parseInt(args.sucursal_id, 10);
+  if (!id) return undefined;
+  const permitidas = await scopeWarehouseIds(req, { includeDeposits: true });
+  if (Array.isArray(permitidas) && !permitidas.includes(id)) {
+    throw Object.assign(new Error("No tienes acceso a esa sucursal"), { status: 403, isOperational: true });
+  }
+  return id;
+}
+
+const PARAM_RANGO = {
+  desde: { type: "string", description: "Fecha inicial YYYY-MM-DD. Si no se indica, hoy." },
+  hasta: { type: "string", description: "Fecha final YYYY-MM-DD (incluida). Si no se indica, igual a 'desde'." },
+  sucursal_id: { type: "integer", description: "Id de una sucursal de la lista del contexto. Omitir para todas las que el usuario ve." },
+};
+
+const HERRAMIENTAS = [
+  {
+    nombre: "resumen_ventas",
+    descripcion: "Resumen de ventas de un período: total facturado, número de ventas, ticket promedio, pendiente por cobrar de esas ventas, devoluciones, cobros por método de pago, ventas por cajero, por día y por hora (para ver las horas fuertes y flojas).",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.salesReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, warehouse_id: await sucursal(req, args) });
+      return {
+        periodo: { desde, hasta },
+        resumen: r.summary,
+        cobros_por_metodo: primeros(r.by_method, 15),
+        por_cajero: primeros(r.by_employee, 15),
+        por_dia: primeros(r.by_day, 31),
+        por_hora: primeros(r.by_hour, 24),
+      };
+    },
+  },
+  {
+    nombre: "productos_mas_vendidos",
+    descripcion: "Productos más vendidos de un período, por monto o por cantidad, con categoría, unidades vendidas y monto.",
+    parametros: {
+      ...PARAM_RANGO,
+      orden: { type: "string", enum: ["monto", "cantidad"], description: "Ordenar por monto vendido (por defecto) o por cantidad." },
+      limite: { type: "integer", description: "Cuántos productos (1 a 20, por defecto 10)." },
+    },
+    permisos: ["reports.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const limite = Math.min(Math.max(parseInt(args.limite, 10) || 10, 1), 20);
+      const r = await reportes.productsReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, limit: limite, warehouse_id: await sucursal(req, args) });
+      const lista = args.orden === "cantidad" ? r.top_by_qty : r.top_by_revenue;
+      return {
+        periodo: { desde, hasta },
+        orden: args.orden === "cantidad" ? "cantidad" : "monto",
+        productos: primeros(lista, limite),
+        por_categoria: primeros(r.by_subcategory, 10),
+      };
+    },
+  },
+  {
+    nombre: "existencia_producto",
+    descripcion: "Busca productos por nombre o código de barras y devuelve su existencia y precio en cada sucursal que el usuario ve.",
+    parametros: {
+      buscar: { type: "string", description: "Nombre (o parte) o código de barras del producto." },
+    },
+    requeridos: ["buscar"],
+    permisos: ["products.view", "inventory.view"],
+    async ejecutar(req, args) {
+      const texto = String(args.buscar || "").trim().slice(0, 80);
+      if (texto.length < 2) return { error: "Indica al menos dos letras del producto." };
+      const permitidas = await scopeWarehouseIds(req, { includeDeposits: true });
+      if (Array.isArray(permitidas) && !permitidas.length) return { productos: [] };
+      // El recorte de sucursales va en el JOIN: el producto aparece igual, solo con las suyas.
+      const whFiltro = Array.isArray(permitidas) ? `AND ps.warehouse_id IN (${permitidas.filter(Number.isInteger).join(",")})` : "";
+      const filas = await sequelize.query(
+        `SELECT p.id, p.name, p.unit, p.barcode, p.is_service, p.is_combo,
+                w.name AS sucursal, ps.qty, COALESCE(ps.price, p.price)::float AS precio
+           FROM products p
+           LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.company_id = p.company_id ${whFiltro}
+           LEFT JOIN warehouses w ON w.id = ps.warehouse_id
+          WHERE p.company_id = :cid
+            AND p.is_variant_parent = false
+            AND (translate(lower(p.name), 'áéíóúüñàèìòù', 'aeiouunaeiou') LIKE :like OR p.barcode = :exacto)
+          ORDER BY (p.barcode IS NOT DISTINCT FROM :exacto) DESC, p.name ASC, w.name ASC
+          LIMIT 60`,
+        { replacements: { cid: req.company_id, like: `%${String(texto).toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[%_]/g, "")}%`, exacto: texto }, type: Sequelize.QueryTypes.SELECT }
+      );
+      const porProducto = new Map();
+      for (const f of filas) {
+        if (!porProducto.has(f.id)) {
+          if (porProducto.size >= 8) continue;
+          porProducto.set(f.id, {
+            producto: f.name, unidad: f.unit, codigo: f.barcode,
+            tipo: f.is_service ? "servicio" : f.is_combo ? "combo" : "producto",
+            sucursales: [],
+          });
+        }
+        if (f.sucursal) porProducto.get(f.id).sucursales.push({ sucursal: f.sucursal, existencia: parseFloat(f.qty) || 0, precio: f.precio });
+      }
+      return { buscado: texto, productos: [...porProducto.values()] };
+    },
+  },
+  {
+    nombre: "productos_por_agotarse",
+    descripcion: "Productos con existencia por debajo de su mínimo (críticos) y productos agotados (en cero).",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["reports.view", "inventory.view"],
+    async ejecutar(req, args) {
+      const ctx = { ...(await buildTenantContext(req)), warehouse_id: await sucursal(req, args), limit: 25 };
+      const [criticos, agotados] = await Promise.all([
+        reportes.inventoryReport({ ...ctx, view: "critical" }),
+        reportes.inventoryReport({ ...ctx, view: "zero" }),
+      ]);
+      return {
+        criticos_total: criticos.summary?.critical_count,
+        agotados_total: criticos.summary?.zero_count,
+        criticos: primeros(criticos.critical_stock, 25),
+        agotados: primeros(agotados.zero_stock, 25),
+      };
+    },
+  },
+  {
+    nombre: "cuentas_por_cobrar",
+    descripcion: "Lo que los clientes deben hoy: saldo total, facturas abiertas, antigüedad de la deuda (0-30, 31-60, más de 60 días) y los clientes que más deben.",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["reports.view"],
+    async ejecutar(req, args) {
+      const r = await reportes.receivablesReport({ ...(await buildTenantContext(req)), warehouse_id: await sucursal(req, args) });
+      return {
+        resumen: r.summary,
+        antiguedad: r.aging,
+        clientes_que_mas_deben: primeros(r.by_customer, 15),
+        clientes_con_deuda: Array.isArray(r.by_customer) ? r.by_customer.length : 0,
+      };
+    },
+  },
+  {
+    nombre: "ingresos_egresos",
+    descripcion: "Dinero que entró (cobros e ingresos) y salió (egresos y gastos) en un período, con el neto, y los egresos por tipo y por método.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.view", "journals.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.financeReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, warehouse_id: await sucursal(req, args) });
+      return {
+        periodo: { desde, hasta },
+        moneda_base: r.base_symbol,
+        moneda_local: r.local_symbol,
+        resumen: r.summary,
+        egresos_por_tipo: r.expenses?.by_kind,
+        egresos_por_metodo: primeros(r.expenses?.by_method, 10),
+        egresos_mayores: primeros([...(r.expenses?.rows || [])].sort((a, b) => (b.amount_base || 0) - (a.amount_base || 0)), 10),
+      };
+    },
+  },
+  {
+    nombre: "margenes",
+    descripcion: "Ganancia de un período: ventas, costo, margen total y porcentaje; los productos que más dejan, los de menor margen, por categoría y los que no tienen costo cargado.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.marginsReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, limit: 10, warehouse_id: await sucursal(req, args) });
+      return {
+        periodo: { desde, hasta },
+        resumen: r.summary,
+        productos_que_mas_dejan: primeros(r.by_product, 10),
+        menor_margen: primeros(r.bottom_margin, 5),
+        por_categoria: primeros(r.by_category, 10),
+        sin_costo: primeros(r.sin_costo, 10),
+      };
+    },
+  },
+];
+
+// ── Consultas de la segunda tanda (20-11-2026): "todo lo que un usuario o administrador puede
+// preguntar". Caja del turno, cajas y bancos, clientes, facturas, tasas, compras y proveedores,
+// vencimientos, mermas, clientes, auditoría y, en restaurantes, mesas y cocina.
+
+const QT = Sequelize.QueryTypes;
+
+// Búsqueda sin acentos ni mayúsculas: "José Mujica" tiene que encontrar a "JOSE MUJICA" y al
+// revés. translate() no necesita la extensión unaccent (que Supabase no trae encendida).
+const SIN_ACENTO = (col) => `translate(lower(${col}), 'áéíóúüñàèìòù', 'aeiouunaeiou')`;
+const sinAcento = (t) => String(t || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[%_]/g, "");
+
+// El mismo req con otro query: varios servicios leen sus filtros de req.query. Object.create
+// conserva todo lo demás (empleado, empresa, X-Sucursales y la caché de sucursales).
+const conQuery = (req, query = {}) => Object.assign(Object.create(req), { query });
+
+async function idsSucursales(req, { depositos = false } = {}) {
+  const ids = await scopeWarehouseIds(req, { includeDeposits: depositos });
+  return Array.isArray(ids) ? ids.filter(Number.isInteger) : null;   // null = todas (admin)
+}
+const enSucursales = (ids, col) => (ids === null ? "" : ids.length ? `AND ${col} IN (${ids.join(",")})` : "AND FALSE");
+
+HERRAMIENTAS.push(
+  {
+    nombre: "caja_turno",
+    descripcion: "Turnos de caja abiertos ahora: cajero, sucursal, desde cuándo, ventas del turno y, por cada caja, fondo inicial, cobros en efectivo, ingresos, salidas (vueltos y egresos), avances y cuánto DEBERÍA haber en la gaveta. Un cajero ve solo su turno; quien tiene reportes ve todos.",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["sales.cash", "reports.view", "journals.view"],
+    async ejecutar(req, args) {
+      const gerente = ["reports.view", "journals.view"].some(p => hasPermission(req.employee?.permissions, p));
+      const wid = await sucursal(req, args);
+      const ids = wid ? [wid] : await idsSucursales(req);
+      const sesiones = await sequelize.query(
+        `SELECT cs.id FROM cash_sessions cs
+          WHERE cs.company_id = :cid AND cs.status = 'open' ${enSucursales(ids, "cs.warehouse_id")}
+            ${gerente ? "" : "AND cs.employee_id = :eid"}
+          ORDER BY cs.opened_at DESC LIMIT 6`,
+        { replacements: { cid: req.company_id, eid: req.employee?.id }, type: QT.SELECT }
+      );
+      if (!sesiones.length) return { turnos_abiertos: 0, nota: gerente ? "No hay turnos abiertos en estas sucursales." : "No tienes un turno abierto." };
+      const getSessionSummary = require("../cashSessions/getSessionSummary");
+      const turnos = [];
+      for (const { id } of sesiones) {
+        const r = await getSessionSummary(id, req);
+        turnos.push({
+          cajero: r.session?.employee?.full_name,
+          sucursal: r.session?.warehouse?.name,
+          abierto_desde: r.session?.opened_at,
+          ventas: r.sales,
+          devoluciones: r.returns,
+          cajas: (r.journal_summary || []).map(j => ({
+            caja: j.journal_name, moneda: j.currency_symbol, fondo_inicial: j.opening_amount,
+            cobros_efectivo: j.cash_in, ingresos_manuales: j.manual_in, salidas_vueltos_y_egresos: j.cash_out,
+            avances_entregados: j.advance_out, deberia_haber: j.expected_amount,
+          })),
+        });
+      }
+      return { turnos_abiertos: turnos.length, turnos };
+    },
+  },
+  {
+    nombre: "saldos_cajas_bancos",
+    descripcion: "Cada caja y cuenta bancaria con su movimiento acumulado (cobros + ingresos − egresos) y lo movido hoy, en la moneda de cada una. Es lo que muestra Contabilidad, Estado de Cuenta.",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["journals.view"],
+    async ejecutar(req, args) {
+      const wid = await sucursal(req, args);
+      const { getSummary } = require("../paymentJournals/paymentJournalService");
+      const { data } = await getSummary(conQuery(req, wid ? { warehouse_id: wid } : {}));
+      return {
+        cuentas: data.map(j => ({
+          cuenta: j.name, tipo: j.type, banco: j.bank_name, sucursal: j.warehouse_name,
+          moneda: j.currency_symbol, acumulado: parseFloat(j.total_ingresos) || 0, hoy: parseFloat(j.ingresos_hoy) || 0,
+        })),
+      };
+    },
+  },
+  {
+    nombre: "buscar_cliente",
+    descripcion: "Busca clientes por nombre o RIF/cédula y devuelve lo que deben, su saldo a favor, cuántas compras llevan, la última compra y sus facturas abiertas.",
+    parametros: { buscar: { type: "string", description: "Nombre (o parte) o documento del cliente." } },
+    requeridos: ["buscar"],
+    permisos: ["customers.view", "sales.create"],
+    async ejecutar(req, args) {
+      const texto = String(args.buscar || "").trim().slice(0, 60);
+      if (texto.length < 2) return { error: "Indica al menos dos letras del cliente." };
+      // Se busca sin acentos (cada palabra por separado) y la ficha sale de getOne, la misma de
+      // Contactos: deuda, compras y saldo a favor iguales a los de la pantalla.
+      const palabras = sinAcento(texto).split(/\s+/).filter(Boolean).slice(0, 4);
+      if (!palabras.length) return { error: "Indica el nombre o el documento del cliente." };
+      const halladas = await sequelize.query(
+        `SELECT id FROM customers
+          WHERE company_id = :cid AND type = 'cliente'
+            AND ${palabras.map((_, i) => `(${SIN_ACENTO("name")} LIKE :p${i} OR ${SIN_ACENTO("COALESCE(rif, '')")} LIKE :p${i})`).join(" AND ")}
+          ORDER BY name LIMIT 4`,
+        { replacements: { cid: req.company_id, ...Object.fromEntries(palabras.map((p, i) => [`p${i}`, `%${p}%`])) }, type: QT.SELECT }
+      );
+      const { getOne } = require("../customers/customerService");
+      const ids = await idsSucursales(req, { depositos: true });
+      const clientes = [];
+      for (const { id } of halladas) {
+        const r = await getOne(id, req).catch(() => null);
+        if (!r?.data) continue;
+        const j = r.data.toJSON ? r.data.toJSON() : r.data;
+        const abiertas = await sequelize.query(
+          `SELECT s.invoice_number AS factura, s.created_at AS fecha, s.total::float AS total, s.status AS estado,
+                  (s.total - COALESCE(s.forgiven_amount, 0) - COALESCE((SELECT SUM(amount) FROM payments WHERE sale_id = s.id), 0))::float AS saldo
+             FROM sales s
+            WHERE s.company_id = :cid AND s.customer_id = :id AND s.status IN ('borrador', 'pendiente', 'parcial') ${enSucursales(ids, "s.warehouse_id")}
+            ORDER BY s.created_at LIMIT 10`,
+          { replacements: { cid: req.company_id, id: j.id }, type: QT.SELECT }
+        );
+        clientes.push({
+          cliente: j.name, deuda_total: parseFloat(j.total_debt || 0), saldo_a_favor: parseFloat(j.credit_available ?? j.credit_balance ?? 0),
+          compras: parseInt(j.total_purchases || 0, 10), total_comprado: parseFloat(j.total_spent || 0), ultima_compra: j.last_purchase_at || null,
+          facturas_abiertas: abiertas,
+        });
+      }
+      return { buscado: texto, clientes };
+    },
+  },
+  {
+    nombre: "buscar_factura",
+    descripcion: "Busca una factura por su número y devuelve fecha, cliente, cajero, estado, total, lo pagado, el saldo, sus productos y cómo la pagaron.",
+    parametros: { numero: { type: "string", description: "Número de factura o parte (por ejemplo A-0125 o 125)." } },
+    requeridos: ["numero"],
+    permisos: ["sales.view"],
+    async ejecutar(req, args) {
+      const numero = String(args.numero || "").trim().slice(0, 30);
+      if (!numero) return { error: "Indica el número de la factura." };
+      const ids = await idsSucursales(req, { depositos: true });
+      const ventas = await sequelize.query(
+        `SELECT s.id, s.invoice_number AS factura, s.created_at AS fecha, s.status AS estado, s.total::float AS total,
+                COALESCE(s.forgiven_amount, 0)::float AS exonerado, c.name AS cliente, e.full_name AS cajero, w.name AS sucursal,
+                COALESCE((SELECT SUM(amount) FROM payments WHERE sale_id = s.id), 0)::float AS pagado
+           FROM sales s
+           LEFT JOIN customers c ON c.id = s.customer_id
+           LEFT JOIN employees e ON e.id = s.employee_id
+           LEFT JOIN warehouses w ON w.id = s.warehouse_id
+          WHERE s.company_id = :cid AND s.invoice_number ILIKE :n ${enSucursales(ids, "s.warehouse_id")}
+          ORDER BY (s.invoice_number = :exacto) DESC, s.created_at DESC LIMIT 3`,
+        { replacements: { cid: req.company_id, n: `%${numero.replace(/[%_]/g, "")}%`, exacto: numero }, type: QT.SELECT }
+      );
+      const facturas = [];
+      for (const v of ventas) {
+        const [items, pagos] = await Promise.all([
+          sequelize.query(`SELECT name AS producto, quantity::float AS cantidad, subtotal::float AS subtotal FROM sale_items WHERE sale_id = :id ORDER BY id LIMIT 25`, { replacements: { id: v.id }, type: QT.SELECT }),
+          sequelize.query(
+            `SELECT COALESCE(pj.name, p.payment_method) AS forma_de_pago, p.amount::float AS monto, p.created_at AS fecha
+               FROM payments p LEFT JOIN payment_journals pj ON pj.id = p.payment_journal_id
+              WHERE p.sale_id = :id ORDER BY p.created_at`,
+            { replacements: { id: v.id }, type: QT.SELECT }),
+        ]);
+        facturas.push({ ...v, saldo: Math.round((v.total - v.exonerado - v.pagado) * 100) / 100, productos: items, pagos });
+      }
+      return { buscado: numero, facturas };
+    },
+  },
+  {
+    nombre: "tasas_de_cambio",
+    descripcion: "Monedas de la tienda con su tasa de hoy (cuántos de esa moneda por 1 de la moneda base) y la tasa de los últimos días. Úsala también para convertir montos entre Ref. y bolívares.",
+    parametros: {},
+    permisos: [],
+    async ejecutar(req) {
+      const monedas = await sequelize.query(
+        `SELECT id, name AS moneda, code AS codigo, symbol AS simbolo, exchange_rate::float AS tasa, is_base AS base, is_local AS local
+           FROM currencies WHERE company_id = :cid AND active ORDER BY is_base DESC, is_local DESC, name`,
+        { replacements: { cid: req.company_id }, type: QT.SELECT }
+      );
+      const local = monedas.find(m => m.local) || monedas.find(m => !m.base);
+      const historial = local ? await sequelize.query(
+        `SELECT rate_date AS fecha, rate::float AS tasa FROM currency_rates
+          WHERE currency_id = :mid AND (company_id = :cid OR company_id IS NULL) ORDER BY rate_date DESC LIMIT 7`,
+        { replacements: { mid: local.id, cid: req.company_id }, type: QT.SELECT }) : [];
+      return { monedas, historial_moneda_local: historial };
+    },
+  },
+  {
+    nombre: "compras_proveedores",
+    descripcion: "Compras de un período: total comprado, número de órdenes, por proveedor, por día y los productos más comprados.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["purchases.view", "reports.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.purchasesReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, limit: 10, warehouse_id: await sucursal(req, args) });
+      return { periodo: { desde, hasta }, resumen: r.summary, por_proveedor: primeros(r.by_supplier, 10), productos_mas_comprados: primeros(r.top_products, 10) };
+    },
+  },
+  {
+    nombre: "cuentas_por_pagar",
+    descripcion: "Lo que la tienda les debe a sus proveedores hoy: cada proveedor con saldo pendiente y el total.",
+    parametros: {},
+    permisos: ["purchases.view", "purchases.pay"],
+    async ejecutar(req) {
+      const { getAll } = require("../customers/customerService");
+      const { data } = await getAll({ type: "proveedor", debtors: "true", limit: 30 }, req);
+      const lista = (data || []).map(c => (c.toJSON ? c.toJSON() : c)).map(c => ({ proveedor: c.name, debe: c.total_debt }))
+        .filter(p => p.debe > 0).sort((a, b) => b.debe - a.debe);
+      return { proveedores_con_saldo: lista.length, total: Math.round(lista.reduce((t, p) => t + p.debe, 0) * 100) / 100, proveedores: lista.slice(0, 15) };
+    },
+  },
+  {
+    nombre: "productos_por_vencer",
+    descripcion: "Lotes con existencia y su fecha de vencimiento: los vencidos y los que vencen pronto, con días que faltan, cantidad y valor en riesgo.",
+    parametros: { dias: { type: "integer", description: "Ventana en días hacia adelante (por defecto 30)." }, sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["reports.view", "inventory.view"],
+    async ejecutar(req, args) {
+      const dias = Math.min(Math.max(parseInt(args.dias, 10) || 30, 1), 365);
+      const lotes = await reportes.expiryReport({ ...(await buildTenantContext(req)), warehouse_id: await sucursal(req, args) });
+      const cerca = lotes.filter(l => l.days_left <= dias);
+      return {
+        ventana_dias: dias,
+        vencidos: cerca.filter(l => l.days_left < 0).length,
+        por_vencer: cerca.filter(l => l.days_left >= 0).length,
+        lotes: cerca.slice(0, 25).map(l => ({ producto: l.product, lote: l.lot, vence: l.expiry, dias: l.days_left, cantidad: l.stock, unidad: l.unit, valor_en_riesgo: l.value_at_risk, sucursal: l.warehouse })),
+      };
+    },
+  },
+  {
+    nombre: "mermas",
+    descripcion: "Pérdidas de inventario de un período (merma, vencidos, robo, faltantes de conteo, ajustes sin motivo, pérdidas en transferencias) con su costo, por motivo y por producto; aparte el consumo interno.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.view", "inventory.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.mermasReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, warehouse_id: await sucursal(req, args) });
+      return { periodo: { desde, hasta }, resumen: r.summary, por_motivo: r.groups, por_producto: primeros(r.by_product, 10) };
+    },
+  },
+  {
+    nombre: "analisis_clientes",
+    descripcion: "Mejores clientes de un período (por monto comprado), clientes nuevos, clientes que dejaron de venir y la tasa de clientes que repiten.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.view"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const r = await reportes.customersReport({ ...(await buildTenantContext(req)), date_from: desde, date_to: hasta, limit: 10, warehouse_id: await sucursal(req, args) });
+      return { periodo: { desde, hasta }, mejores: primeros(r.top_customers, 10), nuevos: primeros(r.new_customers, 10), dejaron_de_venir: primeros(r.inactive_customers, 10), dias_sin_venir: r.inactive_days, repiten: r.repeat_rate, totales: r.totals };
+    },
+  },
+  {
+    nombre: "auditoria",
+    descripcion: "Control de un período: ventas anuladas, devoluciones (por empleado y detalle) y descuentos dados.",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["reports.audit"],
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const ctx = await buildTenantContext(req);
+      const wid = await sucursal(req, args);
+      const r = await reportes.auditReport({ ...ctx, date_from: desde, date_to: hasta, limit: 15, warehouse_id: wid });
+      const ids = wid ? [wid] : await idsSucursales(req);
+      const anuladas = await sequelize.query(
+        `SELECT s.invoice_number AS factura, s.total::float AS total, s.created_at AS fecha, e.full_name AS cajero
+           FROM sales s LEFT JOIN employees e ON e.id = s.employee_id
+          WHERE s.company_id = :cid AND s.status = 'anulado' ${enSucursales(ids, "s.warehouse_id")}
+            AND (s.created_at AT TIME ZONE '${TZ}')::date BETWEEN :desde AND :hasta
+          ORDER BY s.created_at DESC LIMIT 15`,
+        { replacements: { cid: req.company_id, desde, hasta }, type: QT.SELECT }
+      );
+      return { periodo: { desde, hasta }, anuladas, devoluciones: r.returns_summary, devoluciones_por_empleado: primeros(r.by_employee, 10), devoluciones_detalle: primeros(r.returns_list, 10), descuentos: primeros(r.discounts, 15) };
+    },
+  },
+  {
+    nombre: "mesas_abiertas",
+    descripcion: "Mesas con cuenta abierta ahora: mesa y área, mesonero, total, desde qué hora, si pidió la cuenta y cómo va en cocina; y los pedidos del QR esperando al mesonero.",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["tables.view", "sales.create"],
+    modulo: "cocina_enabled",
+    async ejecutar(req, args) {
+      const wid = await sucursal(req, args);
+      const ids = wid ? [wid] : await idsSucursales(req);
+      const [mesas, qr] = await Promise.all([
+        sequelize.query(
+          `SELECT t.name AS mesa, a.name AS area, COALESCE(w.full_name, e.full_name) AS mesonero, s.total::float AS total,
+                  s.created_at AS abierta_desde, (s.bill_requested_at IS NOT NULL) AS pidio_la_cuenta, s.kitchen_status AS cocina
+             FROM sales s
+             JOIN dining_tables t ON t.id = s.table_id
+             LEFT JOIN dining_areas a ON a.id = t.area_id
+             LEFT JOIN employees w ON w.id = s.waiter_id
+             LEFT JOIN employees e ON e.id = s.employee_id
+            WHERE s.company_id = :cid AND s.status IN ('espera', 'borrador') ${enSucursales(ids, "s.warehouse_id")}
+            ORDER BY s.created_at LIMIT 40`,
+          { replacements: { cid: req.company_id }, type: QT.SELECT }),
+        sequelize.query(
+          `SELECT COUNT(*)::int AS n FROM table_orders WHERE company_id = :cid AND status = 'pendiente' ${enSucursales(ids, "warehouse_id")}`,
+          { replacements: { cid: req.company_id }, type: QT.SELECT }).catch(() => [{ n: 0 }]),
+      ]);
+      return { mesas_abiertas: mesas.length, mesas, pedidos_qr_esperando: qr[0]?.n || 0 };
+    },
+  },
+  {
+    nombre: "comandas_cocina",
+    descripcion: "Comandas en cocina ahora: cuántas nuevas, en preparación y listas sin entregar, y las que más llevan esperando (minutos), con su mesa o etiqueta.",
+    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["kitchen.view", "tables.view"],
+    modulo: "cocina_enabled",
+    async ejecutar(req, args) {
+      const wid = await sucursal(req, args);
+      const ids = wid ? [wid] : await idsSucursales(req);
+      const filas = await sequelize.query(
+        `SELECT k.status AS estado, COALESCE(t.name, k.label) AS mesa_o_etiqueta, k.round_no AS ronda,
+                ROUND(EXTRACT(EPOCH FROM (NOW() - k.created_at)) / 60)::int AS minutos_esperando
+           FROM kitchen_tickets k
+           JOIN sales s ON s.id = k.sale_id
+           LEFT JOIN dining_tables t ON t.id = k.table_id
+          WHERE k.company_id = :cid AND k.status IN ('nueva', 'preparando', 'lista')
+            AND s.status NOT IN ('anulado', 'devuelto')
+            AND k.created_at > NOW() - INTERVAL '18 hours'
+            AND (k.status <> 'lista' OR k.status_at > NOW() - INTERVAL '2 hours')
+            ${enSucursales(ids, "k.warehouse_id")}
+          ORDER BY k.created_at LIMIT 60`,
+        { replacements: { cid: req.company_id }, type: QT.SELECT }
+      );
+      const cuenta = (e) => filas.filter(f => f.estado === e).length;
+      return { nuevas: cuenta("nueva"), preparando: cuenta("preparando"), listas_sin_entregar: cuenta("lista"), las_que_mas_esperan: filas.filter(f => f.estado !== "lista").slice(0, 10) };
+    },
+  },
+);
+
+// ── Módulos extra (20-11-2026): comisiones, propinas, agenda y cobranza. Cada consulta existe
+// solo para la empresa que tiene el módulo (`modulo`) y pide los mismos permisos que su pantalla.
+HERRAMIENTAS.push(
+  {
+    nombre: "comisiones",
+    descripcion: "Comisiones por vendedor en un período: lo vendido, lo cobrado, la comisión ganada, lo que falta cobrar de sus ventas y el saldo que se le debe (ganado menos pagado).",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["commissions.view"],
+    modulo: "comisiones_enabled",
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const tc = await buildTenantContext(req);
+      const r = await require("../commissions").report({ company_id: req.company_id, date_from: desde, date_to: hasta, warehouse_id: await sucursal(req, args), wh: tc.wh });
+      return {
+        periodo: { desde, hasta },
+        totales: r.totals,
+        vendedores: (r.data || []).slice(0, 20).map(s => ({ vendedor: s.name, codigo: s.code, porcentaje: s.commission_pct, ventas: s.ventas, vendido: s.vendido, cobrado: s.cobrado, comision_del_periodo: s.comision, por_cobrar: s.por_cobrar, pagado: s.pagado, saldo_que_se_le_debe: s.saldo })),
+      };
+    },
+  },
+  {
+    nombre: "propinas",
+    descripcion: "Propinas de un período: cuánto le tocó a cada persona, lo pagado y el saldo que se le debe; el pozo por repartir y el modo de reparto (mesonero o pozo).",
+    parametros: { ...PARAM_RANGO },
+    permisos: ["tips.view"],
+    modulo: "propinas_enabled",
+    async ejecutar(req, args) {
+      const { desde, hasta } = rango(args);
+      const tc = await buildTenantContext(req);
+      const r = await require("../tips").report({ company_id: req.company_id, date_from: desde, date_to: hasta, warehouse_id: await sucursal(req, args), wh: tc.wh });
+      return {
+        periodo: { desde, hasta },
+        modo_de_reparto: r.modo,
+        totales: r.totals,
+        pozo: r.pool,
+        sin_persona_asignada: r.sin_persona,
+        personas: (r.data || []).slice(0, 20).map(s => ({ persona: s.name, cuentas_atendidas: s.cuentas, propina_del_periodo: s.periodo, por_cobrar: s.por_cobrar, pagado: s.pagado, saldo_que_se_le_debe: s.saldo })),
+      };
+    },
+  },
+  {
+    nombre: "agenda_citas",
+    descripcion: "Citas de un día (por defecto hoy): hora, cliente, profesional o puesto, servicios y estado (pendiente, confirmada, en curso, terminada, cancelada, no vino), y las citas terminadas que faltan por cobrar.",
+    parametros: { fecha: { type: "string", description: "Día YYYY-MM-DD. Si no se indica, hoy." }, sucursal_id: PARAM_RANGO.sucursal_id },
+    permisos: ["agenda.own", "agenda.view", "agenda.book"],
+    modulo: "citas_enabled",
+    async ejecutar(req, args) {
+      const fecha = fecha_(args.fecha) || hoy();
+      const wid = await sucursal(req, args);
+      const ids = wid ? [wid] : (await idsSucursales(req)) ?? (await sequelize.query(
+        `SELECT id FROM warehouses WHERE company_id = :cid AND active IS NOT FALSE AND sells IS NOT FALSE ORDER BY id`,
+        { replacements: { cid: req.company_id }, type: QT.SELECT })).map(w => w.id);
+      const citas = require("../agenda/citas");
+      const todas = [], porCobrar = [];
+      for (const w of ids.slice(0, 3)) {
+        todas.push(...await citas.listarDia(req, w, fecha));
+        porCobrar.push(...await citas.porCobrar(req, w));
+      }
+      const recursos = [...new Set([...todas, ...porCobrar].map(c => c.resource_id).filter(Boolean))];
+      const nombres = recursos.length ? Object.fromEntries((await sequelize.query(
+        `SELECT id, name FROM agenda_resources WHERE company_id = :cid AND id IN (:ids)`,
+        { replacements: { cid: req.company_id, ids: recursos }, type: QT.SELECT })).map(r => [r.id, r.name])) : {};
+      const cita = (c) => ({
+        inicio: c.starts_at, fin: c.ends_at, cliente: c.customer_name, profesional: nombres[c.resource_id] || null,
+        servicios: (c.items || []).map(i => i.name).join(", "), estado: c.status, cobro: c.payment_state, total: c.sale_total ?? null,
+      });
+      const estados = todas.reduce((m, c) => ({ ...m, [c.status]: (m[c.status] || 0) + 1 }), {});
+      return { fecha, total_citas: todas.length, por_estado: estados, citas: todas.slice(0, 30).map(cita), terminadas_por_cobrar: porCobrar.slice(0, 15).map(cita) };
+    },
+  },
+  {
+    nombre: "cobranza_sectores",
+    descripcion: "Cobranza por sectores: cada sector con su sucursal, sus cobradores, cuántos clientes tiene, cuántos deben y cuánto deben en total. Un cobrador ve solo sus sectores.",
+    parametros: {},
+    permisos: ["cobranza.view", "cobranza.manage"],
+    modulo: "cobranza_enabled",
+    async ejecutar(req) {
+      const r = await require("../cobranza").listarSectores(req, {});
+      const sectores = (r.data || []).filter(s => s.active !== false).map(s => ({
+        sector: s.name, sucursal: s.warehouse_name, cobradores: (s.employees || []).map(e => e.name || e.full_name).filter(Boolean).join(", "),
+        clientes: s.clientes, clientes_con_deuda: s.con_deuda, deuda: s.deuda,
+      }));
+      return { sectores: sectores.slice(0, 30), deuda_total: Math.round(sectores.reduce((t, s) => t + (s.deuda || 0), 0) * 100) / 100, clientes_sin_sector: typeof r.sin_sector === "object" ? r.sin_sector : r.sin_sector ?? null };
+    },
+  },
+);
+
+// Sin permisos en la lista = cualquiera que tenga el asistente (las tasas, por ejemplo).
+const puede = (req, h) => !h.permisos.length || h.permisos.some(p => hasPermission(req.employee?.permissions, p));
+
+// Definiciones en el formato de "tools" (OpenAI / DeepSeek) de lo que este usuario puede usar.
+// `flags`: los extras encendidos de la empresa; una consulta de mesas no se ofrece sin Restaurante.
+function disponibles(req, flags = {}) {
+  return HERRAMIENTAS.filter(h => puede(req, h) && (!h.modulo || flags[h.modulo])).map(h => ({
+    type: "function",
+    function: {
+      name: h.nombre,
+      description: h.descripcion,
+      parameters: { type: "object", properties: h.parametros, required: h.requeridos || [] },
+    },
+  }));
+}
+
+async function ejecutar(req, nombre, argsTexto, flags = {}) {
+  const h = HERRAMIENTAS.find(x => x.nombre === nombre);
+  if (!h || (h.modulo && !flags[h.modulo])) return { error: "Esa consulta no existe." };
+  if (!puede(req, h)) return { error: "El usuario no tiene permiso para esta consulta. Dile que se lo pida al administrador de la tienda." };
+  let args = {};
+  try { args = argsTexto ? JSON.parse(argsTexto) : {}; } catch { return { error: "Argumentos inválidos." }; }
+  try {
+    return limpiar(await h.ejecutar(req, args || {}));
+  } catch (err) {
+    if (err.isOperational) return { error: err.message };
+    console.error(`Asistente: herramienta ${nombre}`, err);
+    return { error: "No se pudo consultar ese dato en este momento." };
+  }
+}
+
+module.exports = { disponibles, ejecutar, hoy, limpiar };

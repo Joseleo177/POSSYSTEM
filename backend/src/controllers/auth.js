@@ -3,6 +3,7 @@ const jwt    = require("jsonwebtoken");
 const { Employee, Role, Warehouse, Company } = require("../models");
 const { recordLoginEvent, invalidateEmployee, RESULT } = require("../utils/loginEvents");
 const { effectivePermissions } = require("../config/permissions");
+const { esClaveDebil, problemasClave } = require("../utils/passwordPolicy");
 
 const SECRET  = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
@@ -29,6 +30,16 @@ async function sucursalesDe({ company_id, is_superuser, permissions, warehouses 
   }
   const soloSucursales = lista.filter(w => w.sells !== false);
   return soloSucursales.length ? soloSucursales : lista;
+}
+
+// Los dos tokens llevan la versión de las sesiones del empleado (`tv`, employees.token_version):
+// subirla en la base los invalida todos (middleware/auth.js y refresh).
+function firmarSesion(payload, emp) {
+  const tv = Number(emp.token_version ?? 0);
+  return {
+    token: jwt.sign({ ...payload, tv }, SECRET, { expiresIn: EXPIRES }),
+    refresh_token: jwt.sign({ id: emp.id, company_id: emp.company_id, tv }, SECRET, { expiresIn: '7d' }),
+  };
 }
 
 // POST /api/auth/login
@@ -100,15 +111,19 @@ const login = async (req, res) => {
       is_superuser: !!emp.is_superuser
     };
 
-    const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
-    const refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
+    // Es el único momento en que el servidor ve la contraseña en claro: si no cumple la regla,
+    // queda marcado y la app le pide cambiarla antes de dejarlo trabajar (middleware/auth.js).
+    const debil = esClaveDebil(password, { username: emp.username });
+    if (debil !== emp.must_change_password) await emp.update({ must_change_password: debil });
+
+    const { token, refresh_token } = firmarSesion(payload, emp);
     await recordLoginEvent(req, { employee: emp, kind: "login", result: RESULT.OK });
     invalidateEmployee(emp.id);
     const sucursales = await sucursalesDe({
       company_id: emp.company_id, is_superuser: emp.is_superuser,
       permissions: payload.permissions, warehouses: emp.Warehouses,
     });
-    res.json({ ok: true, token, refresh_token, employee: { ...payload, sucursales } });
+    res.json({ ok: true, token, refresh_token, employee: { ...payload, sucursales, must_change_password: debil } });
   } catch (err) {
     // El detalle queda en el log; al cliente solo un mensaje genérico. El login es un
     // endpoint público: el mensaje de error de Sequelize nombra tablas, columnas y hasta
@@ -128,7 +143,7 @@ const me = async (req, res) => {
     // Los almacenes también se leen de la base y no del token: el token se firma al entrar, y
     // un almacén creado o asignado después no aparecía en Catálogo hasta cerrar sesión.
     const emp = await Employee.findByPk(req.employee.id, {
-      attributes: ["id", "permission_overrides"], include: [
+      attributes: ["id", "permission_overrides", "must_change_password"], include: [
         { model: Role, attributes: ["name", "label", "permissions"] },
         { model: Warehouse, attributes: ["id", "name", "active", "sells"], through: { attributes: [] } },
       ],
@@ -143,6 +158,7 @@ const me = async (req, res) => {
         role: emp.Role.name, role_label: emp.Role.label, permissions,
         warehouses: (emp.Warehouses || []).filter(w => w.active !== false).map(w => ({ id: w.id, name: w.name, sells: w.sells !== false })),
         sucursales,
+        must_change_password: !!emp.must_change_password,
       } });
     }
   } catch { /* se cae a lo del token */ }
@@ -154,20 +170,31 @@ const changePassword = async (req, res) => {
   try {
     const { current_password, new_password } = req.body;
     if (!current_password || !new_password)
-      return res.status(400).json({ ok: false, message: "Campos requeridos" });
-    if (new_password.length < 6)
-      return res.status(400).json({ ok: false, message: "La contraseña debe tener al menos 6 caracteres" });
+      return res.status(400).json({ ok: false, message: "Escribe tu contraseña actual y la nueva" });
 
     const emp = await Employee.findByPk(req.employee.id);
     if (!emp) return res.status(404).json({ ok: false, message: "Empleado no encontrado" });
 
-    const valid = await bcrypt.compare(current_password, emp.password_hash);
-    if (!valid) return res.status(401).json({ ok: false, message: "Contraseña actual incorrecta" });
+    const problemas = problemasClave(new_password, { username: emp.username });
+    if (problemas.length) {
+      return res.status(400).json({ ok: false, message: `La contraseña nueva no es segura: ${problemas[0].toLowerCase()}`, problemas });
+    }
 
+    // 400 y no 401: un 401 haría que la app intente renovar la sesión y vuelva al login.
+    const valid = await bcrypt.compare(current_password, emp.password_hash);
+    if (!valid) return res.status(400).json({ ok: false, message: "La contraseña actual no es correcta" });
+    if (await bcrypt.compare(new_password, emp.password_hash))
+      return res.status(400).json({ ok: false, message: "La contraseña nueva tiene que ser distinta de la actual" });
+
+    // Subir la versión cierra las demás sesiones de esta persona: si le robaron la clave, el
+    // intruso sale al instante. La sesión desde la que se cambia sigue con tokens nuevos.
     const hash = await bcrypt.hash(new_password, 10);
-    await emp.update({ password_hash: hash });
-    
-    res.json({ ok: true, message: "Contraseña actualizada" });
+    await emp.update({ password_hash: hash, must_change_password: false, token_version: Number(emp.token_version ?? 0) + 1 });
+    invalidateEmployee(emp.id);
+
+    const { iat, exp, tv, ...payload } = req.employee; // eslint-disable-line no-unused-vars
+    const { token, refresh_token } = firmarSesion(payload, emp);
+    res.json({ ok: true, message: "Contraseña actualizada", token, refresh_token });
   } catch (err) {
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al cambiar contraseña" });
@@ -194,6 +221,10 @@ const refresh = async (req, res) => {
       if (emp) await recordLoginEvent(req, { employee: emp, kind: "refresh", result: RESULT.INACTIVE });
       return res.status(401).json({ ok: false, message: "Usuario inválido o inactivo" });
     }
+    // Sesiones cerradas (cambio de contraseña o token_version subido a mano): no se renueva.
+    if ((decoded.tv ?? 0) !== Number(emp.token_version ?? 0)) {
+      return res.status(401).json({ ok: false, code: "SESSION_REVOKED", message: "Tu sesión se cerró. Vuelve a entrar." });
+    }
 
     const payload = {
       id:           emp.id,
@@ -208,8 +239,7 @@ const refresh = async (req, res) => {
       is_superuser: !!emp.is_superuser
     };
 
-    const token = jwt.sign(payload, SECRET, { expiresIn: EXPIRES });
-    const new_refresh_token = jwt.sign({ id: emp.id, company_id: emp.company_id }, SECRET, { expiresIn: '7d' });
+    const { token, refresh_token: new_refresh_token } = firmarSesion(payload, emp);
     await recordLoginEvent(req, { employee: emp, kind: "refresh", result: RESULT.OK });
 
     res.json({ ok: true, token, refresh_token: new_refresh_token });

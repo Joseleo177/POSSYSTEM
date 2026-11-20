@@ -3,6 +3,15 @@ import Modal from "../ui/Modal";
 import { Button } from "../ui/Button";
 import DatePicker from "../ui/DatePicker";
 import CustomSelect from "../ui/CustomSelect";
+import Segmented from "../ui/Segmented";
+import { api } from "../../services/api";
+
+// Asistente con IA: misma función en los dos niveles; solo cambia el tope de preguntas al mes
+// (ver services/asistente en el backend).
+const NIVELES_IA = [
+    { key: "basico", label: "IA Básico · 300" },
+    { key: "full",   label: "IA Full · 3.000" },
+];
 
 const PLANS = ["Básico", "Premium", "Ilimitado"];
 const STATUSES = ["Demo", "Activa", "Suspendida", "Vencida"];
@@ -21,6 +30,7 @@ const vacio = () => ({
     expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
     max_users: 5, active: true, catalog_enabled: false, fabrica_enabled: false, cocina_enabled: false, pedidos_web_enabled: false, comisiones_enabled: false, propinas_enabled: false, citas_enabled: false, cobranza_enabled: false, iva_enabled: false, catalogo_pdf_enabled: false, mayor_enabled: false, farmacia_enabled: false, seo_enabled: true,
     print_format: "ticket", fiscal_enabled: false,
+    asistente_enabled: false, asistente_plan: "basico", asistente_limite: "",
     admin_username: "", admin_password: "",
 });
 
@@ -34,11 +44,23 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                 ...editData,
                 print_format: editData.print_format || "ticket",
                 fiscal_enabled: !!editData.fiscal_enabled,
+                asistente_plan: editData.asistente_plan || "basico",
+                asistente_limite: editData.asistente_limite ?? "",
                 expires_at: editData.expires_at ? new Date(editData.expires_at).toISOString().split("T")[0] : "",
                 admin_username: "", admin_password: "",
             }
             : vacio());
     }, [editData, open]);
+
+    // Consumo del asistente este mes, para saber cuánto cobrarle o si ampliar el tope.
+    const [consumoIA, setConsumoIA] = useState(null);
+    useEffect(() => {
+        setConsumoIA(null);
+        if (!open || !editData?.id || !editData.asistente_enabled) return;
+        api.asistente.consumo()
+            .then(r => setConsumoIA((r.data || []).find(c => c.company_id === editData.id) || null))
+            .catch(() => {});
+    }, [open, editData]);
 
     const set = (k, v) => setForm(prev => ({ ...prev, [k]: v }));
 
@@ -182,12 +204,43 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                                 checked={!!form.iva_enabled} onChange={v => set("iva_enabled", v)} />
                         </Grupo>
 
+                        <Grupo titulo="Asistente con IA">
+                            {/* Chat que responde con los datos de la tienda y explica el sistema. Quién
+                                lo usa lo decide la tienda con el permiso "Usar el asistente". */}
+                            <Interruptor titulo="Asistente con IA" detalle="Responde preguntas de la tienda según los permisos de cada usuario y explica cómo usar el sistema."
+                                checked={!!form.asistente_enabled} onChange={v => set("asistente_enabled", v)} />
+                            {form.asistente_enabled && (
+                                <div className="pl-8 pr-4 py-3 bg-surface-2/50 dark:bg-white/[0.02] space-y-3">
+                                    <div>
+                                        <div className={LABEL}>Nivel (preguntas al mes)</div>
+                                        <Segmented options={NIVELES_IA} value={form.asistente_plan || "basico"} onChange={v => set("asistente_plan", v)} />
+                                    </div>
+                                    <div>
+                                        <label className={LABEL}>Tope propio <Opcional /></label>
+                                        <input type="number" min="0" step="1" inputMode="numeric" autoComplete="off"
+                                            value={form.asistente_limite ?? ""} onChange={e => set("asistente_limite", e.target.value)}
+                                            placeholder={form.asistente_plan === "full" ? "3000" : "300"}
+                                            className="h-10 w-40 px-3 rounded-lg border border-border dark:border-white/10 bg-white dark:bg-white/[0.04] text-[13px] focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20" />
+                                        <p className="mt-1 text-[11px] text-content-subtle">Vacío: el tope del nivel.</p>
+                                    </div>
+                                    {consumoIA && (
+                                        <p className="text-[12px] text-content-subtle">
+                                            Este mes: <span className="text-content dark:text-white font-medium tabular-nums">{consumoIA.usadas} de {consumoIA.limite}</span> preguntas
+                                            {" · "}costo <span className="text-content dark:text-white font-medium tabular-nums">$ {Number(consumoIA.costo_usd || 0).toFixed(2)}</span>
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+                        </Grupo>
+
                         <Grupo titulo="Comprobantes y Facturación">
                             <div className="mb-2">
-                                <label className={LABEL}>Formato de entrega habitual</label>
+                                {/* Solo el valor de partida: la tienda lo cambia por sucursal en
+                                    Configuración → Factura (print_format_by_warehouse). */}
+                                <label className={LABEL}>Formato de entrega por defecto</label>
                                 <CustomSelect value={form.print_format || "ticket"} onChange={v => set("print_format", v)}
                                     options={PRINT_FORMATS} className="w-full" />
-                                <p className="mt-1 text-[11px] text-content-subtle">Adapta la pantalla de cobro para evitar botones de tickera si la empresa no la usa.</p>
+                                <p className="mt-1 text-[11px] text-content-subtle">Qué papel sale al imprimir. La empresa puede cambiarlo por sucursal en Configuración → Factura.</p>
                             </div>
                             <Interruptor titulo="Máquina fiscal SENIAT" detalle="Conexión con impresora fiscal física The Factory HKA (Bixolon, HKA-112, Dascom) mediante NXUS Bridge."
                                 checked={!!form.fiscal_enabled} onChange={v => set("fiscal_enabled", v)} />

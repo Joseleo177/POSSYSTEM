@@ -13,7 +13,10 @@ import { aplicarMayor } from "../helpers/precioMayor";
 const CartContext = createContext(null);
 
 export function CartProvider({ children }) {
-  const { employee, notify, baseCurrency, activeCurrencies, settings, company, sucursalActual, sucursales } = useApp();
+  const { employee: empleadoSesion, notify, baseCurrency, activeCurrencies, settings, company, sucursalActual, sucursales } = useApp();
+  // Con la contraseña pendiente de cambiar el servidor rechaza todo (CambiarClaveObligatoria):
+  // para la caja es como no tener sesión, y carga todo al quedar cambiada.
+  const employee = empleadoSesion?.must_change_password ? null : empleadoSesion;
 
   // ── Carrito ────────────────────────────────────────────────
   const [cart, setCart] = useState([]);

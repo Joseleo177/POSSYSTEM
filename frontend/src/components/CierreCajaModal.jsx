@@ -20,8 +20,9 @@ const Linea = ({ label, value, strong }) => (
 );
 
 export default function CierreCajaModal({ session, onClosed, onCancel }) {
-    const { company, settings, notify } = useApp();
-    const fiscalEnabled = !!company?.fiscal_enabled || settings?.fiscal_enabled === "true";
+    const { company, notify } = useApp();
+    // Extra de la empresa: lo enciende el superusuario (CompanyModal), no los ajustes de la tienda.
+    const fiscalEnabled = !!company?.fiscal_enabled;
     const [emitirZ, setEmitirZ]           = useState(false);
     const [summary, setSummary]           = useState(null);
     const [loadingSummary, setLoadingSummary] = useState(true);

@@ -16,6 +16,8 @@ import AppLauncher from "../layout/AppLauncher";
 import CommandPalette from "../components/ui/CommandPalette";
 import BottomTabs from "../layout/BottomTabs";
 import MainContent from "../layout/MainContent";
+import AsistentePanel from "./asistente/Asistente";
+import CambiarClaveObligatoria from "./CambiarClaveObligatoria";
 
 export default function PosApp() {
     const { employee, authChecked, login, logout, can, notification, storeName, settings, company, currencies, pendingNav, setPendingNav, pendingAction, setPendingAction, triggerAction, faltaSucursal, seleccionKey } = useApp();
@@ -63,6 +65,8 @@ export default function PosApp() {
         );
 
     if (!employee) return <LoginScreen onLogin={login} />;
+    // Antes que la sucursal y que la app: con contraseña débil el servidor no deja hacer nada más.
+    if (employee.must_change_password) return <CambiarClaveObligatoria />;
     if (faltaSucursal) return <SucursalPicker />;
 
     return (
@@ -124,6 +128,9 @@ export default function PosApp() {
             <MainContent key={seleccionKey} safeTab={safeTab} />
 
             <BottomTabs visibleTabs={visibleTabs} safeTab={safeTab} goTab={goTab} />
+
+            {/* Fuera de MainContent: la conversación sigue al cambiar de pantalla o de sucursal. */}
+            <AsistentePanel safeTab={safeTab} />
         </div>
     );
 }

@@ -1,5 +1,5 @@
 import { Button } from "../ui/Button";
-import ReceiptModal, { printReceipt } from "../ReceiptModal";
+import ReceiptModal, { printSaleDocument } from "../ReceiptModal";
 import FiscalReceiptModal from "./FiscalReceiptModal";
 import { emitirFacturaFiscal, esFiscalReal } from "../../services/fiscalBridge";
 import PaymentFormModal from "../PaymentFormModal";
@@ -27,9 +27,10 @@ function KeyHint({ n }) {
 }
 
 export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, currentCurrency, onNext, onPay, onUndo, onRefresh }) {
-    const { notify, activeCurrencies, monedasCobro = activeCurrencies, activeJournals, companyInfo, printerWidth, company, settings } = useApp();
-    const printFormat = company?.print_format || "ticket";
-    const fiscalEnabled = !!company?.fiscal_enabled || settings?.fiscal_enabled === "true";
+    const { notify, activeCurrencies, monedasCobro = activeCurrencies, activeJournals, companyInfo, printerWidth, printFormat, company, settings } = useApp();
+    // printFormat: el de la sucursal en que se trabaja (ver AppContext). La máquina fiscal, en
+    // cambio, es un extra que solo enciende el superusuario (CompanyModal).
+    const fiscalEnabled = !!company?.fiscal_enabled;
     const [showReceiptModal, setShowReceiptModal] = useState(false);
     const [showPayModal, setShowPayModal] = useState(false);
     // Cobro inmediato en dos toques: primero la botonera de método/diario (showPicker), y
@@ -349,7 +350,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
         canSettle && "pay",
         canGiveCredit && "credit",
         canCashea && "cashea",
-        "print",
+        // Sin impresora ("Solo digital") no hay Imprimir: el comprobante se ve y se guarda en PDF.
+        printFormat !== "digital" && "print",
         "ticket",
         "next",
     ].filter(Boolean);
@@ -416,7 +418,8 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 ? receiptPayments
                 : (delServidor.length ? delServidor : receiptPayments);
 
-            printReceipt(
+            // Ticket térmico o hoja carta, según el formato de entrega de la empresa.
+            printSaleDocument(
                 {
                     ...full,
                     currency:      receipt.currency,
@@ -433,9 +436,10 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                 printerWidth,
                 // Cobrado todo en divisas, el papel sale en divisas (ver receiptCurrency).
                 baseCurrency,
+                printFormat,
             );
         } catch {
-            notify("No se pudo imprimir el ticket", "err");
+            notify("No se pudo imprimir el comprobante", "err");
         } finally {
             setPrinting(false);
         }
@@ -719,41 +723,31 @@ export default function SaleConfirmModal({ receipt, saleBalance, baseCurrency, c
                         </p>
                     )}
 
-                    {/* Botón de impresión según el formato de la empresa */}
-                    {printFormat === "ticket" && (
+                    {/* Imprimir directo, sin vista previa: térmico o carta según el formato de
+                        entrega de la empresa (printSaleDocument). Sin impresora no aparece. */}
+                    {printFormat !== "digital" && (
                         <Button
                             variant="ghost"
                             onClick={printDirect}
                             disabled={printing}
                             className="h-12 sm:h-10"
-                            title="Imprime el ticket en la impresora térmica, sin abrir la vista previa"
+                            title={printFormat === "carta"
+                                ? "Imprime el documento en hoja carta, sin abrir la vista previa"
+                                : "Imprime el ticket en la impresora térmica, sin abrir la vista previa"}
                         >
                             <KeyHint n={numOf("print")} />
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
-                            {printing ? "Imprimiendo..." : "Imprimir ticket"}
-                        </Button>
-                    )}
-
-                    {printFormat === "carta" && (
-                        <Button
-                            variant="ghost"
-                            onClick={() => setShowReceiptModal(true)}
-                            className="h-12 sm:h-10"
-                            title="Ver e imprimir comprobante en formato carta / PDF"
-                        >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                            Factura Carta / PDF
+                            {printing ? "Imprimiendo..." : printFormat === "carta" ? "Imprimir documento" : "Imprimir ticket"}
                         </Button>
                     )}
 
                     <div className="flex flex-col sm:flex-row gap-2">
-                        {printFormat !== "digital" && (
-                            <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="sm:flex-1 min-w-0 h-12 sm:h-10">
-                                <KeyHint n={numOf("ticket")} />
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                {printFormat === "carta" ? "Ver detalle" : "Ver ticket"}
-                            </Button>
-                        )}
+                        {/* Vista previa: también en "Solo digital", que es de donde sale el PDF. */}
+                        <Button variant="ghost" onClick={() => setShowReceiptModal(true)} className="sm:flex-1 min-w-0 h-12 sm:h-10">
+                            <KeyHint n={numOf("ticket")} />
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                            {printFormat === "ticket" ? "Ver ticket" : "Ver comprobante"}
+                        </Button>
                         {/* Una venta ya no puede quedarse en borrador: o se cobra, o sale a
                             crédito con su factura. Salir de aquí sin resolver la dejaba sin
                             número, como un documento a medias en Pendientes. Ahora la salida

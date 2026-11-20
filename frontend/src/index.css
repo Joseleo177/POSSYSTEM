@@ -227,8 +227,15 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 .dot-wave > span:nth-child(2) { animation-delay: .15s; }
 .dot-wave > span:nth-child(3) { animation-delay: .3s; }
 
+/* Robot del asistente: parpadea cada tanto y flota apenas en el botón (components/asistente). */
+@keyframes bot-blink { 0%, 93%, 100% { transform: scaleY(1); } 96% { transform: scaleY(.15); } }
+@keyframes bot-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.bot-blink { animation: bot-blink 4.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.bot-float { animation: bot-float 3.2s ease-in-out infinite; }
+
 /* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
 @media (prefers-reduced-motion: reduce) {
+  .bot-blink, .bot-float { animation: none; }
   .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in { animation: none; }
   .catalog-sheet-in, .cart-bump, .badge-pop, .cart-toast-in, .fab-in, .rise-in, .ring-grow { animation: none; }
   .bell-ring, .bar-shimmer, .flame-flicker, .dot-wave > span { animation: none; }

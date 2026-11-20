@@ -57,6 +57,11 @@ services:
       VAPID_PUBLIC_KEY:  ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT:     ${VAPID_SUBJECT:-}
+      # ── Asistente con IA (services/asistente) ──
+      # La llave se pega en Configuración → Asistente IA (superusuario). Esto es solo un respaldo
+      # para instalaciones locales: lo del panel manda.
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_MODEL:   ${DEEPSEEK_MODEL:-}
       # ── Modo NUBE — Supabase (dejar vacío para modo local) ─────
       # Si se proveen SUPABASE_URL y SUPABASE_SERVICE_KEY el
       # backend usará Supabase en lugar del contenedor db.

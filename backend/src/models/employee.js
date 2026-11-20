@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     is_superuser: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    // Entró con una contraseña que no cumple la regla (utils/passwordPolicy.js): hasta cambiarla
+    // el servidor solo le deja hacer eso (middleware/auth.js).
+    must_change_password: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    // Versión de sus sesiones: va en el token y subirla las cierra todas (migración 20261125110000).
+    token_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     // Los escribe utils/loginEvents.js; nadie más los toca.
     last_login_at: { type: DataTypes.DATE, allowNull: true },
     last_seen_at: { type: DataTypes.DATE, allowNull: true },

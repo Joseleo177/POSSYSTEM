@@ -64,6 +64,8 @@ async function enviarPendientes() {
         // Se cayó la conexión a mitad: se deja todo como está y se sigue en la próxima vuelta.
         // Sin internet, sin base o con la respuesta cortada: todo queda como está para la próxima.
         if (esSinServidor(err) || err.code === "BAD_RESPONSE" || err.code === "TIMEOUT") break;
+        // Sesión cerrada: la venta sigue en la cola tal cual y se envía al volver a entrar.
+        if (err.code === "SESSION_ENDED") break;
         // Un rechazo del servidor (dato que no acepta, permiso) no cambia por insistir: la
         // venta pasa a la bandeja para que alguien la mire. Un 500 sí se reintenta.
         const definitivo = err.data?.retry === false || (err.status >= 400 && err.status < 500);

@@ -9,9 +9,10 @@ import FiscalReportModal from "./cobro/FiscalReportModal";
 import { RowIcon } from "./ui/Ledger";
 import { resolveImageUrl } from "../helpers";
 import { applyBrandColor, clearBrandColor, DEFAULT_BRAND } from "../helpers/brandColor";
-import { useApp } from "../context/AppContext";
+import { useApp, formatosPorSucursal, formatoDeSucursal } from "../context/AppContext";
 import StorefrontSettings from "./Settings/StorefrontSettings";
 import WebOrdersSettings from "./Settings/WebOrdersSettings";
+import AsistenteIASettings from "./Settings/AsistenteIASettings";
 import { verificarAgenteFiscal, emitirReporteX, emitirReporteZ, configurarPuertoFiscal, probarImpresoraFiscal } from "../services/fiscalBridge";
 
 // El respaldo es de la base entera, no de una empresa: solo el superusuario. El backend
@@ -33,6 +34,8 @@ const SECTIONS = [
     // cliente pague su pedido del catálogo.
     ["pedidos_web", "Pedidos web"],
     ["respaldo", "Respaldo", { superuserOnly: true }],
+    // Llave del proveedor de IA: es de la plataforma, no de la empresa (ver AsistenteIASettings).
+    ["asistente", "Asistente IA", { superuserOnly: true }],
 ];
 
 // [clave, rótulo, tipo, ejemplo, opcional]. Lo opcional se dice a la derecha del rótulo y no
@@ -65,7 +68,7 @@ const snap = (s) => {
 export default function SettingsTab({ notify }) {
     // La tasa vive en Monedas, su propio módulo; acá solo se necesita el símbolo de la
     // moneda base para el tope de exoneración, que ya trae el contexto global.
-    const { loadSettings, employee, baseCurrency, company } = useApp();
+    const { loadSettings, employee, baseCurrency, company, sucursales = [] } = useApp();
     const [settings, setSettings] = useState({});
     const [saved, setSaved] = useState(snap({}));
     const [companyInfo, setCompanyInfo] = useState(null);
@@ -114,10 +117,10 @@ export default function SettingsTab({ notify }) {
     }, []);
 
     useEffect(() => {
-        if (section === "factura") {
+        if (section === "factura" && companyInfo?.fiscal_enabled) {
             checkAgente();
         }
-    }, [section, checkAgente]);
+    }, [section, checkAgente, companyInfo?.fiscal_enabled]);
 
     // Resultado de preguntarle a la máquina (no solo al agente) si responde.
     const [pruebaImpresora, setPruebaImpresora] = useState(null);
@@ -290,7 +293,18 @@ export default function SettingsTab({ notify }) {
     );
 
     const headerOn = (settings.receipt_show_header || "true") === "true";
-    const fiscalOn = settings.fiscal_enabled === "true" || (settings.fiscal_enabled === undefined && !!companyInfo?.fiscal_enabled);
+    // Máquina fiscal: extra que enciende el superusuario en Empresas. Aquí solo se configura el
+    // agente de la caja; la tienda no puede activarla ni apagarla.
+    const fiscalOn = !!companyInfo?.fiscal_enabled;
+    // Formato de entrega de cada sucursal. Sin elección vale el de la empresa (Empresas, lo pone
+    // el superusuario); elegir aquí lo deja guardado para esa sucursal.
+    const formatoDe = (id) => formatoDeSucursal(settings, companyInfo, id);
+    const elegirFormato = (id, f) => setSettings(p => ({
+        ...p,
+        print_format_by_warehouse: JSON.stringify({ ...formatosPorSucursal(p), [id]: f }),
+    }));
+    // El ancho del rollo solo importa si alguna sucursal imprime ticket.
+    const algunaConTicket = sucursales.length ? sucursales.some(w => formatoDe(w.id) === "ticket") : formatoDe(null) === "ticket";
     // Sin la clave guardada es "apagado": así siguen las empresas que ya existían. Las nuevas
     // la reciben encendida al darse de alta (ver controllers/companies.js).
     const reviewOn = settings.pos_review_checkout === "true";
@@ -517,22 +531,51 @@ export default function SettingsTab({ notify }) {
                                 </div>
                             </Seccion>
 
-                            <Seccion titulo="Impresión del ticket" detalle="Cómo sale en la impresora térmica de la caja." className="h-full">
-                                <Campo label="Ancho de la impresora">
-                                    <Segmented
-                                        value={settings.printer_width || "80"}
-                                        onChange={v => setSettings(p => ({ ...p, printer_width: v }))}
-                                        options={[
-                                            { key: "80", label: "80 mm · estándar" },
-                                            { key: "58", label: "58 mm · compacta" },
-                                        ]}
-                                    />
+                            <Seccion titulo="Impresión" detalle="Qué papel sale al imprimir una venta en cada sucursal." className="h-full">
+                                {/* Formato de entrega por sucursal: cada una puede tener su
+                                    impresora. Con una sola, una sola fila sin nombre. */}
+                                <Campo label={sucursales.length > 1 ? "Formato por sucursal" : "Formato"}>
+                                    <div className={sucursales.length > 1 ? "rounded-xl border border-border/70 dark:border-white/[0.08] divide-y divide-border/60 dark:divide-white/[0.06]" : ""}>
+                                        {(sucursales.length ? sucursales : [{ id: null, name: "" }]).map(w => (
+                                            <div key={w.id ?? "unica"} className={sucursales.length > 1 ? "flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3" : ""}>
+                                                {sucursales.length > 1 && (
+                                                    <span className="text-[13px] font-medium text-content dark:text-white min-w-0 truncate">{w.name}</span>
+                                                )}
+                                                <Segmented
+                                                    value={formatoDe(w.id)}
+                                                    onChange={f => w.id != null && elegirFormato(w.id, f)}
+                                                    options={[
+                                                        { key: "ticket", label: "Ticket" },
+                                                        { key: "carta", label: "Hoja carta" },
+                                                        { key: "digital", label: "Solo PDF" },
+                                                    ]}
+                                                    className="self-start sm:self-auto shrink-0"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <p className="mt-1.5 text-[12px] text-content-subtle">
+                                        Ticket: impresora térmica de la caja. Hoja carta: impresora normal. Solo PDF: sin impresora, el comprobante se guarda para enviarlo.
+                                    </p>
                                 </Campo>
+
+                                {algunaConTicket && (
+                                    <Campo label="Ancho del ticket" className="mt-4">
+                                        <Segmented
+                                            value={settings.printer_width || "80"}
+                                            onChange={v => setSettings(p => ({ ...p, printer_width: v }))}
+                                            options={[
+                                                { key: "80", label: "80 mm · estándar" },
+                                                { key: "58", label: "58 mm · compacta" },
+                                            ]}
+                                        />
+                                    </Campo>
+                                )}
 
                                 <div className="mt-4 rounded-xl border border-border/70 dark:border-white/[0.08]">
                                     <Interruptor
                                         titulo="Encabezado de la empresa"
-                                        detalle="Logo, nombre, RIF, dirección y teléfonos al inicio del ticket. Apágalo si imprimes en papel membretado."
+                                        detalle="Logo, nombre, RIF, dirección y teléfonos al inicio del documento. Apágalo si imprimes en papel membretado."
                                         checked={headerOn}
                                         onChange={() => setSettings(p => ({ ...p, receipt_show_header: headerOn ? "false" : "true" }))}
                                     />
@@ -540,23 +583,16 @@ export default function SettingsTab({ notify }) {
                             </Seccion>
                         </div>
 
-                        {/* ── Impresora Fiscal SENIAT (The Factory HKA) ── */}
+                        {/* ── Impresora Fiscal SENIAT (The Factory HKA) ──
+                            Solo si la empresa tiene el extra (lo enciende el superusuario en
+                            Empresas). Sin él, la sección no existe para la tienda. */}
+                        {fiscalOn && (
                         <div className="mt-4">
                             <Seccion
-                                titulo="Impresora Fiscal SENIAT (The Factory HKA)"
-                                detalle="Control de hardware para impresoras fiscales Bixolon, Dascom y HKA enlazadas con NXUS Fiscal Bridge."
+                                titulo="Impresora fiscal SENIAT"
+                                detalle="Agente NXUS Bridge en la computadora de la caja, conectado a la máquina The Factory HKA (Bixolon, HKA-112, Dascom)."
                             >
                                 <div className="space-y-4">
-                                    <div className="rounded-xl border border-border/70 dark:border-white/[0.08]">
-                                        <Interruptor
-                                            titulo="Habilitar Facturación Fiscal (SENIAT)"
-                                            detalle="Muestra el botón «Factura Fiscal (SENIAT)» en la pantalla de cobro. Requiere que el agente nxus-bridge.exe esté en ejecución en la computadora de caja."
-                                            checked={fiscalOn}
-                                            onChange={() => setSettings(p => ({ ...p, fiscal_enabled: fiscalOn ? "false" : "true" }))}
-                                        />
-                                    </div>
-
-                                    {fiscalOn && (
                                         <div className="p-4 rounded-xl bg-surface-2/60 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] space-y-4">
                                             {/* Estado del Agente */}
                                             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-border/50 dark:border-white/[0.06]">
@@ -670,10 +706,10 @@ export default function SettingsTab({ notify }) {
                                                 </div>
                                             </div>
                                         </div>
-                                    )}
                                 </div>
                             </Seccion>
                         </div>
+                        )}
 
                         {/* Modal de confirmación para Reporte Z */}
                         <ConfirmModal
@@ -935,6 +971,8 @@ export default function SettingsTab({ notify }) {
                 )}
 
                 {section === "pedidos_web" && <WebOrdersSettings notify={notify} />}
+
+                {section === "asistente" && <AsistenteIASettings notify={notify} />}
 
                 {/* ── Respaldo ── */}
                 {section === "respaldo" && (

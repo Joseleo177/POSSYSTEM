@@ -11,7 +11,9 @@ const conTecladoFisico = () =>
 
 // footer: acciones fijas al pie, FUERA de la zona que se desplaza. Un pie "sticky" dentro del
 // cuerpo quedaba flotando por encima del relleno inferior y dejaba ver contenido debajo.
-export default function Modal({ open, onClose, title, children, footer = null, width = 560 }) {
+// dismissible={false}: un paso obligatorio (p. ej. cambiar una contraseña débil). Sin la X, y ni
+// Escape ni el clic afuera lo cierran; solo sale por sus propios botones.
+export default function Modal({ open, onClose, title, children, footer = null, width = 560, dismissible = true }) {
   const modalRef = useRef(null);
   const previousFocus = useRef(null);
   const wasOpen = useRef(false);
@@ -65,7 +67,7 @@ export default function Modal({ open, onClose, title, children, footer = null, w
         // Escape: retrocede un paso o se cierra, sin tumbar este Modal.
         if (hasTopOverlay()) return;
         e.stopPropagation();
-        onClose();
+        if (dismissible) onClose?.();
         return;
       }
 
@@ -92,13 +94,13 @@ export default function Modal({ open, onClose, title, children, footer = null, w
 
     window.addEventListener("keydown", handleKey, true); // capture phase — intercepta antes que el fondo
     return () => window.removeEventListener("keydown", handleKey, true);
-  }, [open, onClose]);
+  }, [open, onClose, dismissible]);
 
   if (!open) return null;
 
   return (
     <div
-      onClick={onClose}
+      onClick={dismissible ? onClose : undefined}
       className="fixed inset-0 z-[1000] flex items-center justify-center p-4 sm:p-5 bg-black/40 dark:bg-black/60 backdrop-blur-[2px] overlay-in"
     >
       <div
@@ -113,15 +115,17 @@ export default function Modal({ open, onClose, title, children, footer = null, w
           <h2 className="text-[15px] font-bold tracking-[-0.01em] text-content dark:text-white">
             {title}
           </h2>
-          <button
-            onClick={onClose}
-            aria-label="Cerrar"
-            className="w-8 h-8 flex items-center justify-center rounded-lg text-content-subtle dark:text-white/40 hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
-            </svg>
-          </button>
+          {dismissible && (
+            <button
+              onClick={onClose}
+              aria-label="Cerrar"
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-content-subtle dark:text-white/40 hover:text-content hover:bg-surface-3 dark:hover:text-white dark:hover:bg-white/[0.06] transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Body. overflow-x-hidden: con solo overflow-y-auto el eje x también queda en auto, y

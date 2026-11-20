@@ -173,6 +173,7 @@ app.use("/api/web-orders", require("./routes/webOrders"));            // auth+pe
 app.use("/api/benefit-tags", require("./routes/benefitTags"));          // auth dentro
 app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
 app.use("/api/huellas", require("./routes/huellas"));             // auth dentro; "¿cambió algo?" de la caja
+app.use("/api/asistente", require("./routes/asistente"));         // auth+permit dentro; módulo en el servicio
 
 app.use("/api/events", require("./routes/events"));             // SSE stream
 

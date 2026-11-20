@@ -290,10 +290,13 @@ const addRange = async (req, res) => {
 // DELETE /api/series/ranges/:rangeId
 const removeRange = async (req, res) => {
   try {
+    // SerieRange no tiene company_id: la empresa sale de la serie, que sí pasa por el filtro.
+    // Sin serie (es de otra empresa) el rango no existe para quien pregunta. Antes el
+    // `if (serie)` solo se saltaba la validación y el rango ajeno se borraba igual.
     const range = await SerieRange.findByPk(req.params.rangeId);
-    if (!range) throw new Error("Rango no encontrado");
-    const serie = await Serie.findByPk(range.serie_id);
-    if (serie) await assertWarehouseAccess(req, serie.warehouse_id);
+    const serie = range ? await Serie.findByPk(range.serie_id) : null;
+    if (!range || !serie) return res.status(404).json({ ok: false, message: "Rango no encontrado" });
+    await assertWarehouseAccess(req, serie.warehouse_id);
     // Un rango que ya emitió es el registro de qué números salieron. Borrarlo permitía crearlo
     // de nuevo desde el inicio y la serie volvía a dar números ya facturados.
     if (range.current_number > range.start_number) {

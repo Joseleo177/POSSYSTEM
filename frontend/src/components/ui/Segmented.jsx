@@ -9,6 +9,7 @@ export default function Segmented({ options, value, onChange, className = "" }) 
                 return (
                     <button
                         key={o.key}
+                        type="button"
                         role="tab"
                         aria-selected={on}
                         onClick={() => onChange(o.key)}

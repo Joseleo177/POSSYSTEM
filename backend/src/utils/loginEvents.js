@@ -82,11 +82,11 @@ const touched = new Map(); // employee_id -> ms de la última escritura de last_
 // llegaba hasta volver a entrar. Viene en la misma consulta que ya se hacía, con la misma caché.
 async function isEmployeeActive(employeeId) {
   const hit = cache.get(employeeId);
-  if (hit && hit.expires > Date.now()) return { active: hit.active, permissions: hit.permissions, fresh: false };
+  if (hit && hit.expires > Date.now()) return { active: hit.active, permissions: hit.permissions, mustChangePassword: hit.mustChangePassword, tokenVersion: hit.tokenVersion, fresh: false };
 
   const sequelize = db();
   const [row] = await sequelize.query(
-    `SELECT e.active, e.last_seen_at, e.permission_overrides, r.permissions AS role_permissions
+    `SELECT e.active, e.last_seen_at, e.permission_overrides, e.must_change_password, e.token_version, r.permissions AS role_permissions
        FROM employees e LEFT JOIN roles r ON r.id = e.role_id
       WHERE e.id = :id`,
     { replacements: { id: employeeId }, type: sequelize.QueryTypes.SELECT }
@@ -94,7 +94,11 @@ async function isEmployeeActive(employeeId) {
   // Borrado cuenta como inactivo: su token no debe seguir sirviendo.
   const active = !!row?.active;
   const permissions = row?.role_permissions ? effectivePermissions(row.role_permissions, row.permission_overrides) : null;
-  cache.set(employeeId, { active, permissions, expires: Date.now() + TTL_MS });
+  // Contraseña débil pendiente de cambiar (ver middleware/auth.js).
+  const mustChangePassword = !!row?.must_change_password;
+  // Versión de las sesiones (ver middleware/auth.js): subirla en la base cierra las abiertas.
+  const tokenVersion = Number(row?.token_version ?? 0);
+  cache.set(employeeId, { active, permissions, mustChangePassword, tokenVersion, expires: Date.now() + TTL_MS });
 
   if (active) {
     const last = Math.max(touched.get(employeeId) || 0, row.last_seen_at ? new Date(row.last_seen_at).getTime() : 0);
@@ -103,7 +107,7 @@ async function isEmployeeActive(employeeId) {
       await sequelize.query(`UPDATE employees SET last_seen_at = NOW() WHERE id = :id`, { replacements: { id: employeeId } });
     }
   }
-  return { active, permissions, fresh: true };
+  return { active, permissions, mustChangePassword, tokenVersion, fresh: true };
 }
 
 function invalidateEmployee(employeeId) {

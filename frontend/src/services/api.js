@@ -125,6 +125,10 @@ function buildApiError(status, message, code, data) {
 const pesoArchivos = (fd) => [...fd.values()].reduce((s, v) => s + (v instanceof File ? v.size : 0), 0);
 const MSG_PESADO = "La imagen pesa demasiado para subirla. Prueba con una más liviana (menos de 4 MB).";
 
+// La sesión se cerró (venció, se desactivó al usuario o se cerraron todas las sesiones) y la
+// página va hacia el login. Quien lo reciba no debe dar nada por hecho.
+const sesionTerminada = () => buildApiError(401, "Tu sesión se cerró. Vuelve a entrar.", "SESSION_ENDED");
+
 const errorDeRed = () => buildApiError(
   503,
   "No se pudo conectar con el servidor. Revisa tu conexión o intenta de nuevo en unos segundos.",
@@ -213,12 +217,15 @@ async function requestServidor(path, options = {}) {
           throw errorDeRed();
         }
       } else {
-        return; // Page reloading
+        // La página se recarga hacia el login. Esto NO es un éxito: antes se devolvía
+        // `undefined` y la sincronización sin conexión lo tomaba por una venta enviada, la
+        // marcaba y la borraba de la cola. Se perdía al vencer o cerrarse la sesión.
+        throw sesionTerminada();
       }
     } else {
       localStorage.removeItem("pos_token");
       window.location.reload();
-      return;
+      throw sesionTerminada();
     }
   }
 
@@ -244,6 +251,11 @@ async function requestServidor(path, options = {}) {
   }
 
   if (!res.ok) {
+    // El servidor exige cambiar una contraseña débil: AppContext muestra el paso obligatorio.
+    if (res.status === 403 && data.code === "PASSWORD_CHANGE_REQUIRED") {
+      window.dispatchEvent(new Event("nxus:cambiar-clave"));
+      throw buildApiError(403, data.message, data.code, data);
+    }
     if (res.status === 403) {
       throw buildApiError(403, data.message || "No tienes permisos para esta acción", "FORBIDDEN", data);
     }
@@ -328,7 +340,13 @@ export const api = {
       return data;
     },
     me:             ()          => request("/auth/me"),
-    changePassword: (body)      => request("/auth/change-password", { method: "POST", body: JSON.stringify(body) }),
+    // El servidor cierra las demás sesiones (token_version) y devuelve tokens nuevos para esta.
+    changePassword: async (body) => {
+      const data = await request("/auth/change-password", { method: "POST", body: JSON.stringify(body) });
+      if (data?.token) localStorage.setItem("pos_token", data.token);
+      if (data?.refresh_token) localStorage.setItem("pos_refresh_token", data.refresh_token);
+      return data;
+    },
   },
   products: {
     getAll:  (params = {})         => request("/products?" + new URLSearchParams(params)),
@@ -835,6 +853,17 @@ export const api = {
     statement:    (id, params={}) => request(`/commissions/sellers/${id}/statement?` + new URLSearchParams(params)),
     pay:          (id, body)      => request(`/commissions/sellers/${id}/payouts`, { method: "POST", body: JSON.stringify(body) }),
     voidPayout:   (id)            => request(`/commissions/payouts/${id}`, { method: "DELETE" }),
+  },
+  // Asistente con IA (extra por empresa, ver services/asistente en el backend). La respuesta
+  // tarda unos segundos: el modelo puede consultar varios reportes antes de contestar.
+  asistente: {
+    estado:    ()     => request("/asistente/estado"),
+    preguntar: (body) => request("/asistente/preguntar", { method: "POST", body: JSON.stringify(body), timeout: 90_000 }),
+    consumo:   ()     => request("/asistente/consumo"),
+    // Llave y modelo del proveedor (superusuario). La llave nunca vuelve: solo sus 4 últimos.
+    config:        ()     => request("/asistente/config"),
+    guardarConfig: (body) => request("/asistente/config", { method: "PUT", body: JSON.stringify(body) }),
+    probarConfig:  ()     => request("/asistente/config/probar", { method: "POST", timeout: 15_000 }),
   },
   // Propinas (extra por empresa, ver services/tips en el backend). El personal es el mismo de
   // Comisiones (tabla sellers), con su propia ruta y permisos.

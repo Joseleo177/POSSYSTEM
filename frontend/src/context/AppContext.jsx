@@ -32,6 +32,24 @@ const sucursalesDe = (emp) => {
   return soloSucursales.length ? soloSucursales : lista;
 };
 
+// Formatos de entrega de una venta (companies.print_format y print_format_by_warehouse).
+export const FORMATOS_ENTREGA = ["ticket", "carta", "digital"];
+
+// Formatos elegidos por la tienda para cada sucursal: { "<warehouse_id>": "carta" }.
+export const formatosPorSucursal = (settings) => {
+  try {
+    const m = JSON.parse(settings?.print_format_by_warehouse || "{}");
+    return m && typeof m === "object" ? m : {};
+  } catch { return {}; }
+};
+
+// El de la sucursal si la tienda eligió uno; si no, el de la empresa; si no, ticket.
+export const formatoDeSucursal = (settings, company, warehouseId) => {
+  const propio = warehouseId != null ? formatosPorSucursal(settings)[warehouseId] : null;
+  if (FORMATOS_ENTREGA.includes(propio)) return propio;
+  return FORMATOS_ENTREGA.includes(company?.print_format) ? company.print_format : "ticket";
+};
+
 // Deja solo ids que sigan siendo del usuario. Sin actual válida no hay selección: se pregunta.
 function normalizarSeleccion(sel, lista) {
   const ids = new Set(lista.map(w => w.id));
@@ -83,7 +101,9 @@ export function AppProvider({ children }) {
 
   // Envío de las ventas hechas sin conexión (ver services/offline/sync.js). Corre mientras haya
   // sesión, y solo con las ventas de la empresa con la que se entró.
-  useEffect(() => { if (employee?.company_id) iniciarSincronizacion(employee.company_id); }, [employee?.company_id]);
+  useEffect(() => {
+    if (employee?.company_id && !employee.must_change_password) iniciarSincronizacion(employee.company_id);
+  }, [employee?.company_id, employee?.must_change_password]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const login  = (emp) => {
     recordarSesion(emp);
@@ -92,6 +112,22 @@ export function AppProvider({ children }) {
     setEmployee(emp);
   };
   const logout = () => { localStorage.removeItem("pos_token"); setEmployee(null); };
+
+  // Contraseña débil (ver components/CambiarClaveObligatoria.jsx). Se apaga al cambiarla, y se
+  // enciende si el servidor la exige con la sesión ya abierta (api.js avisa con este evento).
+  const marcarClaveCambiada = useCallback(() => {
+    setEmployee(prev => {
+      if (!prev) return prev;
+      const emp = { ...prev, must_change_password: false };
+      recordarSesion(emp);
+      return emp;
+    });
+  }, []);
+  useEffect(() => {
+    const exigir = () => setEmployee(prev => (prev && !prev.must_change_password ? { ...prev, must_change_password: true } : prev));
+    window.addEventListener("nxus:cambiar-clave", exigir);
+    return () => window.removeEventListener("nxus:cambiar-clave", exigir);
+  }, []);
 
   // ── Sucursales ─────────────────────────────────────────────
   const sucursales = useMemo(() => sucursalesDe(employee), [employee]);
@@ -256,7 +292,8 @@ export function AppProvider({ children }) {
 
   // ── Initial load ───────────────────────────────────────────
   useEffect(() => {
-    if (!employee) return;
+    // Con la contraseña pendiente de cambiar el servidor rechaza todo: se carga después.
+    if (!employee || employee.must_change_password) return;
     loadSettings();
     loadCurrencies();
     loadBanks();
@@ -273,7 +310,7 @@ export function AppProvider({ children }) {
 
   // ── SSE: actualizaciones en tiempo real ─────────────────────
   useEffect(() => {
-    if (!employee) return;
+    if (!employee || employee.must_change_password) return;
     const token = localStorage.getItem('pos_token');
     initSSE(token);
     // El evento trae las monedas completas → setState directo, sin round-trip extra
@@ -328,6 +365,12 @@ export function AppProvider({ children }) {
 
   const storeName    = settings.store_name || "Mi tienda POS";
   const printerWidth = parseInt(settings.printer_width || "80");
+  // Qué papel sale al imprimir una venta: el que la tienda eligió para la sucursal en que se
+  // trabaja (Configuración → Factura) y, si no eligió, el de la empresa (lo pone el superusuario
+  // al darla de alta). Es la sucursal del usuario y no la de la venta: la impresora es la que
+  // tiene delante. Ver printSaleDocument en ReceiptModal.
+  const sucursalImpresion = sucursalActual?.id ?? (sucursales.length === 1 ? sucursales[0].id : null);
+  const printFormat = formatoDeSucursal(settings, company, sucursalImpresion);
   const companyInfo  = {
     name:     settings.store_name    || "",
     rif:      settings.store_rif     || "",
@@ -353,7 +396,7 @@ export function AppProvider({ children }) {
   return (
     <AppContext.Provider value={{
       // Auth
-      employee, authChecked, login, logout, can, refreshEmployee,
+      employee, authChecked, login, logout, can, refreshEmployee, marcarClaveCambiada,
       // Sucursales
       sucursales, sucursalActual, sucursalesMarcadas, etiquetaSucursales, faltaSucursal, seleccionKey,
       elegirSucursal, alternarSucursal, marcarTodas, trabajarEn,
@@ -364,7 +407,7 @@ export function AppProvider({ children }) {
       // Notify
       notification, notify,
       // Settings
-      settings, loadSettings, storeName, companyInfo, company, printerWidth,
+      settings, loadSettings, storeName, companyInfo, company, printerWidth, printFormat,
       // Currencies
       currencies, activeCurrencies, baseCurrency, localCurrency, monedasCobro, loadCurrencies,
       // Journals

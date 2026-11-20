@@ -7,6 +7,9 @@ const { isEmployeeActive, recordLoginEvent, RESULT } = require("../utils/loginEv
 const SECRET = process.env.JWT_SECRET;
 if (!SECRET) throw new Error('JWT_SECRET environment variable is required');
 
+// Lo único que puede hacer quien tiene la contraseña pendiente de cambiar (must_change_password).
+const RUTAS_CON_CLAVE_DEBIL = new Set(["/api/auth/me", "/api/auth/change-password"]);
+
 // Verifica token y carga req.employee
 const auth = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -29,10 +32,24 @@ const auth = async (req, res, next) => {
   // token valía sus 12 h completas. Con el 401 la app intenta renovar, /auth/refresh también lo
   // rechaza y la caja vuelve al login. El intento queda anotado (una vez, no por request).
   try {
-    const { active, permissions, fresh } = await isEmployeeActive(decoded.id);
+    const { active, permissions, mustChangePassword, tokenVersion, fresh } = await isEmployeeActive(decoded.id);
     if (!active) {
       if (fresh) await recordLoginEvent(req, { employee: decoded, kind: "session", result: RESULT.INACTIVE });
       return res.status(401).json({ ok: false, message: "Tu usuario fue desactivado. Habla con el administrador." });
+    }
+    // Sesiones cerradas: cambió la contraseña o se subió token_version a mano para sacar a todos.
+    // Los tokens de antes de la columna no traen `tv` y valen como 0. El 401 hace que la app
+    // intente renovar; /auth/refresh compara lo mismo, lo rechaza y la caja vuelve al login.
+    if ((decoded.tv ?? 0) !== tokenVersion) {
+      return res.status(401).json({ ok: false, code: "SESSION_REVOKED", message: "Tu sesión se cerró. Vuelve a entrar." });
+    }
+    // Entró con una contraseña que no cumple la regla: hasta cambiarla solo puede hacer eso.
+    // El modal de la app no basta: sin este candado, quien llame a la API directo lo salta.
+    if (mustChangePassword && !RUTAS_CON_CLAVE_DEBIL.has(req.originalUrl.split("?")[0])) {
+      return res.status(403).json({
+        ok: false, code: "PASSWORD_CHANGE_REQUIRED",
+        message: "Por seguridad tienes que cambiar tu contraseña antes de continuar.",
+      });
     }
     // Permisos al día (rol + excepciones de la persona), no los que se firmaron en el token.
     if (permissions) req.employee = { ...decoded, permissions };
@@ -222,7 +239,7 @@ const scopeWarehouseIds = async (req, { includeDeposits = false } = {}) => {
 //
 // `optional`: un almacén vacío pasa sin error (borradores que todavía no eligieron destino).
 const assertWarehouseAccess = async (req, warehouseId, { optional = false } = {}) => {
-  if (!req || isAdmin(req)) return;
+  if (!req) return;
 
   // isOperational: el errorHandler central solo respeta `status` en errores marcados así;
   // sin esto un 403 de acceso salía como 500.
@@ -231,9 +248,19 @@ const assertWarehouseAccess = async (req, warehouseId, { optional = false } = {}
 
   const wid = parseInt(warehouseId);
   if (!wid) {
-    if (optional) return;
+    if (optional || isAdmin(req)) return;
     throw fail("Almacén no especificado", 400);
   }
+
+  // El almacén tiene que ser de la empresa, también para el admin. Antes el admin pasaba sin
+  // más, contando con el filtro multi-empresa; pero el id del almacén nunca se comparaba con
+  // la empresa, y un admin podía abrir sesiones de inventario, ajustar stock o asignar
+  // empleados en almacenes de OTRA empresa (auditoría 20-11-2026).
+  if (req.company_id) {
+    const rows = await companyWarehouseRows(req.company_id);
+    if (!rows.some(r => r.id === wid)) throw fail("Almacén no encontrado", 404);
+  }
+  if (isAdmin(req)) return;
 
   const allowed = await employeeWarehouseIds(req.employee?.id);
   if (!allowed.includes(wid)) {

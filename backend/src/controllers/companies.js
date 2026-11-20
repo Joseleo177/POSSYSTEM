@@ -8,9 +8,8 @@ const { invalidarIva } = require("../services/fiscal/iva");
 const { DEFAULT_EXPENSE_CATEGORIES, DEFAULT_INCOME_CATEGORIES } = require("../config/defaultCategories");
 const { DEFAULT_PAYMENT_METHODS, DEFAULT_CASH_JOURNAL } = require("../config/defaultPaymentMethods");
 
-// Longitud mínima de la contraseña que el superusuario fija a mano. Las generadas al azar
-// son de 12 caracteres hex, así que el mínimo solo afecta a las escritas.
-const MIN_PASSWORD = 8;
+// La contraseña del dueño, escrita o generada, sigue la regla de toda la plataforma.
+const { problemasClave, esClaveDebil } = require("../utils/passwordPolicy");
 
 /**
  * La suscripción vence al FINAL del día elegido.
@@ -24,6 +23,21 @@ function normalizeExpiry(value) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value).trim());
   if (!m) return value; // ya viene con hora (ISO completo): se respeta
   return new Date(+m[1], +m[2] - 1, +m[3], 23, 59, 59, 999);
+}
+
+// Asistente con IA: nivel ('basico' | 'full') y tope propio (vacío = el del nivel). Lo que no
+// viene en el body se conserva (`actual`), igual que los demás extras.
+function camposAsistente(body, actual = {}) {
+  const { asistente_enabled, asistente_plan, asistente_limite } = body;
+  const out = {
+    asistente_enabled: asistente_enabled === undefined ? !!actual.asistente_enabled : !!asistente_enabled,
+    asistente_plan: ['basico', 'full'].includes(asistente_plan) ? asistente_plan : (actual.asistente_plan || 'basico'),
+  };
+  if (asistente_limite !== undefined) {
+    const n = parseInt(asistente_limite, 10);
+    out.asistente_limite = asistente_limite === null || asistente_limite === '' || !Number.isInteger(n) || n < 0 ? null : n;
+  }
+  return out;
 }
 
 // GET /api/companies
@@ -55,8 +69,10 @@ const create = async (req, res) => {
 
     // Las credenciales se validan ANTES de tocar la base: si fallaran a mitad del alta, la
     // empresa quedaría creada y sin administrador con quien entrar.
-    if (wantedPass && wantedPass.length < MIN_PASSWORD) {
-      return res.status(400).json({ ok: false, message: `La contraseña debe tener al menos ${MIN_PASSWORD} caracteres` });
+    if (wantedPass) {
+      const problemas = problemasClave(wantedPass, { username: wantedUser });
+      if (problemas.length)
+        return res.status(400).json({ ok: false, message: `La contraseña no es segura: ${problemas[0].toLowerCase()}`, problemas });
     }
     if (wantedUser && !/^[a-zA-Z0-9._-]{3,100}$/.test(wantedUser)) {
       return res.status(400).json({ ok: false, message: "El usuario admite entre 3 y 100 caracteres: letras, números, punto, guion y guion bajo" });
@@ -71,7 +87,11 @@ const create = async (req, res) => {
     // New trial default if not specified
     const expDate = normalizeExpiry(expires_at) || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days trial
 
-    const rawPassword = wantedPass || crypto.randomBytes(6).toString('hex'); // 12-char random password
+    // 12 caracteres hexadecimales al azar. Pueden salir sin letras o sin números, así que se
+    // repite hasta que cumpla la regla (utils/passwordPolicy.js): el dueño no debe arrancar
+    // con el aviso de cambiarla.
+    let rawPassword = wantedPass;
+    while (!rawPassword || esClaveDebil(rawPassword, { username: wantedUser })) rawPassword = crypto.randomBytes(6).toString('hex');
     const password_hash = await bcrypt.hash(rawPassword, 10);
 
     // Empresa, monedas y administrador nacen juntos o no nace ninguno: una empresa a medias
@@ -98,7 +118,8 @@ const create = async (req, res) => {
         farmacia_enabled: !!farmacia_enabled,
         print_format: print_format || 'ticket',
         fiscal_enabled: !!fiscal_enabled,
-        seo_enabled: seo_enabled !== false
+        seo_enabled: seo_enabled !== false,
+        ...camposAsistente(req.body),
       }, { transaction });
 
       // Los roles son de cada empresa: la nueva recibe su copia de las plantillas (los roles
@@ -274,7 +295,8 @@ const update = async (req, res) => {
       print_format: print_format !== undefined ? print_format : (company.print_format || 'ticket'),
       fiscal_enabled: fiscal_enabled === undefined ? company.fiscal_enabled : !!fiscal_enabled,
       // Sin el campo (un cliente viejo del panel) se conserva lo que había.
-      seo_enabled: seo_enabled === undefined ? company.seo_enabled : !!seo_enabled
+      seo_enabled: seo_enabled === undefined ? company.seo_enabled : !!seo_enabled,
+      ...camposAsistente(req.body, company),
     });
     if (company.cocina_enabled) await asegurarRolMesonero(company.id);
     if (company.citas_enabled) await asegurarRolProfesional(company.id);

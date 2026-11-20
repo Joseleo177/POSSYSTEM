@@ -3,6 +3,7 @@ const { Employee, Role, EmployeeWarehouse, Warehouse, Sequelize } = require("../
 const { isAdmin, employeeWarehouseIds } = require("../middleware/auth");
 const { MODULES, ALL_KEYS } = require("../config/permissions");
 const { invalidateEmployee, invalidateAllEmployees } = require("../utils/loginEvents");
+const { problemasClave } = require("../utils/passwordPolicy");
 
 const { Op } = Sequelize;
 
@@ -117,11 +118,12 @@ const getAll = async (req, res) => {
 // Fábrica y Cocina solo se ofrecen a la empresa que tiene el módulo: en las demás serían
 // casillas que no abren nada.
 const getPermissionCatalog = async (req, res) => {
-  let fabrica = false, cocina = false, pedidosWeb = false, comisiones = false, citas = false, cobranza = false, propinas = false, farmacia = false;
+  let fabrica = false, cocina = false, pedidosWeb = false, comisiones = false, citas = false, cobranza = false, propinas = false, farmacia = false, asistente = false;
   try {
     if (req.company_id) {
       const { Company } = require("../models");
-      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'citas_enabled', 'cobranza_enabled', 'propinas_enabled', 'farmacia_enabled'] });
+      const c = await Company.findByPk(req.company_id, { attributes: ['fabrica_enabled', 'cocina_enabled', 'pedidos_web_enabled', 'comisiones_enabled', 'citas_enabled', 'cobranza_enabled', 'propinas_enabled', 'farmacia_enabled', 'asistente_enabled'] });
+      asistente = !!c?.asistente_enabled;
       propinas = !!c?.propinas_enabled;
       fabrica = !!c?.fabrica_enabled;
       cocina = !!c?.cocina_enabled;
@@ -133,7 +135,7 @@ const getPermissionCatalog = async (req, res) => {
     }
   } catch { /* sin la empresa, el catálogo sale sin los módulos extra */ }
   const data = MODULES
-    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables', 'production'].includes(m.key) || cocina) && (m.key !== 'commissions' || comisiones) && (m.key !== 'tips' || propinas) && (m.key !== 'agenda' || citas) && (m.key !== 'cobranza' || cobranza) && (m.key !== 'pharmacy' || farmacia))
+    .filter(m => (m.key !== 'factory' || fabrica) && (!['kitchen', 'tables', 'production'].includes(m.key) || cocina) && (m.key !== 'commissions' || comisiones) && (m.key !== 'tips' || propinas) && (m.key !== 'agenda' || citas) && (m.key !== 'cobranza' || cobranza) && (m.key !== 'pharmacy' || farmacia) && (m.key !== 'assistant' || asistente))
     // Confirmar pagos reportados es del extra de pedidos web: sin él la casilla no abriría nada.
     .map(m => (m.key === 'accounting' && !pedidosWeb ? { ...m, actions: m.actions.filter(a => a.key !== 'confirm') } : m));
   res.json({ ok: true, data });
@@ -183,8 +185,9 @@ const create = async (req, res) => {
     const { username, password, full_name, email, phone, role_id, warehouse_ids, approval_pin } = req.body;
     if (!username || !password || !full_name || !role_id)
       return res.status(400).json({ ok: false, message: "username, password, full_name y role_id son requeridos" });
-    if (password.length < 6)
-      return res.status(400).json({ ok: false, message: "La contraseña debe tener al menos 6 caracteres" });
+    const problemas = problemasClave(password, { username });
+    if (problemas.length)
+      return res.status(400).json({ ok: false, message: `La contraseña no es segura: ${problemas[0].toLowerCase()}`, problemas });
     const pinClean = String(approval_pin || "").trim();
     if (pinClean && !/^\d{4,6}$/.test(pinClean))
       return res.status(400).json({ ok: false, message: "El PIN de autorización debe tener entre 4 y 6 dígitos" });
@@ -225,6 +228,7 @@ const create = async (req, res) => {
   } catch (err) {
     if (err.name === 'SequelizeUniqueConstraintError')
       return res.status(409).json({ ok: false, message: "El username o email ya existe" });
+    if (err.isOperational && err.status) return res.status(err.status).json({ ok: false, message: err.message });
     console.error(err);
     res.status(500).json({ ok: false, message: "Error al crear empleado" });
   }
@@ -252,9 +256,14 @@ const update = async (req, res) => {
     const updates = { full_name, email: email || null, phone: phone || null, role_id, active: active ?? true };
 
     if (password) {
-      if (password.length < 6)
-        return res.status(400).json({ ok: false, message: "Contraseña debe tener al menos 6 caracteres" });
+      const problemas = problemasClave(password, { username: employee.username });
+      if (problemas.length)
+        return res.status(400).json({ ok: false, message: `La contraseña no es segura: ${problemas[0].toLowerCase()}`, problemas });
       updates.password_hash = await bcrypt.hash(password, 10);
+      // Una contraseña que cumple la regla apaga el aviso de cambiarla (ver utils/passwordPolicy.js).
+      updates.must_change_password = false;
+      // Y cierra las sesiones abiertas de esa persona: quien tuviera la clave vieja sale.
+      updates.token_version = Number(employee.token_version ?? 0) + 1;
     }
     if (clear_approval_pin) {
       updates.approval_pin_hash = null;

@@ -41,7 +41,7 @@ router.get  ("/:id/products", permit("inventory.view", "sales.create", "tables.s
 // cada quien —ventas, stock, arqueos y reportes—. Concederla a un rol le permitiría asignarse
 // a sí mismo a las demás tiendas, que es justo lo que el recorte por sucursal evita. Solo admin.
 router.get  ("/employee/:employeeId", wh.getByEmployee);
-router.put  ("/:id/employees",        permit("admin"), wh.assignEmployees);
+router.put  ("/:id/employees",        permit("admin"), ownWarehouse, wh.assignEmployees);
 
 // ── Transferencias ────────────────────────────────────────────
 // Documento de dos tiempos: `transfer` despacha (saca del origen, deja en tránsito) y
