@@ -1,6 +1,6 @@
 // Configuración → Asistente IA (solo superusuario). La llave del proveedor es de la plataforma,
 // no de una empresa: una sola sirve a todas las tiendas que tienen el extra. Se guarda cifrada en
-// la base y vale en el acto, sin redesplegar. Quién tiene el asistente y su nivel se decide en
+// la base y vale en el acto, sin redesplegar. Quién tiene a Asta y su nivel se decide en
 // Empresas.
 //
 // La llave nunca vuelve del servidor: la pantalla solo conoce sus 4 últimos caracteres.
@@ -71,8 +71,8 @@ export default function AsistenteIASettings({ notify }) {
                     <div className="min-w-0">
                         <p className="text-[14px] font-semibold text-content dark:text-white">Llave de DeepSeek</p>
                         <p className="mt-0.5 text-[13px] text-content-subtle leading-relaxed max-w-md">
-                            Una sola llave para todas las tiendas que tienen el asistente. Cambiarla vale en el acto, sin redesplegar.
-                            Quién tiene el asistente y su nivel se elige en Empresas.
+                            Una sola llave para todas las tiendas que tienen a Asta. Cambiarla vale en el acto, sin redesplegar.
+                            Quién tiene a Asta y su nivel se elige en Empresas.
                         </p>
                     </div>
                     {estado?.configurada && (
@@ -146,7 +146,7 @@ export default function AsistenteIASettings({ notify }) {
             <ConfirmModal
                 isOpen={quitar}
                 title="¿Quitar la llave?"
-                message="El asistente deja de responder en todas las tiendas hasta que pegues otra."
+                message="Asta deja de responder en todas las tiendas hasta que pegues otra."
                 confirmText="Quitar"
                 onConfirm={borrar}
                 onCancel={() => setQuitar(false)}

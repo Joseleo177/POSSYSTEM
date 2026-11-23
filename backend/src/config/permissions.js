@@ -227,9 +227,9 @@ const MODULES = [
     // Fuera de todo LEGACY_MAP: la tienda decide a quién se lo da; de entrada solo el admin. Lo
     // que el asistente puede consultar sale de los demás permisos de la persona.
     key: 'assistant',
-    label: 'Asistente con IA',
+    label: 'Asta (asistente con IA)',
     actions: [
-      { key: 'use', label: 'Usar el asistente (responde según los permisos del usuario)' },
+      { key: 'use', label: 'Usar Asta (responde según los permisos del usuario)' },
     ],
   },
   {

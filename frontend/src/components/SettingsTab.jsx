@@ -35,7 +35,7 @@ const SECTIONS = [
     ["pedidos_web", "Pedidos web"],
     ["respaldo", "Respaldo", { superuserOnly: true }],
     // Llave del proveedor de IA: es de la plataforma, no de la empresa (ver AsistenteIASettings).
-    ["asistente", "Asistente IA", { superuserOnly: true }],
+    ["asistente", "Asta (IA)", { superuserOnly: true }],
 ];
 
 // [clave, rótulo, tipo, ejemplo, opcional]. Lo opcional se dice a la derecha del rótulo y no

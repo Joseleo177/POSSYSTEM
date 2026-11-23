@@ -30,7 +30,7 @@ const fallo = (message, status = 502) => Object.assign(new Error(message), { sta
 
 async function completar({ messages, tools }) {
   const { apiKey, modelo } = await config.obtener();
-  if (!apiKey) throw fallo("El asistente todavía no está configurado. Avísale a soporte de NXUS.", 503);
+  if (!apiKey) throw fallo("Asta todavía no está configurada. Avísale a soporte de NXUS.", 503);
 
   const ctrl = new AbortController();
   const reloj = setTimeout(() => ctrl.abort(), ESPERA_MS);
@@ -52,9 +52,9 @@ async function completar({ messages, tools }) {
       signal: ctrl.signal,
     });
   } catch (err) {
-    if (err.name === "AbortError") throw fallo("El asistente tardó demasiado en responder. Intenta de nuevo.", 504);
+    if (err.name === "AbortError") throw fallo("Asta tardó demasiado en responder. Intenta de nuevo.", 504);
     // Sin internet (la instalación local en Docker puede quedarse sin conexión).
-    throw fallo("No hay conexión con el servicio del asistente. Revisa el internet e intenta de nuevo.");
+    throw fallo("No hay conexión con Asta. Revisa el internet e intenta de nuevo.");
   } finally {
     clearTimeout(reloj);
   }
@@ -62,10 +62,10 @@ async function completar({ messages, tools }) {
   if (!res.ok) {
     const cuerpo = await res.text().catch(() => "");
     console.error("DeepSeek", res.status, cuerpo.slice(0, 500));
-    if (res.status === 401) throw fallo("La llave del asistente no es válida. Avísale a soporte de NXUS.", 503);
-    if (res.status === 402) throw fallo("El servicio del asistente no tiene saldo. Avísale a soporte.", 503);
-    if (res.status === 429) throw fallo("El asistente está muy ocupado. Intenta de nuevo en un momento.", 503);
-    throw fallo("El asistente no pudo responder. Intenta de nuevo.");
+    if (res.status === 401) throw fallo("La llave de Asta no es válida. Avísale a soporte de NXUS.", 503);
+    if (res.status === 402) throw fallo("El servicio de Asta no tiene saldo. Avísale a soporte.", 503);
+    if (res.status === 429) throw fallo("Asta está muy ocupada. Intenta de nuevo en un momento.", 503);
+    throw fallo("Asta no pudo responder. Intenta de nuevo.");
   }
 
   const data = await res.json();

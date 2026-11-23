@@ -169,8 +169,8 @@ function BotonFlotante({ pieOcupado, onClick }) {
     return (
         <button
             onClick={onClick}
-            aria-label="Abrir el asistente"
-            title="Pregúntale al asistente"
+            aria-label="Abrir a Asta"
+            title="Pregúntale a Asta"
             className={`group fixed z-[55] fab-in right-4 md:right-5
                 ${pieOcupado ? "hidden lg:flex lg:bottom-[84px]" : "flex bottom-[calc(env(safe-area-inset-bottom)+76px)] md:bottom-5"}
                 h-14 w-14 rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-white
@@ -184,7 +184,7 @@ function BotonFlotante({ pieOcupado, onClick }) {
             <span className={`hidden lg:block pointer-events-none absolute right-full mr-3 top-1/2 -translate-y-1/2
                 whitespace-nowrap rounded-lg bg-content dark:bg-white text-white dark:text-content text-[12px] font-medium px-2.5 py-1.5
                 opacity-0 group-hover:opacity-100 transition-opacity`}>
-                Pregúntale al asistente
+                Pregúntale a Asta
             </span>
         </button>
     );
@@ -298,7 +298,7 @@ export default function AsistentePanel({ safeTab }) {
             <div className="fixed inset-0 z-[60] bg-black/30 lg:bg-black/10 overlay-in" onClick={() => setAbierto(false)} aria-hidden="true" />
             <section
                 role="dialog"
-                aria-label="Asistente"
+                aria-label="Asta"
                 className="fixed z-[61] inset-x-0 bottom-0 h-[90dvh] rounded-t-3xl overflow-hidden sheet-up
                            lg:inset-y-3 lg:left-auto lg:right-3 lg:h-auto lg:w-[440px] lg:rounded-3xl
                            flex flex-col bg-surface-2 dark:bg-surface-dark shadow-2xl ring-1 ring-black/5 dark:ring-white/10"
@@ -312,8 +312,8 @@ export default function AsistentePanel({ safeTab }) {
                             <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-400 ring-2 ring-brand-700" />
                         </span>
                         <div className="min-w-0 flex-1">
-                            <h2 className="text-[15px] font-semibold leading-tight">Asistente NXUS</h2>
-                            <p className="text-[12px] text-white/75 truncate">En línea · {storeName || "tu tienda"}</p>
+                            <h2 className="text-[15px] font-semibold leading-tight">Asta</h2>
+                            <p className="text-[12px] text-white/75 truncate">Asistente de NXUS · {storeName || "tu tienda"}</p>
                         </div>
                         {mensajes.length > 0 && !esperando && (
                             <button onClick={() => setMensajes([])} title="Nueva conversación" aria-label="Nueva conversación"
@@ -337,7 +337,7 @@ export default function AsistentePanel({ safeTab }) {
                                 <div className="rounded-2xl rounded-tl-md bg-white dark:bg-white/[0.06] ring-1 ring-border/60 dark:ring-white/[0.06] px-3.5 py-3">
                                     <p className="text-[15px] font-semibold text-content dark:text-white">{saludo}</p>
                                     <p className="mt-1 text-content-subtle dark:text-white/70">
-                                        Conozco los números de tu tienda y te explico cómo hacer las cosas en el sistema. Pregúntame lo que necesites.
+                                        Soy Asta. Conozco los números de tu tienda y te explico cómo hacer las cosas en el sistema. Pregúntame lo que necesites.
                                     </p>
                                 </div>
                             </div>
@@ -431,7 +431,7 @@ export default function AsistentePanel({ safeTab }) {
                             rows={1}
                             maxLength={1500}
                             autoComplete="off"
-                            placeholder="Pregunta lo que necesites…"
+                            placeholder="Pregúntale a Asta…"
                             className="flex-1 min-h-[36px] max-h-32 py-2 bg-transparent text-[14px] sm:text-[13px] resize-none focus:outline-none placeholder:text-content-subtle/70"
                         />
                         <button type="submit" disabled={esperando || !texto.trim()} aria-label="Enviar"

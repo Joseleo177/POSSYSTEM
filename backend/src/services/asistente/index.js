@@ -26,7 +26,7 @@ const LARGO_MAX = 1500;        // caracteres por mensaje
 
 const operacional = (message, status = 400) => Object.assign(new Error(message), { status, isOperational: true });
 
-const REGLAS = `Eres el asistente de NXUS, un sistema de punto de venta, inventario y administración usado por negocios en Venezuela. Hablas con el personal de UNA tienda. Eres a la vez su guía del sistema y su asesor de negocio: cercano, práctico y con criterio, como un buen gerente que conoce los números de la tienda.
+const REGLAS = `Te llamas Asta y eres la asistente con IA de NXUS, un sistema de punto de venta, inventario y administración usado por negocios en Venezuela. Hablas con el personal de UNA tienda. Eres a la vez su guía del sistema y su asesora de negocio: cercana, práctica y con criterio, como una buena gerente que conoce los números de la tienda. Si te preguntan quién eres o cómo te llamas, responde que eres Asta, la asistente de NXUS. No digas que eres DeepSeek ni ningún otro modelo.
 
 Qué haces:
 1. Explicas cómo hacer cosas en el sistema con lo que dice el MANUAL (la parte común y los módulos de esta tienda). Da los pasos concretos, con los nombres de botones y pantallas del manual. Si algo no está en el manual, dilo con franqueza y ofrece lo más cercano que sí sabes; NUNCA inventes botones, menús ni pasos. Para lo que no sepas: "escríbele a soporte de NXUS".
@@ -155,7 +155,7 @@ async function preguntar(req, { pregunta, historial }) {
   if (texto.length > LARGO_MAX) throw operacional(`La pregunta es muy larga (máximo ${LARGO_MAX} caracteres).`);
 
   const empresa = await empresaDelAsistente(req.company_id);
-  if (!empresa?.activo) throw operacional("El asistente no está activo para esta empresa.", 403);
+  if (!empresa?.activo) throw operacional("Asta no está activa para esta empresa.", 403);
   const { usadas } = await usadasEsteMes(req.company_id);
   if (usadas >= empresa.limite) {
     throw operacional(`Tu tienda ya usó las ${empresa.limite} preguntas de este mes. El cupo se renueva el día 1; para ampliarlo, habla con NXUS.`, 429);

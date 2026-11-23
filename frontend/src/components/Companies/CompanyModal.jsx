@@ -204,10 +204,10 @@ export default function CompanyModal({ open, onClose, onSave, editData, loading 
                                 checked={!!form.iva_enabled} onChange={v => set("iva_enabled", v)} />
                         </Grupo>
 
-                        <Grupo titulo="Asistente con IA">
+                        <Grupo titulo="Asta, asistente con IA">
                             {/* Chat que responde con los datos de la tienda y explica el sistema. Quién
                                 lo usa lo decide la tienda con el permiso "Usar el asistente". */}
-                            <Interruptor titulo="Asistente con IA" detalle="Responde preguntas de la tienda según los permisos de cada usuario y explica cómo usar el sistema."
+                            <Interruptor titulo="Asta" detalle="Responde preguntas de la tienda según los permisos de cada usuario y explica cómo usar el sistema."
                                 checked={!!form.asistente_enabled} onChange={v => set("asistente_enabled", v)} />
                             {form.asistente_enabled && (
                                 <div className="pl-8 pr-4 py-3 bg-surface-2/50 dark:bg-white/[0.02] space-y-3">

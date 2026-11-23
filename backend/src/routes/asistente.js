@@ -16,7 +16,7 @@ const enviar = (fn) => async (req, res, next) => {
 };
 
 const conEmpresa = (req, res, next) => {
-  if (!req.company_id) return res.status(400).json({ ok: false, message: "El asistente es por empresa: entra con un usuario de la tienda." });
+  if (!req.company_id) return res.status(400).json({ ok: false, message: "Asta trabaja por empresa: entra con un usuario de la tienda." });
   next();
 };
 
