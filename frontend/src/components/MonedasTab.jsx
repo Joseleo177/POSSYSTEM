@@ -38,7 +38,7 @@ const cuando = (d) => {
 };
 
 export default function MonedasTab({ notify }) {
-    const { loadCurrencies, can, settings, loadSettings } = useApp();
+    const { loadCurrencies, can, settings, loadSettings, currencies: globales } = useApp();
     const puedeEditar = can("currencies.manage");
 
     const [currencies, setCurrencies] = useState([]);
@@ -62,6 +62,17 @@ export default function MonedasTab({ notify }) {
     };
 
     useEffect(() => { load(); }, []);
+
+    // La tasa también cambia desde fuera de esta pantalla: el aviso del BCV de arriba ("Aplicar")
+    // y el refresco de la barra recargan las monedas globales, no esta copia. Sin esto la barra
+    // decía 1.011,18 y la tarjeta seguía en 918,77 (23-11-2026). Se recarga solo cuando cambia
+    // alguna tasa: la huella evita pedir de nuevo por cada render.
+    const huella = (globales || []).map(c => `${c.id}:${c.exchange_rate}:${c.active}`).join("|");
+    const primera = useRef(true);
+    useEffect(() => {
+        if (primera.current) { primera.current = false; return; }
+        load();
+    }, [huella]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const updateRate = async (id, rate) => {
         try {
