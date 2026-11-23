@@ -13,10 +13,26 @@
  *   getLabel – fn(clave) → texto; por defecto la clave misma
  *   align    – "right" para el último grupo de la barra: abierto hacia la derecha se salía
  *              de la pantalla del teléfono
+ *
+ * Además, al abrirse se mide: si igual se sale por un costado (en el teléfono la barra se
+ * parte en dos renglones y cualquier grupo puede quedar pegado al borde —pasó con "Pagos"),
+ * se corre lo justo para quedar a 8 px del borde.
  */
+import { useLayoutEffect, useRef, useState } from "react";
+
 export default function NavDropdownMenu({ items, active, onSelect, getLabel = (k) => k, align = "left" }) {
+  const ref = useRef(null);
+  const [shift, setShift] = useState(0);
+  useLayoutEffect(() => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const vw = document.documentElement.clientWidth;
+    if (r.right > vw - 8) setShift(vw - 8 - r.right);
+    else if (r.left < 8) setShift(8 - r.left);
+  }, []);
   return (
-    <div className={`absolute top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 min-w-[200px] p-1.5 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 z-50`}>
+    <div ref={ref} style={shift ? { transform: `translateX(${shift}px)` } : undefined}
+      className={`absolute top-full ${align === "right" ? "right-0" : "left-0"} mt-1.5 min-w-[200px] p-1.5 bg-white dark:bg-surface-dark-3 border border-border/40 dark:border-white/10 rounded-xl shadow-xl shadow-black/10 dark:shadow-black/40 z-50`}>
       {items.map(key => {
         const isActive = key === active;
         return (

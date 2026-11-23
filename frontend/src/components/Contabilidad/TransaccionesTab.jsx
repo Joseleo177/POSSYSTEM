@@ -155,11 +155,11 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
 
     const subheader = (
         <div className="shrink-0 px-4 py-2 border-b border-border/20 dark:border-white/5 flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 min-w-[200px]">
+            <div className="relative flex-1 min-w-0 sm:min-w-[200px]">
                 <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-content-subtle/70 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
-                <input type="text" placeholder="Buscar por factura, mesa, mesonero, cliente o RIF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
+                <input type="text" autoComplete="off" placeholder="Buscar por factura, mesa, mesonero, cliente o RIF..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="input h-9 pl-9 w-full" />
             </div>
 
             {tables.length > 0 && (
@@ -167,7 +167,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     value={tableId}
                     onChange={setTableId}
                     height="h-9"
-                    className="w-full sm:w-[190px]"
+                    className="hidden sm:block sm:w-[190px]"
                     boxClassName="rounded-lg"
                     placeholder="Todas las mesas"
                     options={[
@@ -188,7 +188,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                     value={waiterId}
                     onChange={setWaiterId}
                     height="h-9"
-                    className="w-full sm:w-[200px]"
+                    className="hidden sm:block sm:w-[200px]"
                     boxClassName="rounded-lg"
                     placeholder="Atendió: Todos"
                     options={[
@@ -215,8 +215,19 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                 </button>
                 {showFilterDrop && (
                     <>
-                        <div className="fixed inset-0 z-[60]" onClick={() => setShowFilterDrop(false)} />
-                        <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-surface-dark-2 border border-black/[0.07] dark:border-white/10 rounded-xl shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] z-[70] popover-in max-h-[80vh] overflow-y-auto">
+                        {/* En el teléfono el panel es una hoja inferior: anclado al botón se salía
+                            por la izquierda de la pantalla. Desde sm vuelve a ser un desplegable. */}
+                        <div className="fixed inset-0 z-[790] bg-black/40 sm:bg-transparent sm:z-[60] overlay-in" onClick={() => setShowFilterDrop(false)} />
+                        <div className="fixed inset-x-0 bottom-0 z-[800] max-h-[85dvh] rounded-t-3xl border-t hoja-o-popover safe-area-bottom sm:absolute sm:inset-x-auto sm:bottom-auto sm:top-full sm:right-0 sm:mt-1 sm:w-72 sm:max-h-[80vh] sm:rounded-xl sm:border sm:z-[70] bg-white dark:bg-surface-dark-2 border-black/[0.07] dark:border-white/10 shadow-[0_12px_40px_-8px_rgb(0_0_0/0.22)] overflow-y-auto overscroll-contain">
+                            <div className="sm:hidden sticky top-0 z-10 bg-white dark:bg-surface-dark-2 px-4 pt-2 pb-2 border-b border-border/20 dark:border-white/5">
+                                <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-black/15 dark:bg-white/20" />
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[14px] font-semibold text-content dark:text-white">Filtros</span>
+                                    <button onClick={() => setShowFilterDrop(false)} aria-label="Cerrar" className="w-9 h-9 -mr-2 rounded-full flex items-center justify-center text-content-subtle hover:bg-surface-2 dark:hover:bg-white/5">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" /></svg>
+                                    </button>
+                                </div>
+                            </div>
                             <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
                                 <div className="text-[12px] font-medium text-content-subtle mb-2">Estado</div>
                                 <div className="grid grid-cols-2 gap-1.5">
@@ -242,8 +253,9 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                     </div>
                                 </div>
                             )}
+                            {/* Mesa y Atendió están en la barra desde sm; en el teléfono viven solo aquí. */}
                             {tables.length > 0 && (
-                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="sm:hidden px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[12px] font-medium text-content-subtle mb-2">Mesa</div>
                                     <CustomSelect
                                         value={tableId}
@@ -259,7 +271,7 @@ export default function TransaccionesTab({ notify, can, allSeries, fmtPrice, set
                                 </div>
                             )}
                             {conMesonero && visibleEmployees.length > 0 && (
-                                <div className="px-4 py-3 border-b border-border/20 dark:border-white/5">
+                                <div className="sm:hidden px-4 py-3 border-b border-border/20 dark:border-white/5">
                                     <div className="text-[12px] font-medium text-content-subtle mb-2">Atendió (Mesonero)</div>
                                     <CustomSelect
                                         value={waiterId}
