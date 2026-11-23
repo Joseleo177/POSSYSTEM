@@ -392,6 +392,14 @@ export default function CobroPage() {
                 activePromos={activePromos}
                 farmaciaEnabled={farmaciaEnabled}
                 onOpenEquivalents={setEquivProduct}
+                // Cámara del teléfono: el código entra al buscador como si lo tecleara el
+                // lector USB, y la auto-apertura de arriba abre el producto. Se quita el
+                // filtro de categoría: el producto escaneado puede ser de otra.
+                onScan={(codigo) => {
+                    scanPendingRef.current = true;
+                    products.setSelectedCat("all");
+                    products.setSearch(codigo);
+                }}
             />
 
             {/* Modales */}

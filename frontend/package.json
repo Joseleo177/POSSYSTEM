@@ -7,6 +7,8 @@
     "preview": "vite preview --host"
   },
   "dependencies": {
+    "@zxing/browser": "0.1.5",
+    "@zxing/library": "0.21.3",
     "html-to-image": "1.11.11",
     "jspdf": "2.5.2",
     "jspdf-autotable": "3.8.4",

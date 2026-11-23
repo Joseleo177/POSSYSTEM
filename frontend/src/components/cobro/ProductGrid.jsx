@@ -1,5 +1,6 @@
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useMemo, useState } from "react";
 import CustomSelect from "../ui/CustomSelect";
+import BarcodeScanner, { puedeEscanear } from "../ui/BarcodeScanner";
 import KeyboardLegend from "./KeyboardLegend";
 import { resolveImageUrl, imgRetryOnError, toNameCase } from "../../helpers";
 import { StockBand, splitQty } from "../ui/StockQty";
@@ -22,9 +23,19 @@ export default function ProductGrid({
     activePromos = [],
     farmaciaEnabled = false,
     onOpenEquivalents,
+    // Código leído con la cámara: la página lo busca como si lo hubiera tecleado un lector.
+    onScan,
 }) {
     const sentinelRef = useRef(null);
     const scrollRef = useRef(null);
+    const [escaneando, setEscaneando] = useState(false);
+    // El escáner se ofrece en equipos táctiles o de pantalla chica con cámara accesible; una
+    // caja de escritorio usa el lector USB. Se decide una vez: no cambia mientras se vende.
+    const [{ escaner, conTeclado }] = useState(() => {
+        const mm = (q) => typeof window !== "undefined" && window.matchMedia(q).matches;
+        const tactil = mm("(pointer: coarse)") || mm("(max-width: 1023.98px)");
+        return { escaner: !!onScan && tactil && puedeEscanear(), conTeclado: !tactil };
+    });
 
     // Cuánto de cada producto ya está en el carrito, para marcar su tarjeta y no volver a
     // agregarlo por error. Las tallas y colores suman en la tarjeta de su modelo, que es la
@@ -92,33 +103,46 @@ export default function ProductGrid({
                 </button>
             </div>
 
-            {/* Barra búsqueda + filtro */}
-            <div className="flex items-center gap-2 mb-3">
+            {/* Barra búsqueda + filtro. En teléfono y tablet el buscador ocupa la fila entera,
+                más alto, con el escáner de la cámara adentro, y las categorías van debajo.
+                16px de letra bajo lg: con menos, el iPhone hace zoom al tocar el campo. */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-2 mb-3">
                 <div className="relative flex-1">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 text-content-subtle opacity-40 pointer-events-none">
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    <div className="absolute left-3.5 lg:left-3 top-1/2 -translate-y-1/2 text-content-subtle opacity-50 lg:opacity-40 pointer-events-none">
+                        <svg className="w-5 h-5 lg:w-4 lg:h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
                     </div>
                     <input
                         id="product-search-input"
                         ref={searchInputRef}
+                        type="search"
+                        enterKeyHint="search"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                         onKeyDown={onSearchKeyDown}
-                        placeholder={farmaciaEnabled ? "Buscar producto, principio activo, laboratorio... (F1)" : "Buscar producto... (F1)"}
-                        className="input !pl-10 w-full"
+                        placeholder={farmaciaEnabled
+                            ? (conTeclado ? "Buscar producto, principio activo, laboratorio... (F1)" : "Producto, principio activo o laboratorio")
+                            : (conTeclado ? "Buscar producto... (F1)" : "Buscar producto o código")}
+                        className={`input w-full !h-12 lg:!h-10 !text-[16px] lg:!text-[13px] !rounded-xl lg:!rounded-md !pl-11 lg:!pl-10 [&::-webkit-search-cancel-button]:hidden ${escaner ? "!pr-14" : ""}`}
                         // Sin esto el navegador despliega su historial de formularios encima
                         // de la grilla y tapa los productos.
                         autoComplete="off"
                         spellCheck={false}
                     />
+                    {escaner && (
+                        <button type="button" onClick={() => setEscaneando(true)} aria-label="Escanear código de barras con la cámara" title="Escanear con la cámara"
+                            className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 lg:w-8 lg:h-8 rounded-lg bg-surface-2 dark:bg-white/[0.08] text-content dark:text-white flex items-center justify-center active:scale-95 transition-transform">
+                            {/* Código de barras dentro de un marco de cámara */}
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M7 8v8M10 8v8M13 8v8M17 8v8" /></svg>
+                        </button>
+                    )}
                 </div>
-                {/* Ancho fijo: con min-w el recuadro se estiraba y encogía según el largo
-                    de la categoría elegida, y la barra "bailaba" en cada selección. */}
+                {/* Ancho fijo en escritorio: con min-w el recuadro se estiraba y encogía según
+                    el largo de la categoría elegida, y la barra "bailaba" en cada selección. */}
                 <CustomSelect
                     value={selectedCat}
                     onChange={setSelectedCat}
                     options={[{ value: "all", label: "Todas las categorías" }, ...categories.map(c => ({ value: c.name, label: c.name }))]}
-                    className="w-[200px] shrink-0 !text-[11px] font-bold"
+                    className="w-full lg:w-[200px] shrink-0 !text-[11px] font-bold"
                     icon={<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2a1 1 0 01-.293.707L13 13.414V19a1 1 0 01-.553.894l-4 2A1 1 0 017 21v-7.586L3.293 6.707A1 1 0 013 6V4z" /></svg>}
                 />
             </div>
@@ -245,6 +269,14 @@ export default function ProductGrid({
             </div>
 
             <KeyboardLegend />
+
+            {escaner && (
+                <BarcodeScanner
+                    open={escaneando}
+                    onClose={() => setEscaneando(false)}
+                    onDetected={(codigo) => { setEscaneando(false); onScan(codigo); }}
+                />
+            )}
         </main>
     );
 }

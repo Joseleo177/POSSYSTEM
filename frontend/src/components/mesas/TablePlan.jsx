@@ -367,6 +367,11 @@ export default function TablePlan({ tables, cuentasPorMesa, fmtTotal, editable =
 /**
  * Las mismas mesas como cuadrícula de tarjetas, para el teléfono: a 390px el plano deja cada
  * mesa del tamaño de una uña.
+ *
+ * Cada tarjeta lleva la mesa dibujada en miniatura (la misma del plano, sin girar para que la
+ * cuadrícula se lea pareja). Antes era solo texto, y la libre iba con borde punteado y gris: se
+ * leía como un hueco vacío o deshabilitado (23-11-2026). Ahora la libre es una tarjeta normal y
+ * la ocupada se distingue por el borde en tinta, los platos sobre la mesa, el total y el tiempo.
  */
 export function TableGrid({ tables, cuentasPorMesa, fmtTotal, highlightId, onTap, className = "grid grid-cols-3 gap-2" }) {
     const ahora = Date.now();
@@ -379,16 +384,20 @@ export function TableGrid({ tables, cuentasPorMesa, fmtTotal, highlightId, onTap
                 const cocina = cocinaDe(cuentas);
                 const abierta = ocupada ? Math.min(...cuentas.map(c => new Date(c.created_at).getTime())) : null;
                 const pidio = ocupada ? pidioDesde(cuentas) : null;
+                const [bw, bh] = baseDe(t);
                 return (
                     <button key={t.id} type="button" onClick={() => onTap?.(t)}
                         className={[
-                            "relative h-[76px] rounded-xl px-2 flex flex-col items-center justify-center text-center active:scale-[0.97] transition-transform",
+                            "relative min-h-[112px] rounded-xl px-2 pt-2.5 pb-2 flex flex-col items-center text-center active:scale-[0.97] transition-transform shadow-card dark:shadow-none",
                             ocupada
-                                ? "bg-white dark:bg-white/[0.09] border-2 border-content/70 dark:border-white/55 shadow-card dark:shadow-none"
-                                : "bg-white/60 dark:bg-white/[0.02] border border-dashed border-content/25 dark:border-white/20",
+                                ? "bg-white dark:bg-white/[0.09] border-2 border-content/70 dark:border-white/55"
+                                : "bg-white dark:bg-white/[0.04] border border-border/60 dark:border-white/[0.08]",
                             highlightId === t.id ? "ring-2 ring-brand-500" : "",
                         ].join(" ")}>
-                        <span className={`text-[14px] font-semibold truncate max-w-full ${ocupada ? "text-content dark:text-white" : "text-content-subtle"}`}>{t.name}</span>
+                        <span className="relative w-full h-11 mb-1.5 shrink-0">
+                            <Dibujo shape={t.shape} w={bw} h={bh} bw={bw} bh={bh} rot={0} seats={t.seats} ocupada={ocupada} />
+                        </span>
+                        <span className="text-[14px] font-semibold truncate max-w-full text-content dark:text-white">{t.name}</span>
                         {ocupada ? (
                             <>
                                 {fmtTotal && <span className="text-[12px] font-semibold text-content dark:text-white tabular-nums">{fmtTotal(cuentas)}</span>}

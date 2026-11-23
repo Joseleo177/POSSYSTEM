@@ -50,6 +50,10 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 .modal-in   { animation: modal-in .18s cubic-bezier(.2, .8, .2, 1); }
 .overlay-in { animation: catalog-fade-in .15s ease-out; }
 .popover-in { animation: popover-in .14s ease-out; }
+/* Escáner de códigos (ui/BarcodeScanner): la línea recorre la ventana de lectura. */
+@keyframes scan-line { 0%, 100% { top: 12%; } 50% { top: 86%; } }
+.scan-line { animation: scan-line 2.2s ease-in-out infinite; }
+
 /* Panel de filtros que en el teléfono es hoja inferior y desde sm un desplegable (Ventas). */
 .hoja-o-popover { animation: sheet-up .24s cubic-bezier(.32, .72, 0, 1); }
 @media (min-width: 640px) {
@@ -241,7 +245,7 @@ input[type=checkbox], input[type=radio] { accent-color: #18181b; }
 /* Quien pidió menos movimiento en su sistema no debería recibir un panel deslizándose. */
 @media (prefers-reduced-motion: reduce) {
   .bot-blink, .bot-float { animation: none; }
-  .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in, .hoja-o-popover { animation: none; }
+  .catalog-drawer-in, .catalog-overlay-in, .sheet-up, .modal-in, .overlay-in, .popover-in, .hoja-o-popover, .scan-line { animation: none; }
   .catalog-sheet-in, .cart-bump, .badge-pop, .cart-toast-in, .fab-in, .rise-in, .ring-grow { animation: none; }
   .bell-ring, .bar-shimmer, .flame-flicker, .dot-wave > span { animation: none; }
   .add-fill, .add-spark { display: none; }
