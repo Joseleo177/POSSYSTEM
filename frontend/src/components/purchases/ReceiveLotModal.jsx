@@ -32,7 +32,7 @@ export default function ReceiveLotModal({ purchase, onConfirm, onCancel, loading
                     </div>
                     <div>
                         <div className="text-[12px] font-medium text-content-subtle dark:text-white/50">Recibir mercancía</div>
-                        <div className="text-sm font-bold text-content dark:text-white">Orden #{purchase?.id}</div>
+                        <div className="text-sm font-bold text-content dark:text-white">Compra #{purchase?.id}</div>
                     </div>
                 </div>
 

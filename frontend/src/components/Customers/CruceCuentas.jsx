@@ -259,7 +259,7 @@ export default function CruceCuentas({ detail, onRefresh }) {
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         <ListaDocs titulo="Lo que le debes" sub={puedeCruzar && st.sugerido > 0 ? "Marca las compras que entran en el cruce" : "Sus compras pendientes"}
-                            docs={compras} etiqueta={d => `Orden #${d.id}`} fmt={fmt}
+                            docs={compras} etiqueta={d => `Compra #${d.id}`} fmt={fmt}
                             marcados={selC} onMarcar={puedeCruzar && st.sugerido > 0 ? (ids) => marcar("c", ids) : undefined} />
                         <ListaDocs titulo="Lo que te debe" sub={puedeCruzar && st.sugerido > 0 ? "Marca las facturas que entran en el cruce" : "Lo que se llevó"}
                             docs={ventas} etiqueta={d => d.numero ? `Factura ${d.numero}` : `Venta #${d.id}`} fmt={fmt}
