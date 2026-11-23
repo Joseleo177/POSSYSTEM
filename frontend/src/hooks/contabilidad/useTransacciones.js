@@ -88,7 +88,9 @@ export function useTransacciones({ notify }) {
     const loadSales = useCallback(async () => {
         setLoading(true);
         try {
-            const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
+            // Sin la deuda anterior (el fiado del cuaderno): no es una factura. Se cobra desde la
+            // ficha del cliente, Cuentas por cobrar y las facturas pendientes de la caja.
+            const params = { limit: LIMIT, offset: (page - 1) * LIMIT, prior_debt: "exclude" };
             if (histDateFrom)         params.date_from = histDateFrom;
             if (histDateTo)           params.date_to   = histDateTo;
             if (debouncedSearch)      params.search    = debouncedSearch;

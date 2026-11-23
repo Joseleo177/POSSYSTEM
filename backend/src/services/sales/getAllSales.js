@@ -100,8 +100,12 @@ module.exports = async function getAllSales(query, tenant = {}) {
   // (customers/priorDebt.js), que no tiene líneas y se cobra desde Facturas pendientes de la caja,
   // también junto a las facturas del cliente. Los totales del pie siguen exigiendo líneas: la
   // deuda anterior no es facturación.
-  andClauses.push(Sequelize.literal(
-    `(EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = "Sale"."id") OR "Sale"."is_prior_debt")`
+  // `prior_debt=exclude` (Contabilidad → Ventas → Facturas, 23-11-2026): ahí la deuda anterior no
+  // va —no es una factura, no tiene productos ni número fiscal—. Se ve y se cobra desde la ficha
+  // del cliente, Cuentas por cobrar y las facturas pendientes de la caja.
+  andClauses.push(Sequelize.literal(query.prior_debt === 'exclude'
+    ? `(EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = "Sale"."id") AND "Sale"."is_prior_debt" IS NOT TRUE)`
+    : `(EXISTS (SELECT 1 FROM sale_items si WHERE si.sale_id = "Sale"."id") OR "Sale"."is_prior_debt")`
   ));
 
   const where = andClauses.length ? { [Op.and]: andClauses } : {};

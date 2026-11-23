@@ -33,7 +33,8 @@ export default function ReturnableSalesModal({ open, onClose, onDone, baseCurren
     const load = useCallback(async () => {
         setLoading(true);
         try {
-            const sp = new URLSearchParams({ limit: 50, summary: "0" });
+            // La deuda anterior no tiene productos: no hay nada que devolver.
+            const sp = new URLSearchParams({ limit: 50, summary: "0", prior_debt: "exclude" });
             DEVOLVIBLES.forEach(s => sp.append("status", s));
             if (search.trim()) sp.set("search", search.trim());
             // Solo la sucursal de esta caja: la mercancía devuelta entra a su inventario y el
