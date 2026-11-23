@@ -169,7 +169,7 @@ export default function BarcodeScanner({ open, onClose, onDetected, title = "Esc
                     <div className="relative w-[80%] max-w-[360px] aspect-[16/10] rounded-2xl shadow-[0_0_0_100vmax_rgba(0,0,0,0.55)]">
                         {["top-0 left-0 border-t-[3px] border-l-[3px] rounded-tl-2xl", "top-0 right-0 border-t-[3px] border-r-[3px] rounded-tr-2xl",
                           "bottom-0 left-0 border-b-[3px] border-l-[3px] rounded-bl-2xl", "bottom-0 right-0 border-b-[3px] border-r-[3px] rounded-br-2xl"].map(c => (
-                            <span key={c} className={`absolute w-8 h-8 border-white ${c}`} />
+                            <span key={c} className={`absolute w-8 h-8 border-white [filter:drop-shadow(0_0_2px_rgba(0,0,0,0.7))] ${c}`} />
                         ))}
                         {listo && <span className="scan-line absolute inset-x-4 h-[2px] rounded-full bg-brand-400 shadow-[0_0_12px_2px_rgba(255,255,255,0.35)]" />}
                     </div>
