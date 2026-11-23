@@ -11,13 +11,17 @@ const norm = (s) => String(s || "").trim().normalize("NFD").replace(/[\u0300-\u0
  * - Si el texto coincide con una opción existente (ignorando tildes/mayúsculas), al salir o
  *   elegir usa la grafía canónica existente para evitar duplicados ("calox" -> "Calox").
  * - Si no existe, ofrece "+ Usar «...»" para crear un valor nuevo al vuelo.
+ * - `onPick` (opcional): recibe lo elegido en la lista o con Enter, en vez de `onChange`. Lo usa
+ *   quien junta varios valores (ui/PrincipiosInput): escribir no es lo mismo que elegir.
  */
 export default function SuggestInput({
     value = "",
     onChange,
+    onPick,
     options = [],
     placeholder = "",
     className = "",
+    inputClassName = "",
 }) {
     const [open, setOpen] = useState(false);
     const [activeIdx, setActiveIdx] = useState(0);
@@ -81,7 +85,7 @@ export default function SuggestInput({
     }, [open, totalRows]);
 
     const pick = (val) => {
-        onChange(val);
+        if (onPick) onPick(val); else onChange(val);
         setOpen(false);
     };
 
@@ -110,7 +114,7 @@ export default function SuggestInput({
         <div ref={triggerRef} className={`relative ${className}`}>
             <input
                 type="text"
-                className="input pr-8"
+                className={`input pr-8 ${inputClassName}`}
                 value={value}
                 placeholder={placeholder}
                 autoComplete="off"

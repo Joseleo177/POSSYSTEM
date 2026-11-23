@@ -4,6 +4,7 @@ import { Button } from "./ui/Button";
 import { useApp } from "../context/AppContext";
 import CustomSelect from "./ui/CustomSelect";
 import SuggestInput from "./ui/SuggestInput";
+import PrincipiosInput from "./ui/PrincipiosInput";
 import { calcSalePrice as calcSalePriceHelper, resolveImageUrl, toNameCase } from "../helpers";
 import { api } from "../services/api";
 import { Spinner } from "./ui/Spinner";
@@ -897,13 +898,13 @@ export default function ProductModal({ open, onClose, onSave, editData, categori
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div className="sm:col-span-2">
                                 <label className="label">Principio activo (Genérico)</label>
-                                <SuggestInput
+                                <PrincipiosInput
                                     value={form.active_ingredient}
                                     onChange={v => set("active_ingredient", v)}
                                     options={pharmacyOpts.active_ingredients}
                                     placeholder="Ej. Losartán Potásico, Amoxicilina, Ibuprofeno"
                                 />
-                                <p className="mt-1 text-[11px] text-content-subtle">Se usa en caja para buscar y sugerir equivalentes con stock.</p>
+                                <p className="mt-1 text-[11px] text-content-subtle">Si el medicamento combina varios, agrega cada uno. Se usa en caja para buscar y sugerir equivalentes con stock.</p>
                             </div>
                             <div>
                                 <label className="label">Concentración / Presentación</label>

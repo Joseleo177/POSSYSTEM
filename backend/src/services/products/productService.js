@@ -10,6 +10,7 @@ const { pieceConfigChanges } = require("../factory/numbering");
 const { unitOfMode } = require("../factory/shared");
 const { marcarRecetaDesde } = require("./recipeStock");
 const { factorPrecio, ivaActivo } = require("../fiscal/iva");
+const principios = require("../../utils/principios");
 
 // ¿La empresa tiene el módulo Fábrica? El control por piezas solo se acepta ahí.
 async function fabricaActiva(companyId, transaction) {
@@ -649,6 +650,8 @@ function tipoRecipe(valor) {
 }
 
 const textoCorto = (valor, max) => (valor === undefined ? undefined : (String(valor ?? "").trim().slice(0, max) || null));
+// Principios activos: uno o varios, guardados como "Loratadina + Pseudoefedrina" (utils/principios).
+const principiosParaGuardar = (valor) => (valor === undefined ? undefined : textoCorto(principios.unir(valor) || "", 200));
 
 async function createProduct({ body, file, company_id }) {
   const { name, price, category_id, unit, qty_step,
@@ -723,7 +726,7 @@ async function createProduct({ body, file, company_id }) {
       kitchen_prep: body.kitchen_prep === 'true' || body.kitchen_prep === true,
       iva_tipo: ivaTipo(body.iva_tipo) || 'G',
       // Ficha farmacéutica (módulo Farmacia). Una caja se vende como combo, no con precio aparte.
-      active_ingredient: textoCorto(body.active_ingredient, 200) ?? null,
+      active_ingredient: principiosParaGuardar(body.active_ingredient) ?? null,
       concentration: textoCorto(body.concentration, 80) ?? null,
       therapeutic_action: textoCorto(body.therapeutic_action, 120) ?? null,
       shelf_location: textoCorto(body.shelf_location, 60) ?? null,
@@ -1006,7 +1009,7 @@ async function updateProduct({ id, body, file, company_id, warehouse_id = null, 
       // Solo lo manda el modal de una empresa con IVA; sin el campo se conserva.
       iva_tipo: ivaTipo(body.iva_tipo) || product.iva_tipo,
       // Ficha farmacéutica (módulo Farmacia). Una caja se vende como combo, no con precio aparte.
-      active_ingredient: textoCorto(body.active_ingredient, 200) === undefined ? product.active_ingredient : textoCorto(body.active_ingredient, 200),
+      active_ingredient: body.active_ingredient === undefined ? product.active_ingredient : principiosParaGuardar(body.active_ingredient),
       concentration: textoCorto(body.concentration, 80) === undefined ? product.concentration : textoCorto(body.concentration, 80),
       therapeutic_action: textoCorto(body.therapeutic_action, 120) === undefined ? product.therapeutic_action : textoCorto(body.therapeutic_action, 120),
       shelf_location: textoCorto(body.shelf_location, 60) === undefined ? product.shelf_location : textoCorto(body.shelf_location, 60),
@@ -1427,9 +1430,16 @@ async function getPharmacyOptions(company_id) {
     }
     return [...map.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' }));
   };
+  // Los principios se sugieren de a uno: "Loratadina + Pseudoefedrina" aporta "Loratadina" y
+  // "Pseudoefedrina", que es lo que se elige en el campo (una etiqueta por principio).
+  const sueltos = new Map();
+  for (const r of rows) for (const p of principios.separar(r.active_ingredient)) {
+    const k = principios.norm(p);
+    if (!sueltos.has(k)) sueltos.set(k, p);
+  }
   return {
     data: {
-      active_ingredients:  collect('active_ingredient'),
+      active_ingredients:  [...sueltos.values()].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })),
       concentrations:      collect('concentration'),
       brands:              collect('brand'),
       therapeutic_actions: collect('therapeutic_action'),
@@ -1438,19 +1448,31 @@ async function getPharmacyOptions(company_id) {
   };
 }
 
-// Equivalentes farmacéuticos: otros productos de la misma empresa con el mismo principio activo
-// (comparación insensible a mayúsculas, tildes y espacios), ordenados por stock en la sucursal.
+// Equivalentes farmacéuticos, ordenados por stock en la sucursal. Dos grupos (23-11-2026):
+//   - data: los que tienen EXACTAMENTE los mismos principios, en cualquier orden. Se pueden
+//     vender en su lugar.
+//   - combinaciones: los que los contienen y además llevan otros ("Loratadina + Pseudoefedrina"
+//     para quien pidió Loratadina). NO son equivalentes —la pseudoefedrina no se le da a
+//     cualquiera—: se muestran aparte, con lo que llevan de más, y decide el farmacéutico.
+// Se compara principio por principio (utils/principios): "loratadina" no es "desloratadina".
 async function getEquivalents({ productId, warehouse_id, company_id }) {
   const base = await Product.findByPk(productId, {
     attributes: ['id', 'name', 'active_ingredient', 'concentration', 'company_id'],
   });
   if (!base) { const e = new Error("Producto no encontrado"); e.status = 404; throw e; }
-  const principio = String(base.active_ingredient || "").trim();
-  if (!principio) return { data: [], active_ingredient: null };
-  const principioNorm = normKey(principio);
+  const lista = principios.separar(base.active_ingredient);
+  if (!lista.length) return { data: [], combinaciones: [], active_ingredient: null, principios: [] };
+  const claveBase = principios.claves(base.active_ingredient);
 
   const cid = company_id || base.company_id;
   const wid = parseInt(warehouse_id, 10) || null;
+  // Primer filtro en la base: que mencione cada principio. Trae también falsos parecidos
+  // ("desloratadina"), que se descartan abajo al comparar principio por principio.
+  const likes = {};
+  const filtroPrincipios = [...claveBase].map((k, i) => {
+    likes[`p${i}`] = `%${k.replace(/[\\%_]/g, (c) => "\\" + c)}%`;
+    return `TRANSLATE(LOWER(COALESCE(p.active_ingredient, '')), 'áéíóúàèìòùäëïöüñ', 'aeiouaeiouaeioun') LIKE :p${i}`;
+  }).join(" AND ");
   const rows = await sequelize.query(`
     SELECT
       p.id, p.name, p.brand, p.active_ingredient, p.concentration,
@@ -1466,15 +1488,15 @@ async function getEquivalents({ productId, warehouse_id, company_id }) {
       AND p.id <> :pid
       AND p.sellable = true
       AND p.is_variant_parent = false
-      AND TRANSLATE(LOWER(TRIM(COALESCE(p.active_ingredient, ''))), 'áéíóúàèìòùäëïöüñ', 'aeiouaeiouaeioun') = :principioNorm
+      AND ${filtroPrincipios}
     ORDER BY stock DESC, p.name ASC
-    LIMIT 30
+    LIMIT 300
   `, {
-    replacements: { cid, pid: base.id, wid, principioNorm },
+    replacements: { cid, pid: base.id, wid, ...likes },
     type: Sequelize.QueryTypes.SELECT,
   });
 
-  const data = rows.map(r => ({
+  const fila = (r) => ({
     ...r,
     price: parseFloat(r.price),
     wholesale_price: r.wholesale_price != null ? parseFloat(r.wholesale_price) : null,
@@ -1483,9 +1505,20 @@ async function getEquivalents({ productId, warehouse_id, company_id }) {
     qty_step: parseFloat(r.qty_step || 1),
     stock: parseFloat(r.stock || 0),
     image_url: imageUrl(r.image_filename),
-  }));
+  });
 
-  return { data, active_ingredient: principio };
+  const data = [], combinaciones = [];
+  for (const r of rows) {
+    const suyos = principios.separar(r.active_ingredient);
+    const claveSuya = new Set(suyos.map(principios.norm));
+    if (![...claveBase].every(k => claveSuya.has(k))) continue;   // "desloratadina" y parecidos
+    if (claveSuya.size === claveBase.size) { if (data.length < 30) data.push(fila(r)); }
+    else if (combinaciones.length < 30) {
+      combinaciones.push({ ...fila(r), adicionales: suyos.filter(p => !claveBase.has(principios.norm(p))) });
+    }
+  }
+
+  return { data, combinaciones, active_ingredient: lista.join(" + "), principios: lista };
 }
 
 // calculateComboStockAndCost se exporta para que el catálogo público calcule la
