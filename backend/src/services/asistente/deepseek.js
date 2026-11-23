@@ -28,12 +28,14 @@ const PRECIOS = {
 
 const fallo = (message, status = 502) => Object.assign(new Error(message), { status, isOperational: true });
 
-async function completar({ messages, tools }) {
+// `opciones` es para la lectura de documentos (lectorCompra.js): otro modelo (con visión), más
+// espera, más salida, temperatura 0 y respuesta en JSON. El chat usa los valores por defecto.
+async function completar({ messages, tools, opciones = {} }) {
   const { apiKey, modelo } = await config.obtener();
   if (!apiKey) throw fallo("Asta todavía no está configurada. Avísale a soporte de NXUS.", 503);
 
   const ctrl = new AbortController();
-  const reloj = setTimeout(() => ctrl.abort(), ESPERA_MS);
+  const reloj = setTimeout(() => ctrl.abort(), opciones.espera_ms || ESPERA_MS);
   let res;
   try {
     res = await fetch(URL_API, {
@@ -43,16 +45,17 @@ async function completar({ messages, tools }) {
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: modelo,
+        model: opciones.modelo || modelo,
         messages,
         ...(tools?.length ? { tools, tool_choice: "auto" } : {}),
-        temperature: 0.2,
-        max_tokens: 1600,
+        temperature: opciones.temperature ?? 0.2,
+        max_tokens: opciones.max_tokens || 1600,
+        ...(opciones.json ? { response_format: { type: "json_object" } } : {}),
       }),
       signal: ctrl.signal,
     });
   } catch (err) {
-    if (err.name === "AbortError") throw fallo("Asta tardó demasiado en responder. Intenta de nuevo.", 504);
+    if (err.name === "AbortError") throw fallo(opciones.msj_espera || "Asta tardó demasiado en responder. Intenta de nuevo.", 504);
     // Sin internet (la instalación local en Docker puede quedarse sin conexión).
     throw fallo("No hay conexión con Asta. Revisa el internet e intenta de nuevo.");
   } finally {
@@ -77,6 +80,7 @@ async function completar({ messages, tools }) {
   const salida  = u.completion_tokens || 0;
   return {
     mensaje: data.choices?.[0]?.message || { role: "assistant", content: "" },
+    fin: data.choices?.[0]?.finish_reason || null,
     uso: { cache, entrada, salida },
   };
 }

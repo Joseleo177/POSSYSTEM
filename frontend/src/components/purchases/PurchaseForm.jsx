@@ -5,6 +5,7 @@ import PurchaseItemsTable from "./PurchaseItemsTable";
 import { useApp } from "../../context/AppContext";
 import Segmented from "../ui/Segmented";
 import ServiceInvoiceForm from "./ServiceInvoiceForm";
+import CompraDesdeFoto from "./CompraDesdeFoto";
 
 const fmt2 = (n) => Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2, useGrouping: false });
 
@@ -54,15 +55,32 @@ export default function PurchaseForm({ state }) {
 
     const sinAlmacen = !selectedWarehouseId;
 
+    // Compra desde foto: es parte del extra de Asta (lo enciende NXUS por empresa).
+    const { company, can, notify } = useApp();
+    const conFoto = !!company?.asistente_enabled && can("purchases.create");
+    const [desdeFoto, setDesdeFoto] = useState(false);
+    const botonFoto = conFoto && tipo === "mercancia" && (
+        <button type="button" onClick={() => setDesdeFoto(true)}
+            className="btn-outline h-9 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 whitespace-nowrap shrink-0">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M3 9a2 2 0 012-2h.93a2 2 0 001.66-.9l.82-1.2A2 2 0 0110.07 4h3.86a2 2 0 011.66.9l.82 1.2a2 2 0 001.66.9H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            Desde foto
+        </button>
+    );
+
     // Qué se está cargando: mercancía (entra al inventario) o una factura de servicios (solo líneas
     // de gasto). Solo se elige en una orden nueva; un borrador ya es de mercancía.
-    const selector = !editingDraftId && (
-        <div className="overflow-x-auto scrollbar-hide">
-            <Segmented
-                value={tipo}
-                onChange={setTipo}
-                options={[{ key: "mercancia", label: "Mercancía" }, { key: "servicios", label: "Servicios o gastos" }]}
-            />
+    const selector = (!editingDraftId || botonFoto) && (
+        <div className="flex items-center justify-between gap-3">
+            {!editingDraftId ? (
+                <div className="overflow-x-auto scrollbar-hide min-w-0">
+                    <Segmented
+                        value={tipo}
+                        onChange={setTipo}
+                        options={[{ key: "mercancia", label: "Mercancía" }, { key: "servicios", label: "Servicios o gastos" }]}
+                    />
+                </div>
+            ) : <span />}
+            {botonFoto}
         </div>
     );
 
@@ -131,6 +149,12 @@ export default function PurchaseForm({ state }) {
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.4} d="M12 4v16m8-8H4" /></svg>
                             Agregar producto
                         </button>
+                        {conFoto && (
+                            <button onClick={() => setDesdeFoto(true)}
+                                className="mt-2 h-10 px-4 rounded-lg text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:bg-brand-500/10">
+                                o cárgala desde la foto de la factura
+                            </button>
+                        )}
                     </div>
                 )}
 
@@ -210,6 +234,10 @@ export default function PurchaseForm({ state }) {
                 invoiceRate={invoiceRate}
                 invoiceSym={invoiceSym}
             />
+
+            {conFoto && (
+                <CompraDesdeFoto open={desdeFoto} onClose={() => setDesdeFoto(false)} state={state} notify={notify} />
+            )}
         </div>
     );
 }

@@ -1,8 +1,9 @@
--- Despliegue del 25-11: CUATRO migraciones en un solo pegado.
+-- Despliegue del 25-11: CINCO migraciones en un solo pegado.
 --   20261125100000-asistente-ia.js           companies.asistente_* + asistente_mensajes
 --   20261125100000-must-change-password.js   employees.must_change_password
 --   20261125110000-plataforma-ajustes.js     plataforma_ajustes
 --   20261125110000-token-version.js          employees.token_version
+--   20261125120000-asta-compra-foto.js       asistente_mensajes.consultas + compra_alias
 --
 -- Correr en el editor SQL de Supabase ANTES de desplegar el backend: el modelo Company lee
 -- asistente_enabled, asistente_plan y asistente_limite, y el modelo Employee lee
@@ -58,12 +59,30 @@ ALTER TABLE plataforma_ajustes ENABLE ROW LEVEL SECURITY;
 -- 20261125110000-token-version.js
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 0;
 
+-- 20261125120000-asta-compra-foto.js
+-- Peso de cada registro en el cupo (leer un documento de compra = 5) y los nombres que usa cada
+-- proveedor para los productos de la tienda.
+ALTER TABLE asistente_mensajes ADD COLUMN IF NOT EXISTS consultas SMALLINT NOT NULL DEFAULT 1;
+CREATE TABLE IF NOT EXISTS compra_alias (
+  id            SERIAL PRIMARY KEY,
+  company_id    INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  clave         VARCHAR(200) NOT NULL,
+  product_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  package_unit  VARCHAR(50),
+  package_size  NUMERIC(10,3),
+  veces         INTEGER NOT NULL DEFAULT 1,
+  updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS compra_alias_clave ON compra_alias (company_id, clave);
+ALTER TABLE compra_alias ENABLE ROW LEVEL SECURITY;
+
 INSERT INTO "SequelizeMeta" (name)
 SELECT n FROM (VALUES
   ('20261125100000-asistente-ia.js'),
   ('20261125100000-must-change-password.js'),
   ('20261125110000-plataforma-ajustes.js'),
-  ('20261125110000-token-version.js')
+  ('20261125110000-token-version.js'),
+  ('20261125120000-asta-compra-foto.js')
 ) v(n)
  WHERE NOT EXISTS (SELECT 1 FROM "SequelizeMeta" WHERE name = v.n);
 
@@ -76,7 +95,8 @@ COMMIT;
 SELECT esperado.t AS tabla, esperado.c AS columna_faltante
   FROM (VALUES
     ('companies', 'asistente_enabled'), ('companies', 'asistente_plan'), ('companies', 'asistente_limite'),
-    ('asistente_mensajes', 'costo_usd'), ('plataforma_ajustes', 'valor'),
+    ('asistente_mensajes', 'costo_usd'), ('asistente_mensajes', 'consultas'), ('compra_alias', 'clave'),
+    ('plataforma_ajustes', 'valor'),
     ('employees', 'must_change_password'), ('employees', 'token_version')
   ) AS esperado(t, c)
  WHERE NOT EXISTS (

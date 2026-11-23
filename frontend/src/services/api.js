@@ -864,6 +864,10 @@ export const api = {
     config:        ()     => request("/asistente/config"),
     guardarConfig: (body) => request("/asistente/config", { method: "PUT", body: JSON.stringify(body) }),
     probarConfig:  ()     => request("/asistente/config/probar", { method: "POST", timeout: 15_000 }),
+    // Compra desde foto: lee el documento del proveedor (hasta ~1 min) y propone las líneas.
+    leerCompra:    (imagenes) => request("/asistente/leer-compra", { method: "POST", body: JSON.stringify({ imagenes }), timeout: 130_000 }),
+    // Lo que la tienda confirmó (descripción del proveedor → producto) para la próxima factura.
+    compraAlias:   (lineas)   => request("/asistente/compra-alias", { method: "POST", body: JSON.stringify({ lineas }) }),
   },
   // Propinas (extra por empresa, ver services/tips en el backend). El personal es el mismo de
   // Comisiones (tabla sellers), con su propia ruta y permisos.

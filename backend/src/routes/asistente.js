@@ -2,6 +2,7 @@ const router = require("express").Router();
 const { auth, permit, superuser } = require("../middleware/auth");
 const svc = require("../services/asistente");
 const config = require("../services/asistente/config");
+const lector = require("../services/asistente/lectorCompra");
 
 // Asistente con IA: un extra que el superusuario enciende por empresa (companies.
 // asistente_enabled). Quién lo usa lo decide la tienda con assistant.use; lo que puede consultar,
@@ -34,5 +35,11 @@ router.post("/config/probar", auth, superuser, enviar(async () => ({ data: await
 router.get("/estado", auth, conEmpresa, permit("assistant.use"), enviar(async (req) => ({ data: await svc.estado(req.company_id) })));
 
 router.post("/preguntar", auth, conEmpresa, permit("assistant.use"), enviar(async (req) => ({ data: await svc.preguntar(req, req.body || {}) })));
+
+// Compra desde foto (Compras → Nueva orden → "Desde foto"). Es parte del extra de Asta, pero la
+// usa quien carga compras: el permiso es el de crear compras, no el del chat. Solo propone; la
+// compra se guarda por el camino de siempre (POST /api/purchases).
+router.post("/leer-compra", auth, conEmpresa, permit("purchases.create"), enviar(async (req) => ({ data: await lector.leer(req, req.body || {}) })));
+router.post("/compra-alias", auth, conEmpresa, permit("purchases.create"), enviar(async (req) => ({ data: await lector.recordarAlias(req, req.body || {}) })));
 
 module.exports = router;

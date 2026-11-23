@@ -32,8 +32,9 @@ export function usePurchasesModals({
     // ABRIR MODALES
     // ───────────────────────────────────────────────
     // CustomerModal espera _newType y _newName cuando se crea desde otro flujo
-    const openCreateSupplier = (name = "") => {
-        setSupplierEditData({ _newType: "proveedor", _newName: name });
+    // rif: "J-40273473-5" cuando viene de una factura leída (Compra desde foto).
+    const openCreateSupplier = (name = "", rif = "") => {
+        setSupplierEditData({ _newType: "proveedor", _newName: name, ...(rif ? { rif } : {}) });
         setSupplierModal(true);
     };
 

@@ -82,10 +82,11 @@ async function empresaDelAsistente(companyId) {
   };
 }
 
-// Preguntas respondidas este mes (hora de Caracas). Las que fallaron no cuentan.
+// Consultas usadas este mes (hora de Caracas). Las que fallaron no cuentan. Cada registro pesa
+// lo que dice `consultas`: una pregunta 1, leer un documento de compra 5 (lectorCompra.js).
 async function usadasEsteMes(companyId) {
   const [r] = await sequelize.query(
-    `SELECT COUNT(*)::int AS n, COALESCE(SUM(costo_usd), 0)::float AS costo
+    `SELECT COALESCE(SUM(consultas), 0)::int AS n, COALESCE(SUM(costo_usd), 0)::float AS costo
        FROM asistente_mensajes
       WHERE company_id = :cid AND error IS NULL AND created_at >= ${inicioDeMes}`,
     { replacements: { cid: companyId }, type: Sequelize.QueryTypes.SELECT }
@@ -131,8 +132,8 @@ async function anotar(req, datos) {
   try {
     await sequelize.query(
       `INSERT INTO asistente_mensajes
-         (company_id, employee_id, pregunta, respuesta, herramientas, tokens_cache, tokens_entrada, tokens_salida, costo_usd, duracion_ms, error)
-       VALUES (:cid, :eid, :pregunta, :respuesta, CAST(:herramientas AS JSONB), :cache, :entrada, :salida, :costo, :ms, :error)`,
+         (company_id, employee_id, pregunta, respuesta, herramientas, tokens_cache, tokens_entrada, tokens_salida, costo_usd, duracion_ms, error, consultas)
+       VALUES (:cid, :eid, :pregunta, :respuesta, CAST(:herramientas AS JSONB), :cache, :entrada, :salida, :costo, :ms, :error, :consultas)`,
       {
         replacements: {
           cid: req.company_id, eid: req.employee?.id || null,
@@ -140,6 +141,7 @@ async function anotar(req, datos) {
           herramientas: JSON.stringify(datos.herramientas || []),
           cache: datos.uso.cache, entrada: datos.uso.entrada, salida: datos.uso.salida,
           costo: datos.costo, ms: datos.ms, error: datos.error ? String(datos.error).slice(0, 300) : null,
+          consultas: datos.consultas || 1,
         },
       }
     );
@@ -218,7 +220,7 @@ async function preguntar(req, { pregunta, historial }) {
 async function consumoPorEmpresa() {
   return sequelize.query(
     `SELECT c.id AS company_id, c.name, c.asistente_plan AS plan, c.asistente_limite AS limite_propio,
-            COUNT(m.id) FILTER (WHERE m.error IS NULL)::int AS usadas,
+            COALESCE(SUM(m.consultas) FILTER (WHERE m.error IS NULL), 0)::int AS usadas,
             COUNT(m.id) FILTER (WHERE m.error IS NOT NULL)::int AS fallidas,
             COALESCE(SUM(m.costo_usd), 0)::float AS costo_usd
        FROM companies c
@@ -230,4 +232,4 @@ async function consumoPorEmpresa() {
   ).then(filas => filas.map(f => ({ ...f, limite: f.limite_propio ?? LIMITES[f.plan] ?? LIMITES.basico })));
 }
 
-module.exports = { preguntar, estado, consumoPorEmpresa, LIMITES, NIVELES };
+module.exports = { preguntar, estado, consumoPorEmpresa, empresaDelAsistente, usadasEsteMes, anotar, LIMITES, NIVELES };
