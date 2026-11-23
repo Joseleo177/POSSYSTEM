@@ -8,6 +8,7 @@ router.get("/rates/on",      auth, ctrl.getRatesOn);
 router.get("/:id/rates",     auth, permit("currencies.manage"), ctrl.getHistory);
 router.put("/:id/rates/:date", auth, permit("currencies.manage"), ctrl.putDayRate);
 router.get("/bcv",           auth, permit("currencies.manage"), ctrl.getBcvPreview);
+router.put("/source",        auth, permit("currencies.manage"), ctrl.setRateSource);
 router.post("/refresh",      auth, permit("currencies.manage"), ctrl.refreshRates);
 router.post("/",             auth, permit("currencies.manage"), ctrl.create);
 router.put("/:id/rate",      auth, permit("currencies.manage"), ctrl.updateRate);

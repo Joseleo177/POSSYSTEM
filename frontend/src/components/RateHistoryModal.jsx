@@ -13,6 +13,8 @@ import { fmtDateShort, fmtDate, todayISO, toNameCase } from "../helpers";
 const fmtRate = (n) => Number(n || 0).toLocaleString("es-VE", { minimumFractionDigits: 2, maximumFractionDigits: 4 });
 const ORIGEN = {
     bcv: "BCV",
+    "bcv-euro": "BCV euro",
+    paralelo: "Paralelo",
     "er-api": "En línea",
     manual: "A mano",
     registro: "De los cobros",

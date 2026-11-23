@@ -9,6 +9,9 @@ import Check from "./ui/Check";
 import { useApp } from "../context/AppContext";
 import { fmtTime } from "../helpers/dates";
 import RateHistoryModal from "./RateHistoryModal";
+import CustomSelect from "./ui/CustomSelect";
+import { FUENTES_BOLIVAR, fuenteBolivar } from "../helpers/tasaBolivar";
+import { checkBcvRate } from "../hooks/useBcvRate";
 
 // Antes vivía como una pestaña más de Configuración Global. Se separó a su propio módulo
 // porque tocar la tasa del día es una tarea de caja/administración, no de dueño de empresa:
@@ -35,7 +38,7 @@ const cuando = (d) => {
 };
 
 export default function MonedasTab({ notify }) {
-    const { loadCurrencies, can } = useApp();
+    const { loadCurrencies, can, settings, loadSettings } = useApp();
     const puedeEditar = can("currencies.manage");
 
     const [currencies, setCurrencies] = useState([]);
@@ -134,6 +137,25 @@ export default function MonedasTab({ notify }) {
         .then(() => { load(); loadCurrencies(); })
         .catch(e => notify(e.message, "err"));
 
+    // De dónde sale la tasa del bolívar. Se lee del `settings` que ya trae AppContext (GET
+    // /settings no pide permiso de Configuración) y se guarda por /currencies/source.
+    const fuente = fuenteBolivar(settings, currencies);
+    const [guardandoFuente, setGuardandoFuente] = useState(false);
+    const cambiarFuente = async (source) => {
+        if (source === fuente || guardandoFuente) return;
+        setGuardandoFuente(true);
+        try {
+            await api.currencies.setSource(source);
+            await loadSettings();
+            await load();
+            loadCurrencies();
+            notify(`La tasa del bolívar ahora es: ${FUENTES_BOLIVAR.find(f => f.value === source)?.label}`);
+            // El aviso consulta la nueva fuente enseguida, sin esperar su próxima vuelta.
+            if (source !== "manual") checkBcvRate().catch(() => {});
+        } catch (e) { notify(e.message, "err"); }
+        finally { setGuardandoFuente(false); }
+    };
+
     const removeCurrency = async () => {
         try {
             await api.currencies.remove(deleteCurrencyDialog.id);
@@ -188,6 +210,7 @@ export default function MonedasTab({ notify }) {
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                             {divisas.map(c => (
                                 <RateCard key={c.id} c={c} base={base} madre={madreDe(c)} puedeEditar={puedeEditar}
+                                    fuente={fuente} guardandoFuente={guardandoFuente} onFuente={cambiarFuente}
                                     onSave={updateRate} onToggle={() => toggle(c)} onDelete={() => setDeleteCurrencyDialog(c)}
                                     onHistory={() => setHistorial(c)} onLocal={() => setLocal(c)}
                                     onAutoSync={() => toggleAutoSync(c)}
@@ -283,7 +306,8 @@ export default function MonedasTab({ notify }) {
     );
 }
 
-function RateCard({ c, base, madre, puedeEditar, onSave, onToggle, onDelete, onHistory, onLocal, onAutoSync, onAddAlt }) {
+function RateCard({ c, base, madre, puedeEditar, fuente, guardandoFuente, onFuente, onSave, onToggle, onDelete, onHistory, onLocal, onAutoSync, onAddAlt }) {
+    const esBolivar = !madre && c.code === "VES" && base?.code === "USD";
     const [editing, setEditing] = useState(false);
     const [val, setVal] = useState("");
     const [saving, setSaving] = useState(false);
@@ -364,10 +388,29 @@ function RateCard({ c, base, madre, puedeEditar, onSave, onToggle, onDelete, onH
                 {/* Ajustes de la divisa: si se sincroniza sola, cuál es la local y sus otras tasas. */}
                 {puedeEditar && !madre && (
                     <div className="mt-4 pt-4 border-t border-border/60 dark:border-white/[0.06] space-y-2.5">
-                        <label className="flex items-center gap-2.5 cursor-pointer">
-                            <Check checked={c.auto_sync !== false} onChange={onAutoSync} title='Actualizar con "Sincronizar tasas"' />
-                            <span className="text-[13px] text-content dark:text-white">Actualizar con "Sincronizar tasas"</span>
-                        </label>
+                        {/* El bolívar con base en $: de dónde sale su tasa (dólar BCV, euro BCV,
+                            paralelo o a mano). Reemplaza la casilla de "Sincronizar": "A mano" es
+                            lo mismo que apagarla, y el servidor las mantiene de acuerdo. */}
+                        {esBolivar ? (
+                            <div>
+                                <div className="text-[12px] text-content-subtle mb-1.5">Tasa del bolívar</div>
+                                <CustomSelect
+                                    value={fuente}
+                                    onChange={onFuente}
+                                    disabled={guardandoFuente}
+                                    options={FUENTES_BOLIVAR.map(f => ({ value: f.value, label: f.label }))}
+                                    boxClassName="!text-[13px]"
+                                />
+                                <p className="mt-1.5 text-[12px] text-content-subtle leading-snug">
+                                    {FUENTES_BOLIVAR.find(f => f.value === fuente)?.hint}
+                                </p>
+                            </div>
+                        ) : (
+                            <label className="flex items-center gap-2.5 cursor-pointer">
+                                <Check checked={c.auto_sync !== false} onChange={onAutoSync} title='Actualizar con "Sincronizar tasas"' />
+                                <span className="text-[13px] text-content dark:text-white">Actualizar con "Sincronizar tasas"</span>
+                            </label>
+                        )}
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
                             {!c.is_local && (
                                 <button onClick={onLocal} className="text-[13px] font-medium text-brand-700 dark:text-brand-300 hover:underline">

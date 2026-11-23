@@ -520,8 +520,11 @@ export const api = {
     // Si "Sincronizar tasas" la actualiza o la pone la tienda (pesos de frontera, USDT).
     toggleAutoSync: (id)     => request(`/currencies/${id}/auto-sync`, { method: "PUT" }),
     refreshRates: ()         => request("/currencies/refresh",       { method: "POST" }),
-    // Tasa publicada por el BCV con su fecha valor, sin aplicarla.
+    // Tasa que ofrece la fuente del bolívar de la empresa (BCV dólar/euro o paralelo), con su
+    // fecha valor, sin aplicarla.
     bcv:          (fresh)    => request(`/currencies/bcv${fresh ? "?fresh=1" : ""}`),
+    // De dónde sale la tasa del bolívar: bcv_usd | bcv_eur | paralelo | manual.
+    setSource:    (source)   => request("/currencies/source",        { method: "PUT", body: JSON.stringify({ source }) }),
     // Historial: tasa de cada moneda un día (para cobros con fecha anterior), días guardados de
     // una moneda, y corregir un día pasado.
     ratesOn:      (date)     => request(`/currencies/rates/on?date=${encodeURIComponent(date)}`),

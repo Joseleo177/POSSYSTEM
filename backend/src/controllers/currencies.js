@@ -2,12 +2,13 @@ const https = require("https");
 const tls   = require("tls");
 const fs    = require("fs");
 const path  = require("path");
-const { Currency, Sequelize } = require("../models");
+const { Currency, Setting, Sequelize } = require("../models");
 const { broadcast } = require("../services/sseService");
 const rates = require("../services/currencyRates");
 
 const companyOf = (req) => req.company_id ?? req.employee?.company_id ?? null;
-const RATE_SOURCES = new Set(["manual", "bcv"]);
+// Lo que el aviso de la tasa puede mandar al aplicarla (ver ORIGEN_FUENTE).
+const RATE_SOURCES = new Set(["manual", "bcv", "bcv-euro", "paralelo"]);
 
 // Base, luego la local (los Bs) y cada tasa alterna justo debajo de su moneda (mismo código).
 const ORDEN = [['is_base', 'DESC'], ['is_local', 'DESC'], ['code', 'ASC'], ['rate_of_id', 'ASC NULLS FIRST'], ['name', 'ASC']];
@@ -150,7 +151,16 @@ const toggleAutoSync = async (req, res) => {
 // (Sectigo Public Server Authentication CA DV R36, bajado de crt.sectigo.com, vence en 2036)
 // junto a sus raíces de siempre: la verificación sigue encendida, solo se completa la cadena.
 // Si el BCV cambia de certificadora esto falla y se cae a dolarapi, que es el respaldo.
-const BCV_CA = [...tls.rootCertificates, fs.readFileSync(path.join(__dirname, "../certs/sectigo-dv-r36.pem"), "utf8")];
+//
+// 23-11-2026: el BCV pasó a un certificado OV (Sectigo Public Server Authentication CA OV R36,
+// de crt.sectigo.com, vence en 2036) y desde entonces todo salía de dolarapi, que iba un día
+// atrasado. Se cargan TODOS los .pem de certs/: si vuelve a cambiar, basta con agregar el
+// intermedio nuevo ahí (el emisor sale en el certificado del BCV, campo "CA Issuers").
+const CERTS_DIR = path.join(__dirname, "../certs");
+const BCV_CA = [
+  ...tls.rootCertificates,
+  ...fs.readdirSync(CERTS_DIR).filter(f => f.endsWith(".pem")).map(f => fs.readFileSync(path.join(CERTS_DIR, f), "utf8")),
+];
 const fetchBcvPage = () => new Promise((resolve, reject) => {
   const req = https.get("https://www.bcv.org.ve/", {
     ca: BCV_CA,
@@ -167,78 +177,173 @@ const fetchBcvPage = () => new Promise((resolve, reject) => {
   req.on("error", reject);
 });
 
-// "876,79760000" dentro del bloque id="dolar" y la fecha valor en el atributo content del
-// span que la acompaña ("2026-10-13T00:00:00-04:00").
-const parseBcvPage = (html) => {
-  const block = html.split('id="dolar"')[1] || "";
+// "876,79760000" dentro de cada bloque (id="dolar", id="euro") y la fecha valor en el atributo
+// content del span que los acompaña ("2026-10-13T00:00:00-04:00"). Es una sola fecha valor
+// para todas las divisas que publica el BCV.
+const tasaDelBloque = (html, id) => {
+  const block = html.split(`id="${id}"`)[1] || "";
   const m = block.match(/<strong[^>]*>\s*([\d.,]+)\s*<\/strong>/);
+  return m ? Number(m[1].replace(/\./g, "").replace(",", ".")) : 0;
+};
+const parseBcvPage = (html) => {
   const d = html.match(/Fecha Valor:[\s\S]{0,300}?content="(\d{4}-\d{2}-\d{2})/);
-  const rate = m ? Number(m[1].replace(/\./g, "").replace(",", ".")) : 0;
-  return { rate, value_date: d ? d[1] : null };
+  return { usd: tasaDelBloque(html, "dolar"), eur: tasaDelBloque(html, "euro"), value_date: d ? d[1] : null };
 };
 
-// Obtiene la tasa BCV oficial (USD -> VES) y su FECHA VALOR: el día desde el que rige.
+const getJson = async (url) => {
+  const r = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+};
+const fechaIso = (v) => {
+  const s = String(v || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+};
+
+// Tasas oficiales del BCV (bolívares por dólar y por euro) con su FECHA VALOR: el día desde
+// el que rigen.
 //
 // El BCV publica en la tarde la tasa del próximo día hábil (el viernes, la del lunes; antes
 // de un feriado, la del día siguiente a él). Muchos comercios cobran con ella desde que sale,
 // sobre todo el fin de semana, así que el sistema no la aplica solo: la ofrece con su fecha
 // y el usuario decide (ver GET /currencies/bcv).
 //
-// Primero la página del BCV, que es la fuente y trae la fecha valor exacta. dolarapi queda de
-// respaldo: el 11-10-2026 seguía en 875,65 "del 09/10" cuando el BCV ya publicaba 876,80 con
-// fecha valor 13/10.
-const getBcvRate = async () => {
+// Primero la página del BCV, que es la fuente y trae la fecha valor exacta. Dólar y euro
+// salen de la MISMA descarga: la tienda que trabaja con el euro no suma consultas. dolarapi
+// queda de respaldo: el 11-10-2026 seguía en 875,65 "del 09/10" cuando el BCV ya publicaba
+// 876,80 con fecha valor 13/10 (y el 23-11 seguía con la del viernes 20).
+const getBcvRates = async () => {
   const errors = [];
   try {
-    const { rate, value_date } = parseBcvPage(await fetchBcvPage());
-    if (rate > 0) return { rate, value_date, source: "bcv.org.ve" };
+    const { usd, eur, value_date } = parseBcvPage(await fetchBcvPage());
+    if (usd > 0) return { usd, eur: eur > 0 ? eur : null, value_date, source: "bcv.org.ve" };
     errors.push("bcv.org.ve → no se encontró la tasa en la página");
   } catch (e) {
     errors.push(`bcv.org.ve → ${e.message}`);
   }
 
-  const sources = [
-    { url: "https://ve.dolarapi.com/v1/dolares/oficial",   pick: (d) => d?.promedio, date: (d) => d?.fechaActualizacion },
-    { url: "https://pydolarve.org/api/v1/dollar?page=bcv", pick: (d) => d?.monitors?.bcv?.price, date: () => null },
-  ];
-  for (const src of sources) {
-    try {
-      const r = await fetch(src.url, {
-        headers: { "User-Agent": "Mozilla/5.0", "Accept": "application/json" },
-        signal: AbortSignal.timeout(5000),
-      });
-      if (!r.ok) { errors.push(`${src.url} → HTTP ${r.status}`); continue; }
-      const d = await r.json();
-      const price = Number(src.pick(d));
-      const date = String(src.date(d) || "").slice(0, 10);
-      if (price > 0) return { rate: price, value_date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null, source: new URL(src.url).hostname };
-      errors.push(`${src.url} → respuesta sin precio válido`);
-    } catch (e) {
-      errors.push(`${src.url} → ${e.message}`);
+  // /v1/cotizaciones trae el dólar y el euro oficiales en una sola respuesta.
+  try {
+    const lista = await getJson("https://ve.dolarapi.com/v1/cotizaciones");
+    const de = (moneda) => (Array.isArray(lista) ? lista : []).find(x => x?.moneda === moneda && x?.fuente === "oficial");
+    const usd = Number(de("USD")?.promedio), eur = Number(de("EUR")?.promedio);
+    if (usd > 0) {
+      return { usd, eur: eur > 0 ? eur : null, value_date: fechaIso(de("USD")?.fechaActualizacion), source: "ve.dolarapi.com" };
     }
+    errors.push("ve.dolarapi.com → respuesta sin precio válido");
+  } catch (e) {
+    errors.push(`ve.dolarapi.com → ${e.message}`);
+  }
+
+  try {
+    const d = await getJson("https://pydolarve.org/api/v1/dollar?page=bcv");
+    const usd = Number(d?.monitors?.bcv?.price);
+    if (usd > 0) return { usd, eur: null, value_date: null, source: "pydolarve.org" };
+    errors.push("pydolarve.org → respuesta sin precio válido");
+  } catch (e) {
+    errors.push(`pydolarve.org → ${e.message}`);
   }
   throw new Error("No se pudo obtener la tasa BCV: " + errors.join(" | "));
 };
 
-// La misma tasa vale para todas las empresas: se guarda unos minutos para que cada pestaña
-// abierta no salga a consultar al BCV por su cuenta (en Vercel se paga el tiempo esperando).
-const BCV_CACHE_MS = 10 * 60 * 1000;
-let bcvCache = null;
-const getBcvRateCached = async (fresh = false) => {
-  if (!fresh && bcvCache && Date.now() - bcvCache.at < BCV_CACHE_MS) return bcvCache.data;
-  const data = await getBcvRate();
-  bcvCache = { at: Date.now(), data };
-  return data;
+// Dólar paralelo de dolarapi: un promedio del mercado que en Venezuela anda pegado a la USDT de
+// Binance (23-11-2026: 1.107 contra una USDT de ~1.100). No es el anuncio exacto de nadie, por
+// eso solo se OFRECE: si la tienda mira otro número, lo pone a mano y el aviso no se lo pisa.
+// No trae fecha valor: rige desde que sale y se mueve durante el día.
+const getParalelo = async () => {
+  try {
+    const d = await getJson("https://ve.dolarapi.com/v1/dolares/paralelo");
+    const rate = Number(d?.promedio);
+    if (rate > 0) return { rate, value_date: null, updated_at: d?.fechaActualizacion || null, source: "ve.dolarapi.com" };
+    throw new Error("respuesta sin precio válido");
+  } catch (e) {
+    throw new Error(`No se pudo obtener el dólar paralelo: ve.dolarapi.com → ${e.message}`);
+  }
 };
 
-// GET /api/currencies/bcv — tasa disponible en el BCV, SIN aplicarla. ?fresh=1 salta la caché
-// (el botón de la barra: quien lo pulsa quiere lo último, no lo de hace diez minutos).
+// Las mismas tasas valen para todas las empresas: se guardan unos minutos para que cada
+// pestaña abierta no salga a consultar por su cuenta (en Vercel se paga el tiempo esperando).
+const RATE_CACHE_MS = 10 * 60 * 1000;
+const cacheado = (fn) => {
+  let memo = null;
+  return async (fresh = false) => {
+    if (!fresh && memo && Date.now() - memo.at < RATE_CACHE_MS) return memo.data;
+    const data = await fn();
+    memo = { at: Date.now(), data };
+    return data;
+  };
+};
+const getBcvRatesCached = cacheado(getBcvRates);
+const getParaleloCached = cacheado(getParalelo);
+
+// ── Tasa del bolívar de cada empresa ─────────────────────────────────────────
+// La base es el dólar (así se trabaja en Venezuela) y lo que cambia de una tienda a otra es a
+// qué tasa pasa ese dólar a bolívares: el dólar BCV (lo de siempre), el euro BCV ($10 × euro)
+// o la USDT. Es un ajuste de la empresa: sin la clave, dólar BCV, como todas hasta hoy.
+//   bcv_usd  → bcv.org.ve, dólar (aviso con fecha valor)
+//   bcv_eur  → bcv.org.ve, euro (aviso con fecha valor)
+//   paralelo → dolarapi paralelo (aviso sin fecha valor; referencia de la USDT)
+//   manual   → la pone la tienda; ni el aviso ni "Sincronizar" la tocan
+const RATE_SOURCE_KEY = "bolivar_rate_source";
+const FUENTES_BOLIVAR = new Set(["bcv_usd", "bcv_eur", "paralelo", "manual"]);
+// Lo que queda en el historial de tasas (currency_rates.source) al aplicarla.
+const ORIGEN_FUENTE = { bcv_usd: "bcv", bcv_eur: "bcv-euro", paralelo: "paralelo" };
+
+// Sin la clave (empresas de antes): dólar BCV, salvo que ya hubieran apagado el "Sincronizar"
+// del bolívar, que era la forma de decir "la tasa la pongo yo". Espejo de fuenteBolivar
+// (frontend/src/helpers/tasaBolivar.js).
+const fuenteDelBolivar = async (companyId) => {
+  if (!companyId) return "bcv_usd";
+  const row = await Setting.findOne({ where: { key: RATE_SOURCE_KEY, company_id: companyId } });
+  if (FUENTES_BOLIVAR.has(row?.value)) return row.value;
+  const ves = await Currency.findOne({ where: { company_id: companyId, code: "VES", is_base: false, rate_of_id: null }, attributes: ["auto_sync"] });
+  return ves && ves.auto_sync === false ? "manual" : "bcv_usd";
+};
+
+// La tasa que la fuente de la empresa ofrece hoy: { rate, value_date, source, kind }.
+const tasaDeFuente = async (kind, fresh = false) => {
+  if (kind === "paralelo") return { ...(await getParaleloCached(fresh)), kind };
+  const bcv = await getBcvRatesCached(fresh);
+  if (kind === "bcv_eur") {
+    if (!(bcv.eur > 0)) throw new Error(`No se pudo obtener la tasa BCV del euro (${bcv.source} no la trajo)`);
+    return { rate: bcv.eur, value_date: bcv.value_date, source: bcv.source, kind };
+  }
+  return { rate: bcv.usd, value_date: bcv.value_date, source: bcv.source, kind: "bcv_usd" };
+};
+
+// GET /api/currencies/bcv — la tasa que la fuente de la empresa ofrece, SIN aplicarla. ?fresh=1
+// salta la caché (el botón de la barra: quien lo pulsa quiere lo último, no lo de hace diez
+// minutos). Con la tasa a mano no hay nada que ofrecer: data null.
 const getBcvPreview = async (req, res) => {
   try {
-    const data = await getBcvRateCached(req.query.fresh === "1");
-    res.json({ ok: true, data });
+    const kind = await fuenteDelBolivar(companyOf(req));
+    if (kind === "manual") return res.json({ ok: true, data: null, kind });
+    const data = await tasaDeFuente(kind, req.query.fresh === "1");
+    res.json({ ok: true, data, kind });
   } catch (err) {
     res.status(502).json({ ok: false, message: err.message });
+  }
+};
+
+// PUT /api/currencies/source { source } — de dónde sale la tasa del bolívar. Vive en Monedas
+// (permiso currencies.manage), no en Configuración: es parte de manejar la tasa del día.
+// "Manual" apaga además el "Sincronizar" del bolívar, para que las dos cosas digan lo mismo.
+const setRateSource = async (req, res) => {
+  try {
+    const source = String(req.body?.source || "");
+    if (!FUENTES_BOLIVAR.has(source)) return res.status(400).json({ ok: false, message: "Fuente de tasa no válida" });
+    const company_id = companyOf(req);
+    if (!company_id) return res.status(400).json({ ok: false, message: "Elige una empresa primero" });
+    await Setting.upsert({ key: RATE_SOURCE_KEY, value: source, company_id });
+    await Currency.update({ auto_sync: source !== "manual" }, { where: { company_id, code: "VES", is_base: false, rate_of_id: null } });
+    await avisarCambio(req);
+    res.json({ ok: true, data: { source } });
+  } catch (err) {
+    console.error("[currencies] source:", err);
+    res.status(500).json({ ok: false, message: "Error al guardar la fuente de la tasa" });
   }
 };
 
@@ -261,19 +366,24 @@ const refreshRates = async (req, res) => {
     const updated = [];
     const errors = [];
 
+    // El bolívar sale de la fuente de la empresa (dólar BCV, euro BCV o paralelo). A mano, no se
+    // toca; y nunca va a er-api, que da una tasa internacional que no es la de ninguna tienda.
     const vesCur = currencies.find(c => c.code === "VES");
     if (vesCur && baseCur.code === "USD") {
-      try {
-        log("fetching BCV...");
-        const bcv = await getBcvRateCached(true);
-        log("BCV =", bcv.rate, "fecha valor", bcv.value_date);
-        await vesCur.update({ exchange_rate: bcv.rate, updated_at: new Date() });
-        await rates.recordRate(vesCur, { source: "bcv", employee_id: req.employee?.id ?? null });
-        log("VES updated in DB");
-        updated.push({ code: "VES", rate: bcv.rate, value_date: bcv.value_date, source: "BCV" });
-      } catch (e) {
-        log("VES error:", e.message);
-        errors.push({ code: "VES", error: e.message });
+      const kind = await fuenteDelBolivar(companyOf(req));
+      if (kind !== "manual") {
+        try {
+          log("fetching", kind, "...");
+          const t = await tasaDeFuente(kind, true);
+          log(kind, "=", t.rate, "fecha valor", t.value_date);
+          await vesCur.update({ exchange_rate: t.rate, updated_at: new Date() });
+          await rates.recordRate(vesCur, { source: ORIGEN_FUENTE[kind], employee_id: req.employee?.id ?? null });
+          log("VES updated in DB");
+          updated.push({ code: "VES", rate: t.rate, value_date: t.value_date, source: ORIGEN_FUENTE[kind] });
+        } catch (e) {
+          log("VES error:", e.message);
+          errors.push({ code: "VES", error: e.message });
+        }
       }
     }
 
@@ -307,7 +417,8 @@ const refreshRates = async (req, res) => {
     }
 
     log("done. updated:", updated.length, "errors:", errors.length);
-    if (!updated.length) throw new Error(errors.map(e => e.error).join(" | ") || "No se actualizó ninguna tasa");
+    // Sin errores y sin nada que actualizar (bolívar a mano y ninguna otra divisa): está al día.
+    if (!updated.length && errors.length) throw new Error(errors.map(e => e.error).join(" | "));
 
     res.json({ ok: true, updated, errors, data: await avisarCambio(req) });
   } catch (err) {
@@ -386,4 +497,4 @@ const putDayRate = async (req, res) => {
   }
 };
 
-module.exports = { getAll, updateRate, toggle, create, setLocal, toggleAutoSync, refreshRates, getBcvPreview, remove, getRatesOn, getHistory, putDayRate };
+module.exports = { getAll, updateRate, toggle, create, setLocal, toggleAutoSync, refreshRates, getBcvPreview, setRateSource, remove, getRatesOn, getHistory, putDayRate };

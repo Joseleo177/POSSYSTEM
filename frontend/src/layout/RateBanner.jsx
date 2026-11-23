@@ -5,6 +5,7 @@ import { api } from "../services/api";
 import { todayISO } from "../helpers";
 import { Spinner } from "../components/ui/Spinner";
 import { useBcvRate, checkBcvRate, clearBcvManual, getBcvState } from "../hooks/useBcvRate";
+import { fuenteBolivar, ORIGEN_FUENTE } from "../helpers/tasaBolivar";
 
 // Aviso de que el BCV publicó una tasa distinta de la que se está usando.
 //
@@ -32,14 +33,17 @@ function fechaValor(iso) {
 }
 
 export default function RateBanner() {
-    const { can, company, currencies, baseCurrency, loadCurrencies, notify } = useApp();
+    const { can, company, currencies, baseCurrency, settings, loadCurrencies, notify } = useApp();
     const { data, manual } = useBcvRate();
     const [applying, setApplying] = React.useState(false);
     const [dismissed, setDismissed] = React.useState(null);
 
-    // El BCV da bolívares por dólar: solo tiene sentido con base USD y el bolívar activo.
+    // La tasa pasa dólares a bolívares: solo tiene sentido con base USD y el bolívar activo.
+    // De dónde sale (dólar BCV, euro BCV o paralelo) lo decide la empresa en Monedas; con la
+    // tasa a mano no hay nada que ofrecer y el aviso no existe.
+    const fuente = fuenteBolivar(settings, currencies);
     const ves = currencies.find(c => c.code === "VES" && c.active && !c.is_base && !c.rate_of_id);
-    const enabled = can("currencies.manage") && !!ves && baseCurrency?.code === "USD";
+    const enabled = can("currencies.manage") && !!ves && baseCurrency?.code === "USD" && fuente !== "manual";
 
     React.useEffect(() => {
         try { setDismissed(localStorage.getItem(dismissKey(company?.id))); } catch { setDismissed(null); }
@@ -57,18 +61,25 @@ export default function RateBanner() {
         };
         document.addEventListener("visibilitychange", onVisible);
         return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVisible); };
-    }, [enabled]);
+    }, [enabled, fuente]);
 
-    if (!enabled || !data?.rate) return null;
+    // `data.kind` distinto de la fuente: es lo que se consultó antes de cambiarla en Monedas.
+    if (!enabled || !data?.rate || data.kind !== fuente) return null;
 
     const actual = parseFloat(ves.exchange_rate) || 0;
     if (Math.abs(data.rate - actual) < 0.00005) return null;
 
     const hoy = todayISO();
-    const futura = !!data.value_date && data.value_date > hoy;
-    // Mientras la fecha no llega, descartarla dura hasta ese día; desde que rige, solo hoy.
-    const key = `${data.rate}|${data.value_date || ""}|${futura ? "futura" : hoy}`;
+    const paralelo = fuente === "paralelo";
+    const futura = !paralelo && !!data.value_date && data.value_date > hoy;
+    // BCV: mientras la fecha no llega, descartarla dura hasta ese día; desde que rige, solo hoy.
+    // Paralelo: se mueve durante el día, así que "seguir con la mía" vale por el día entero,
+    // aunque cambie; si no, el aviso volvería cada vez que dolarapi publica un número nuevo.
+    const key = paralelo
+        ? `paralelo|${hoy}`
+        : `${fuente}|${data.rate}|${data.value_date || ""}|${futura ? "futura" : hoy}`;
     if (!manual && dismissed === key) return null;
+    const delEuro = fuente === "bcv_eur" ? " del euro" : "";
 
     const fv = fechaValor(data.value_date);
     const sym = ves.symbol || "Bs.";
@@ -83,7 +94,7 @@ export default function RateBanner() {
         if (applying) return;
         setApplying(true);
         try {
-            await api.currencies.updateRate(ves.id, { exchange_rate: data.rate, source: "bcv" });
+            await api.currencies.updateRate(ves.id, { exchange_rate: data.rate, source: ORIGEN_FUENTE[fuente] });
             await loadCurrencies();
             notify(`Tasa aplicada: ${sym} ${fmtRate(data.rate)}`);
             clearBcvManual();
@@ -96,12 +107,14 @@ export default function RateBanner() {
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 sm:px-4 py-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
                 <p className="flex-1 min-w-[220px] text-[13px] leading-snug text-amber-900 dark:text-amber-200">
-                    {futura ? (
-                        <>El BCV publicó la tasa del <span className="font-semibold">{fv.dia} {fv.corta}</span>: </>
+                    {paralelo ? (
+                        <>El dólar paralelo marca </>
+                    ) : futura ? (
+                        <>El BCV publicó la tasa{delEuro} del <span className="font-semibold">{fv.dia} {fv.corta}</span>: </>
                     ) : fv && data.value_date === hoy ? (
-                        <>Tasa BCV de hoy: </>
+                        <>Tasa BCV{delEuro} de hoy: </>
                     ) : (
-                        <>Tasa BCV vigente{fv ? ` desde el ${fv.corta}` : ""}: </>
+                        <>Tasa BCV{delEuro} vigente{fv ? ` desde el ${fv.corta}` : ""}: </>
                     )}
                     <span className="font-semibold tabular-nums">{sym} {fmtRate(data.rate)}</span>
                     <span className="text-amber-800/80 dark:text-amber-200/70">

@@ -6,6 +6,7 @@ import { useApp } from "../context/AppContext";
 import { useBcvRate, checkBcvRate } from "../hooks/useBcvRate";
 import SucursalSwitcher from "./SucursalSwitcher";
 import { monedaLocal } from "../helpers/currency";
+import { fuenteBolivar, NOMBRE_TASA } from "../helpers/tasaBolivar";
 
 function useDateTick() {
     const [now, setNow] = React.useState(new Date());
@@ -25,13 +26,19 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
     // Antes aplicaba sin preguntar lo último que publicara el BCV, que en la tarde ya es la
     // tasa del día siguiente. Ahora consulta y, si hay una distinta, la ofrece en el aviso
     // (RateBanner) con su fecha valor para que se decida si aplicarla.
+    // La consulta va a la fuente del bolívar de la empresa (dólar BCV, euro BCV o paralelo).
+    // Con la tasa a mano no hay nada que consultar y el botón no aparece.
+    const fuente = fuenteBolivar(settings, currencies);
+    const nombreTasa = NOMBRE_TASA[fuente] || "Tasa BCV";
     const handleRefreshRate = async () => {
         if (refreshing) return;
         try {
-            const bcv = await checkBcvRate({ manual: true });
+            const t = await checkBcvRate({ manual: true });
             const actual = parseFloat(localCurrency?.exchange_rate) || 0;
-            if (bcv && Math.abs(bcv.rate - actual) < 0.00005) notify("Ya tienes la última tasa publicada por el BCV");
-        } catch (e) { notify(e.message || "No se pudo consultar la tasa del BCV", "err"); }
+            if (t && Math.abs(t.rate - actual) < 0.00005) {
+                notify(fuente === "paralelo" ? "Ya tienes el último dólar paralelo" : `Ya tienes la última tasa${fuente === "bcv_eur" ? " del euro" : ""} publicada por el BCV`);
+            }
+        } catch (e) { notify(e.message || "No se pudo consultar la tasa", "err"); }
     };
 
     const now = useDateTick();
@@ -108,11 +115,11 @@ export default function TopBar({ settings, storeName, safeTab, visibleTabs, empl
                     </div>
                 )}
                 {/* Sin permiso para manejar la tasa el botón solo devolvía un error. */}
-                {localCurrency && can("currencies.manage") && (
+                {localCurrency && can("currencies.manage") && fuente !== "manual" && (
                     <button
                         onClick={handleRefreshRate}
                         disabled={refreshing}
-                        title="Actualizar tasa BCV"
+                        title={`Consultar: ${nombreTasa}`}
                         className="w-6 h-6 flex items-center justify-center rounded-md text-content-subtle dark:text-white/30 hover:text-brand-500 dark:hover:text-brand-400 hover:bg-brand-500/10 transition-all disabled:opacity-40"
                     >
                         <svg className={`w-3 h-3 ${refreshing ? "animate-spin" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
