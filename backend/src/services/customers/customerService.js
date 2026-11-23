@@ -452,6 +452,30 @@ async function updateCustomer(id, body) {
     // Cliente y proveedor a la vez: los datos de contacto son de la persona, no de una de sus
     // cuentas. Se cambian en las dos fichas, o el RIF dejaría de unirlas.
     const otra = await gemelo(customer);
+
+    // Cambiar de Cliente a Proveedor (o al revés) a alguien que ya tiene historia no lo
+    // convierte: sus facturas o compras se quedarían colgando del tipo equivocado. Queda como
+    // los dos, "Cliente y proveedor" (decisión del usuario, 23-11-2026). Sin historia, se cambia.
+    if (payload.type !== customer.type) {
+      const conHistoria = customer.type === "proveedor"
+        ? (await Purchase.count({ where: { supplier_id: customer.id } })) > 0
+        : (await Sale.count({ where: { customer_id: customer.id } })) > 0 || parseFloat(customer.credit_balance || 0) > 0.001;
+      if (conHistoria || otra) {
+        const comun = { name: payload.name, rif: payload.rif, phone: payload.phone, email: payload.email, address: payload.address };
+        await sequelize.transaction(async (transaction) => {
+          await customer.update({ ...payload, type: customer.type }, { transaction });
+          if (otra) await otra.update(comun, { transaction });
+          else await Customer.create({ ...payload, company_id: customer.company_id }, { transaction });
+        });
+        const antes = customer.type === "proveedor" ? "proveedor" : "cliente";
+        return {
+          data: customer,
+          message: otra
+            ? `${customer.name} ya es cliente y proveedor. Datos actualizados en los dos lados.`
+            : `${customer.name} ahora es cliente y proveedor: conserva todo lo que tenía como ${antes}.`,
+        };
+      }
+    }
     await sequelize.transaction(async (transaction) => {
       await customer.update(payload, { transaction });
       if (otra) {

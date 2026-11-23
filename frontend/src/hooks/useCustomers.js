@@ -94,8 +94,9 @@ export function useCustomers(notify) {
     const label = form.type === "proveedor" ? "Proveedor" : "Cliente";
     try {
       if (editId) {
-        await api.customers.update(editId, form);
-        notify(`${label} actualizado ✓`);
+        // El servidor avisa si el cambio de tipo lo dejó como "Cliente y proveedor".
+        const r = await api.customers.update(editId, form);
+        notify(r?.message || `${label} actualizado ✓`);
       } else {
         await api.customers.create(form);
         notify(`${label} registrado ✓`);

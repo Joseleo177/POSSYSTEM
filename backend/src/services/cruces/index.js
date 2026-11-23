@@ -104,13 +104,26 @@ async function registrarComoCliente(req, contactoId) {
   return { cliente: ficha(nuevo), creado: true };
 }
 
-async function cruzar(req, { contacto_id, monto, notas }) {
+// `compras` / `ventas`: los documentos que la tienda eligió cruzar (ids). Sin ellos, todos los
+// pendientes. El monto se reparte de lo más viejo a lo más nuevo DENTRO de lo elegido.
+async function cruzar(req, { contacto_id, monto, notas, compras, ventas }) {
   const st = await estado(req, contacto_id);
   if (!st.proveedor || !st.cliente) throw fail("Para cruzar cuentas el contacto tiene que estar registrado como proveedor y como cliente, con el mismo RIF.");
+  const elegidos = (lista, ids, nombre) => {
+    if (!Array.isArray(ids) || !ids.length) return lista;
+    const set = new Set(ids.map(Number));
+    const hay = lista.filter(d => set.has(d.id));
+    if (hay.length !== set.size) throw fail(`Una de las ${nombre} que marcaste ya no está pendiente. Vuelve a abrir el cruce.`);
+    return hay;
+  };
+  st.compras = elegidos(st.compras, compras, "compras");
+  st.ventas = elegidos(st.ventas, ventas, "facturas");
+  const enCompras = r2(st.compras.reduce((t, c) => t + c.saldo, 0));
+  const enVentas = r2(st.ventas.reduce((t, v) => t + v.saldo, 0));
   const m = r2(parseFloat(String(monto ?? "").replace(",", ".")));
   if (!(m > 0)) throw fail("El monto del cruce tiene que ser mayor que cero");
-  if (m > st.le_debo + 0.005) throw fail(`Le debes Ref. ${st.le_debo.toFixed(2)} a este proveedor: el cruce no puede ser mayor.`);
-  if (m > st.me_debe + 0.005) throw fail(`Este proveedor te debe Ref. ${st.me_debe.toFixed(2)}: el cruce no puede ser mayor.`);
+  if (m > enCompras + 0.005) throw fail(`Las compras que se cruzan suman Ref. ${enCompras.toFixed(2)}: el cruce no puede ser mayor.`);
+  if (m > enVentas + 0.005) throw fail(`Las facturas que se cruzan suman Ref. ${enVentas.toFixed(2)}: el cruce no puede ser mayor.`);
   const nota = String(notas || "").trim().slice(0, 300) || null;
 
   const t = await sequelize.transaction();

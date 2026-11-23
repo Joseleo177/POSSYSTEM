@@ -13,6 +13,7 @@ import Modal from "../ui/Modal";
 import ConfirmModal from "../ui/ConfirmModal";
 import Money from "../ui/Money";
 import { Button } from "../ui/Button";
+import Check from "../ui/Check";
 
 const SECTION = "bg-white dark:bg-white/[0.04] rounded-2xl border border-border/60 dark:border-white/[0.06] shadow-card dark:shadow-none";
 const num = (v) => { const n = parseFloat(String(v ?? "").replace(",", ".")); return Number.isFinite(n) ? n : 0; };
@@ -35,18 +36,33 @@ function repartir(docs, monto) {
     });
 }
 
-function ListaDocs({ titulo, sub, docs, etiqueta, fmt }) {
+// `marcados`: los documentos que entran en el cruce (la tienda elige cuáles). Sin `onMarcar`
+// (solo ver), no hay casillas.
+function ListaDocs({ titulo, sub, docs, etiqueta, fmt, marcados, onMarcar }) {
+    const todos = docs.length > 0 && docs.every(d => marcados?.has(d.id));
     return (
         <div className="rounded-xl border border-border/70 dark:border-white/[0.08] overflow-hidden flex flex-col min-h-0">
-            <div className="px-4 py-2.5 border-b border-border/60 dark:border-white/[0.06]">
-                <p className="text-[13px] font-semibold text-content dark:text-white">{titulo}</p>
-                <p className="text-[12px] text-content-subtle">{sub}</p>
+            <div className="px-4 py-2.5 border-b border-border/60 dark:border-white/[0.06] flex items-start gap-3">
+                {onMarcar && docs.length > 1 && (
+                    <Check checked={todos} onChange={() => onMarcar(todos ? [] : docs.map(d => d.id))}
+                        title={todos ? "Quitar todas" : "Marcar todas"} className="mt-0.5" />
+                )}
+                <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-content dark:text-white">{titulo}</p>
+                    <p className="text-[12px] text-content-subtle">{sub}</p>
+                </div>
             </div>
             <div className="divide-y divide-border/60 dark:divide-white/[0.06] max-h-56 overflow-y-auto">
                 {docs.length === 0 && <p className="px-4 py-3 text-[12px] text-content-subtle">Nada pendiente.</p>}
                 {docs.map(d => (
-                    <div key={d.id} className="px-4 py-2 flex items-center justify-between gap-3 text-[13px]">
-                        <div className="min-w-0">
+                    <div key={d.id}
+                        onClick={onMarcar ? () => onMarcar(marcados.has(d.id) ? [...marcados].filter(x => x !== d.id) : [...marcados, d.id]) : undefined}
+                        className={`px-4 py-2 flex items-center justify-between gap-3 text-[13px] ${onMarcar ? "cursor-pointer hover:bg-surface-2/60 dark:hover:bg-white/[0.03]" : ""} ${onMarcar && !marcados.has(d.id) ? "opacity-55" : ""}`}>
+                        {onMarcar && (
+                            <Check checked={marcados.has(d.id)} title={marcados.has(d.id) ? "No cruzar este documento" : "Cruzar este documento"}
+                                onChange={() => onMarcar(marcados.has(d.id) ? [...marcados].filter(x => x !== d.id) : [...marcados, d.id])} />
+                        )}
+                        <div className="min-w-0 flex-1">
                             <div className="font-medium text-content dark:text-white truncate">{etiqueta(d)}</div>
                             <div className="text-[12px] text-content-subtle tabular-nums">
                                 {fmtDateShort(d.fecha)}
@@ -54,7 +70,9 @@ function ListaDocs({ titulo, sub, docs, etiqueta, fmt }) {
                         </div>
                         <div className="text-right shrink-0 tabular-nums">
                             <Money value={fmt(d.saldo)} className="text-[13px] font-semibold text-content dark:text-white" />
-                            {d.aplica > 0 && (
+                            {onMarcar && !marcados.has(d.id) ? (
+                                <div className="text-[11px] text-content-subtle">No entra</div>
+                            ) : d.aplica > 0 && (
                                 <div className="text-[11px] text-content-subtle">
                                     {d.queda <= 0.005 ? "Queda saldada" : <>Queda {fmt(d.queda)}</>}
                                 </div>
@@ -83,12 +101,36 @@ export default function CruceCuentas({ detail, onRefresh }) {
     }, [detail.id]);
     useEffect(() => { cargar(); }, [cargar]);
 
-    const abrir = () => { setMonto(st?.sugerido ? String(st.sugerido) : ""); setNotas(""); setAbierto(true); };
+    // Qué documentos entran: de entrada todos; la tienda desmarca los que no quiere cruzar.
+    const [selC, setSelC] = useState(new Set());
+    const [selV, setSelV] = useState(new Set());
+    const sumaDe = (docs, sel) => r2(docs.filter(d => sel.has(d.id)).reduce((t, d) => t + d.saldo, 0));
+    const abrir = () => {
+        setSelC(new Set((st?.compras || []).map(d => d.id)));
+        setSelV(new Set((st?.ventas || []).map(d => d.id)));
+        setMonto(st?.sugerido ? String(st.sugerido) : "");
+        setNotas("");
+        setAbierto(true);
+    };
+    // Al cambiar lo marcado, el monto pasa al máximo que se puede cruzar con eso.
+    const marcar = (lado, ids) => {
+        const nuevoC = lado === "c" ? new Set(ids) : selC;
+        const nuevoV = lado === "v" ? new Set(ids) : selV;
+        setSelC(nuevoC); setSelV(nuevoV);
+        const max = Math.min(sumaDe(st.compras, nuevoC), sumaDe(st.ventas, nuevoV));
+        setMonto(max > 0 ? String(r2(max)) : "");
+    };
 
     const m = r2(num(monto));
-    const compras = useMemo(() => repartir(st?.compras || [], m), [st, m]);
-    const ventas = useMemo(() => repartir(st?.ventas || [], m), [st, m]);
-    const maximo = st ? r2(Math.min(st.le_debo, st.me_debe)) : 0;
+    const compras = useMemo(() => {
+        const rep = repartir((st?.compras || []).filter(d => selC.has(d.id)), m);
+        return (st?.compras || []).map(d => rep.find(x => x.id === d.id) || { ...d, aplica: 0, queda: d.saldo });
+    }, [st, m, selC]);
+    const ventas = useMemo(() => {
+        const rep = repartir((st?.ventas || []).filter(d => selV.has(d.id)), m);
+        return (st?.ventas || []).map(d => rep.find(x => x.id === d.id) || { ...d, aplica: 0, queda: d.saldo });
+    }, [st, m, selV]);
+    const maximo = st ? r2(Math.min(sumaDe(st.compras, selC), sumaDe(st.ventas, selV))) : 0;
     const montoValido = m > 0 && m <= maximo + 0.005;
 
     const registrarCliente = async () => {
@@ -102,7 +144,7 @@ export default function CruceCuentas({ detail, onRefresh }) {
 
     const cruzar = async () => {
         try {
-            const r = await api.cruces.cruzar({ contacto_id: detail.id, monto: m, notas });
+            const r = await api.cruces.cruzar({ contacto_id: detail.id, monto: m, notas, compras: [...selC], ventas: [...selV] });
             setSt(r.data);
             setAbierto(false);
             notify(`Cruce #${r.data.cruce_id} registrado por ${fmt(m)}`);
@@ -173,7 +215,10 @@ export default function CruceCuentas({ detail, onRefresh }) {
                     <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2">
                         <button type="button" onClick={() => setAbierto(false)} className="btn-outline h-12 sm:h-10 px-5 rounded-lg text-[13px] font-medium">Cancelar</button>
                         <Button onClick={cruzar} disabled={!montoValido} className="h-12 sm:h-10 px-5">
-                            {montoValido ? `Cruzar ${fmt(m)}` : m > maximo ? `Máximo ${fmt(maximo)}` : "Indica el monto"}
+                            {montoValido ? `Cruzar ${fmt(m)}`
+                                : !selC.size ? "Marca al menos una compra"
+                                : !selV.size ? "Marca al menos una factura"
+                                : m > maximo ? `Máximo ${fmt(maximo)}` : "Indica el monto"}
                         </Button>
                     </div>
                 ) : null}
@@ -213,10 +258,12 @@ export default function CruceCuentas({ detail, onRefresh }) {
                     )}
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                        <ListaDocs titulo="Lo que le debes" sub="Sus compras pendientes, de la más vieja a la más nueva"
-                            docs={compras} etiqueta={d => `Orden #${d.id}`} fmt={fmt} />
-                        <ListaDocs titulo="Lo que te debe" sub="Lo que se llevó, de lo más viejo a lo más nuevo"
-                            docs={ventas} etiqueta={d => d.numero ? `Factura ${d.numero}` : `Venta #${d.id}`} fmt={fmt} />
+                        <ListaDocs titulo="Lo que le debes" sub={puedeCruzar && st.sugerido > 0 ? "Marca las compras que entran en el cruce" : "Sus compras pendientes"}
+                            docs={compras} etiqueta={d => `Orden #${d.id}`} fmt={fmt}
+                            marcados={selC} onMarcar={puedeCruzar && st.sugerido > 0 ? (ids) => marcar("c", ids) : undefined} />
+                        <ListaDocs titulo="Lo que te debe" sub={puedeCruzar && st.sugerido > 0 ? "Marca las facturas que entran en el cruce" : "Lo que se llevó"}
+                            docs={ventas} etiqueta={d => d.numero ? `Factura ${d.numero}` : `Venta #${d.id}`} fmt={fmt}
+                            marcados={selV} onMarcar={puedeCruzar && st.sugerido > 0 ? (ids) => marcar("v", ids) : undefined} />
                     </div>
 
                     <p className="text-[12px] text-content-subtle leading-relaxed">
