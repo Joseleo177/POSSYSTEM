@@ -15,6 +15,7 @@ module.exports = {
   getAll:        wrap(req => getAll(req.query, req)),
   getOne:        wrap(req => getOne(req.params.id, req, req.query)),
   getPurchases:  wrap(req => getCustomerPurchases(req.params.id, req.query, req)),
+  statement:     wrap(req => require("../services/customers/estadoCuenta").estadoDeCuenta(req.params.id, req.query, req)),
   create:        wrap(req => createCustomer(req.body), 201),
   update:        wrap(req => updateCustomer(req.params.id, req.body)),
   adjustCredit:  wrap(req => adjustCredit(req.params.id, parseFloat(req.body.amount ?? 0), req)),

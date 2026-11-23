@@ -16,15 +16,21 @@ export function useCustomersLogic() {
         setCustomerModal(true);
     };
 
-    const openEdit = (c) => {
+    // Editar desde la ficha la deja abierta y la recarga al guardar; desde la lista, como antes.
+    const [desdeFicha, setDesdeFicha] = useState(false);
+    const openEdit = (c, { ficha = false } = {}) => {
         setCustomerEditData(c);
         setCustomerModal(true);
-        if (methods.detail) methods.closeDetail();
+        setDesdeFicha(ficha);
+        if (methods.detail && !ficha) methods.closeDetail();
     };
 
     const onSave = async (form) => {
         const ok = await methods.save(form, customerEditData?.id);
-        if (ok) setCustomerModal(false);
+        if (ok) {
+            setCustomerModal(false);
+            if (desdeFicha && methods.detail?.id) methods.refreshDetail(methods.detail.id);
+        }
     };
 
     return {

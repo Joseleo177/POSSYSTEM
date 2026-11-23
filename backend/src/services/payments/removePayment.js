@@ -10,6 +10,8 @@ module.exports = async function removePayment(id, req) {
   try {
     const payment = await Payment.findByPk(id, { transaction: t, lock: true });
     if (!payment) throw new Error("Pago no encontrado");
+    const { esDeCruce, ERROR_PAGO_DE_CRUCE } = require("../cruces");
+    if (esDeCruce(payment.batch_id)) throw Object.assign(new Error(ERROR_PAGO_DE_CRUCE), { status: 400, isOperational: true });
     // Lo financiado por Cashea que Cashea ya pagó: quitarlo dejaría su liquidación descuadrada.
     if (payment.cashea_settlement_id) {
       throw Object.assign(new Error(`Cashea ya pagó este cobro (liquidación #${payment.cashea_settlement_id}). Anula primero la liquidación.`), { status: 400, isOperational: true });

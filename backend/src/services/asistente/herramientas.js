@@ -539,6 +539,28 @@ HERRAMIENTAS.push(
     },
   },
   {
+    nombre: "cruces_cuentas",
+    descripcion: "Cruces de cuentas con proveedores que también le compran a la tienda (lo que se le debía al proveedor contra lo que él debía como cliente): cada cruce con fecha, contacto, monto, quién lo hizo, si está anulado y qué compras y facturas saldó.",
+    parametros: {
+      desde: PARAM_RANGO.desde, hasta: PARAM_RANGO.hasta,
+      buscar: { type: "string", description: "Nombre o RIF del contacto, para ver solo sus cruces." },
+    },
+    permisos: ["customers.cross", "accounting.view", "purchases.view"],
+    async ejecutar(req, args) {
+      const { listar } = require("../cruces");
+      // Sin fechas, todos (los cruces son pocos); con fechas, ese período.
+      const r = await listar(req, { desde: fecha(args.desde), hasta: fecha(args.hasta) || fecha(args.desde), buscar: args.buscar });
+      return {
+        resumen: r.resumen,
+        cruces: r.cruces.slice(0, 40).map(c => ({
+          numero: c.id, fecha: c.created_at, contacto: c.contacto, monto: c.monto, estado: c.estado, notas: c.notas,
+          hecho_por: c.hecho_por, anulado_por: c.anulado_por,
+          saldo_compras: c.compras.map(x => `Compra #${x.id}: ${x.monto}`), saldo_facturas: c.ventas.map(x => `${x.numero || `Venta #${x.id}`}: ${x.monto}`),
+        })),
+      };
+    },
+  },
+  {
     nombre: "productos_por_vencer",
     descripcion: "Lotes con existencia y su fecha de vencimiento: los vencidos y los que vencen pronto, con días que faltan, cantidad y valor en riesgo.",
     parametros: { dias: { type: "integer", description: "Ventana en días hacia adelante (por defecto 30)." }, sucursal_id: PARAM_RANGO.sucursal_id },

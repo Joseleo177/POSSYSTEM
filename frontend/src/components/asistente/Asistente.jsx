@@ -47,6 +47,7 @@ const CONSULTAS = {
     agenda_citas: "Agenda",
     cobranza_sectores: "Cobranza",
     farmacia_recipes: "Récipes",
+    cruces_cuentas: "Cruces de cuentas",
 };
 
 const PENSANDO = ["Pensando…", "Revisando tus números…", "Armando la respuesta…"];

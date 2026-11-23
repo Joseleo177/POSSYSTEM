@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { exportToCSV } from "../../utils/exportUtils";
+import { buildEstadoCuentaExcel } from "../../helpers/excel";
 import { fmtBase, fmtSale as fmtSaleHelper, todayISO, journalsForWarehouse, fmtDateShort, settleTolerance } from "../../helpers";
 import Check from "../ui/Check";
 import Money from "../ui/Money";
@@ -7,6 +7,8 @@ import { useApp } from "../../context/AppContext";
 import SaleDetailModal from "./SaleDetailModal";
 import BulkPaymentModal from "./BulkPaymentModal";
 import PriorDebtModal from "./PriorDebtModal";
+import CruceCuentas from "./CruceCuentas";
+import Segmented from "../ui/Segmented";
 import PurchaseDetailModal from "../Contabilidad/PurchaseDetailModal";
 import PurchasePaymentModal from "../purchases/PurchasePaymentModal";
 import JournalPickerButton from "../cobro/JournalPickerButton";
@@ -56,8 +58,10 @@ const Dato = ({ label, value, sub }) => (
     </div>
 );
 
-export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh }) {
-    const { baseCurrency, notify, activeJournals, activeCurrencies, employee, can, company } = useApp();
+// onSwitch(id): el contacto es cliente y proveedor a la vez (mismo RIF, cruce de cuentas) y se
+// pasa a ver su otra cuenta.
+export default function CustomerDetail({ detail, pending, paid, paidTotal, paidPage, onPaidPageChange, onClose, onPay, onRefresh, onSwitch, onEdit }) {
+    const { baseCurrency, notify, activeJournals, activeCurrencies, employee, can, company, companyInfo, settings } = useApp();
     const [selectedSaleId, setSelectedSaleId] = useState(null);
     // Proveedor: la compra que se está viendo y la que se está pagando (una o varias).
     const [selectedPurchaseId, setSelectedPurchaseId] = useState(null);
@@ -208,17 +212,39 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
     const montoVencido = vencidas.reduce((acc, s) => acc + parseFloat(s.balance || 0), 0);
     const paidTotalPages = Math.ceil((paidTotal || 0) / PAID_LIMIT);
 
-    const handleExportStatement = () => {
-        const safeSales = [...pendingSales, ...paidSales];
-        if (!safeSales.length) return;
-        const headers = ["Factura", "Fecha", "Estado", "Cargo", "Abonado", "Saldo"];
-        const rows = safeSales.map(s => [
-            s.id,
-            new Date(s.created_at).toLocaleDateString("es-VE"),
-            s.status.toUpperCase(),
-            s.total, s.amount_paid, s.balance,
-        ]);
-        exportToCSV(`Estado_Cuenta_${detail.name.replace(/\s+/g, "_")}`, rows, headers);
+    // Estado de cuenta en Excel: TODOS los documentos (no solo la página visible), cada uno con
+    // sus abonos y su saldo, y una hoja con lo pendiente. Ver services/customers/estadoCuenta.js.
+    const [exportando, setExportando] = useState(false);
+    const handleExportStatement = async () => {
+        setExportando(true);
+        try {
+            const r = await api.customers.statement(detail.id);
+            if (!r.data?.documentos?.length) notify("Este contacto todavía no tiene documentos", "err");
+            else buildEstadoCuentaExcel(r.data, baseCurrency?.symbol || "Ref.");
+        } catch (e) { notify(e.message, "err"); }
+        setExportando(false);
+    };
+
+    // El mismo estado de cuenta en PDF, para el cliente: en el teléfono se comparte (WhatsApp,
+    // Guardar en Archivos); en la computadora se descarga. Reemplaza a "Imprimir", que sacaba la
+    // pantalla tal cual con la barra de la tasa y el menú.
+    const [armandoPdf, setArmandoPdf] = useState(false);
+    const handlePdf = async () => {
+        setArmandoPdf(true);
+        try {
+            const r = await api.customers.statement(detail.id);
+            if (!r.data?.documentos?.length) { notify("Este contacto todavía no tiene documentos", "err"); return; }
+            const [{ estadoCuentaAPdf }, entrega] = await Promise.all([import("../../helpers/estadoCuentaPdf"), import("../../helpers/pdfDirecto")]);
+            const blob = await estadoCuentaAPdf(r.data, companyInfo, { simbolo: baseCurrency?.symbol || "Ref.", color: settings?.brand_color });
+            const nombre = entrega.nombreArchivo("Estado de cuenta", detail.name);
+            const telefono = window.matchMedia("(pointer: coarse)").matches;
+            if (telefono && entrega.sePuedeCompartir(blob, nombre)) {
+                try { await entrega.compartir(blob, nombre); } catch (e) { if (e?.name !== "AbortError") entrega.descargar(blob, nombre); }
+            } else {
+                entrega.descargar(blob, nombre);
+            }
+        } catch (e) { notify(e.message, "err"); }
+        finally { setArmandoPdf(false); }
     };
 
     return (
@@ -238,14 +264,20 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             Deuda anterior
                         </button>
                     )}
-                    <button onClick={handleExportStatement} title="Descargar estado de cuenta (CSV)" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                    {onEdit && can("customers.edit") && (
+                        <button onClick={() => onEdit(detail)} title="Editar datos del contacto" aria-label="Editar datos del contacto" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                            <span className="hidden sm:inline">Editar</span>
+                        </button>
+                    )}
+                    <button onClick={handleExportStatement} disabled={exportando} title="Descargar estado de cuenta en Excel" aria-label="Descargar estado de cuenta en Excel" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-60">
+                        {exportando ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>}
                         {/* En el teléfono, solo el icono: con "Deuda anterior" no cabían los tres. */}
-                        <span className="hidden sm:inline">CSV</span>
+                        <span className="hidden sm:inline">Excel</span>
                     </button>
-                    <button onClick={() => window.print()} title="Imprimir estado de cuenta" aria-label="Imprimir estado de cuenta" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5">
-                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONS.print}/></svg>
-                        <span className="hidden sm:inline">Imprimir</span>
+                    <button onClick={handlePdf} disabled={armandoPdf} title="Estado de cuenta en PDF, para enviar o imprimir" aria-label="Estado de cuenta en PDF" className="btn-outline h-8 px-3 rounded-lg text-[12px] font-medium flex items-center gap-1.5 disabled:opacity-60">
+                        {armandoPdf ? <Spinner /> : <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={ICONS.print}/></svg>}
+                        <span className="hidden sm:inline">PDF</span>
                     </button>
                 </div>
             </div>
@@ -261,6 +293,17 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                     <p className="text-[12px] font-bold opacity-50 mt-1">Fecha: {new Date().toLocaleDateString("es-VE")}</p>
                 </div>
 
+                {/* ── Cliente y proveedor a la vez: una cuenta por cada lado ── */}
+                {detail.pareja_id && onSwitch && (
+                    <div className="shrink-0 overflow-x-auto scrollbar-hide print-hidden">
+                        <Segmented
+                            value={detail.type === "proveedor" ? "proveedor" : "cliente"}
+                            onChange={(v) => { if (v !== (detail.type === "proveedor" ? "proveedor" : "cliente")) onSwitch(detail.pareja_id); }}
+                            options={[{ key: "proveedor", label: "Como proveedor" }, { key: "cliente", label: "Como cliente" }]}
+                        />
+                    </div>
+                )}
+
                 {/* ── Ficha: quién es y cuánto debe ── */}
                 <div className={`${SECTION} shrink-0`}>
                     <div className="px-5 pt-5 pb-4 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
@@ -270,7 +313,10 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                             </div>
                             <div className="min-w-0">
                                 {/* Mayorista: paga el precio al mayor (venta al mayor encendida). */}
-                                <p className="text-[12px] text-content-subtle">{!esCliente ? "Proveedor" : company?.mayor_enabled && detail.price_level === "mayor" ? "Cliente mayorista" : "Cliente"}</p>
+                                <p className="text-[12px] text-content-subtle">
+                                    {!esCliente ? "Proveedor" : company?.mayor_enabled && detail.price_level === "mayor" ? "Cliente mayorista" : "Cliente"}
+                                    {detail.pareja_id && (esCliente ? " · también es tu proveedor" : " · también es tu cliente")}
+                                </p>
                                 <h2 className="text-[20px] font-semibold tracking-tight text-content dark:text-white leading-tight break-words">{detail.name}</h2>
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-[12px] text-content-subtle">
                                     {detail.rif && <span className="tabular-nums">{detail.rif}</span>}
@@ -333,6 +379,9 @@ export default function CustomerDetail({ detail, pending, paid, paidTotal, paidP
                               ))} />
                     </dl>
                 </div>
+
+                {/* ── Cruce de cuentas: mismo RIF como proveedor y como cliente ── */}
+                <CruceCuentas key={detail.id} detail={detail} onRefresh={onRefresh} />
 
                 {/* ── Por cobrar e historial: lado a lado en escritorio ── */}
                 <div className={`lg:flex-1 lg:min-h-0 grid gap-3 print:block ${pendingSales.length ? "lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]" : ""}`}>

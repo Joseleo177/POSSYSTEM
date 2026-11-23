@@ -39,6 +39,9 @@ async function findCustomerByDocument(normalized, transaction) {
         ),
       ],
     },
+    // El mismo RIF puede tener ficha de cliente y de proveedor (cruce de cuentas): quien compra
+    // por la vitrina es el cliente.
+    order: [[Sequelize.literal(`("Customer"."type" = 'cliente')`), "DESC"], ["id", "ASC"]],
     limit: 1,
     transaction,
   });

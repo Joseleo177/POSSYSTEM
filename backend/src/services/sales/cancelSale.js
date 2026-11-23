@@ -29,6 +29,16 @@ module.exports = async function cancelSale(id, req) {
       );
     }
 
+    // Saldada (en parte) con un cruce de cuentas: borrar sus pagos dejaría la compra del otro lado
+    // pagada sin respaldo. Se anula primero el cruce (ver services/cruces).
+    {
+      const { Payment } = require("../../models");
+      const deCruce = await Payment.findOne({ where: { sale_id: sale.id, batch_id: { [Op.like]: "cruce:%" } }, attributes: ["batch_id"], transaction });
+      if (deCruce) {
+        throw Object.assign(new Error(`Esta factura está saldada con un cruce de cuentas (#${deCruce.batch_id.slice(6)}). Anula primero el cruce desde la ficha del contacto.`), { status: 400, isOperational: true });
+      }
+    }
+
     const items = await SaleItem.findAll({
       where: { sale_id: sale.id },
       transaction,

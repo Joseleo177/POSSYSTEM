@@ -48,7 +48,7 @@ export default function ClientesPage() {
     return (
         <Page
             module="Contactos"
-            title={detail ? (detail.type === "proveedor" ? "Ficha del proveedor" : "Ficha del cliente") : "Contactos"}
+            title={detail ? (detail.pareja_id ? "Ficha del contacto" : detail.type === "proveedor" ? "Ficha del proveedor" : "Ficha del cliente") : "Contactos"}
             actions={pageActions}
         >
             {!detail ? (
@@ -176,6 +176,8 @@ export default function ClientesPage() {
                     onClose={closeDetail}
                     onPay={setPayModal}
                     onRefresh={() => refreshDetail(detail?.id)}
+                    onSwitch={(id) => refreshDetail(id)}
+                    onEdit={(c) => openEdit(c, { ficha: true })}
                 />
             )}
 
@@ -198,7 +200,9 @@ export default function ClientesPage() {
             <ConfirmModal
                 isOpen={!!deleteConfirm}
                 title="¿Eliminar contacto?"
-                message={`Estás a punto de eliminar a "${deleteConfirm?.name}". Esta acción es permanente.`}
+                message={deleteConfirm?.pareja_id
+                    ? `Estás a punto de eliminar a "${deleteConfirm?.name}" como cliente y como proveedor. Esta acción es permanente.`
+                    : `Estás a punto de eliminar a "${deleteConfirm?.name}". Esta acción es permanente.`}
                 onConfirm={async () => { await remove(deleteConfirm.id, deleteConfirm.type); setDeleteConfirm(null); }}
                 onCancel={() => setDeleteConfirm(null)}
                 type="danger"

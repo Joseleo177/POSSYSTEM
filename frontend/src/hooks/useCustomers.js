@@ -31,7 +31,9 @@ export function useCustomers(notify) {
   // ── Cargar lista ─────────────────────────────────────────────
   const load = useCallback(async () => {
     try {
-      const params = { limit: LIMIT, offset: (page - 1) * LIMIT };
+      // agrupar: el cliente-proveedor (mismo RIF, cruce de cuentas) sale en UNA fila. Solo aquí:
+      // la caja y los buscadores necesitan cada ficha por separado.
+      const params = { limit: LIMIT, offset: (page - 1) * LIMIT, agrupar: 1 };
       if (search)        params.search  = search;
       if (typeFilter)    params.type    = typeFilter;
       if (debtorsFilter) params.debtors = true;

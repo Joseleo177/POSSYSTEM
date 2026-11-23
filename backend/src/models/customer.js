@@ -32,14 +32,16 @@ module.exports = (sequelize, DataTypes) => {
     tableName: 'customers',
     modelName: 'Customer',
     timestamps: false,
+    // Por tipo: el mismo RIF puede ser cliente y proveedor de la empresa (cruce de cuentas,
+    // migración 20261126100000). Dos clientes con el mismo RIF siguen sin poder existir.
     indexes: [
       {
         unique: true,
-        fields: ['email', 'company_id']
+        fields: ['email', 'company_id', 'type']
       },
       {
         unique: true,
-        fields: ['rif', 'company_id']
+        fields: ['rif', 'company_id', 'type']
       }
     ]
   });

@@ -804,3 +804,83 @@ export function buildLibroVentasExcel(data, range, { titulo = "Libro de ventas",
     ] },
   ]), `${compras ? "LibroCompras" : "LibroVentas"}_${range.from}_${range.to}${sufijoSucursal(range)}`);
 }
+
+// ── Estado de cuenta de un contacto (Contactos → ficha) ──────────────────────
+// Reemplaza al CSV que volcaba solo la página visible con ids internos. Hoja 1: cada documento
+// con su cargo, los abonos que lo bajaron (cobro con caja y método, saldo a favor, NC,
+// exoneración, cruce) y lo que queda; hoja 2: lo pendiente con su vencimiento. Los montos van
+// como números con formato, para que se puedan sumar en Excel. Datos: GET /customers/:id/statement.
+const ESTADO_DOC = { pendiente: "Pendiente", parcial: "Abonada", pagado: "Pagada", exonerado: "Exonerada", devuelto: "Devuelta" };
+const fechaVE = (v) => (v ? new Intl.DateTimeFormat("es-VE", { timeZone: "America/Caracas", day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(v)) : "");
+const fechaCorta = (iso) => (iso ? String(iso).slice(0, 10).split("-").reverse().join("/") : "");
+
+function formatoMonto(ws, columnas, desdeFila) {
+  const rango = XLSX.utils.decode_range(ws["!ref"]);
+  for (let r = desdeFila; r <= rango.e.r; r++) {
+    for (const c of columnas) {
+      const cel = ws[XLSX.utils.encode_cell({ r, c })];
+      if (cel && cel.t === "n") cel.z = "#,##0.00";
+    }
+  }
+}
+
+export function buildEstadoCuentaExcel(data, simbolo = "Ref.") {
+  const { empresa, contacto, resumen, documentos } = data;
+  const esProveedor = contacto.tipo === "proveedor";
+  const hoy = fechaVE(new Date());
+
+  // Hoja 1: estado de cuenta
+  const cabecera = [
+    ["ESTADO DE CUENTA"],
+    [empresa ? `${empresa.nombre}${empresa.rif ? ` · RIF ${empresa.rif}` : ""}` : ""],
+    [],
+    [esProveedor ? "Proveedor" : "Cliente", contacto.nombre],
+    ["RIF / Cédula", contacto.rif || "Sin RIF"],
+    ...(contacto.telefono ? [["Teléfono", contacto.telefono]] : []),
+    ["Plazo de pago", contacto.dias_credito ? `${contacto.dias_credito} días` : "De contado"],
+    ["Emitido", hoy],
+    [],
+    [esProveedor ? "Le debes" : "Saldo pendiente", resumen.saldo_pendiente],
+    ["Vencido", resumen.vencido],
+    ...(!esProveedor && resumen.saldo_a_favor > 0 ? [["Saldo a favor del cliente", resumen.saldo_a_favor]] : []),
+    [],
+  ];
+  const titulos = ["Fecha", "Documento", "Concepto", "Referencia", "Sucursal", "Vence",
+    `Cargo (${simbolo})`, `Abono (${simbolo})`, `Saldo del documento (${simbolo})`, "Estado"];
+  const filas = [];
+  for (const d of documentos) {
+    const estado = [ESTADO_DOC[d.estado] || d.estado,
+      d.dias_vencida > 0 ? `vencida ${d.dias_vencida} ${d.dias_vencida === 1 ? "día" : "días"}` : null,
+      d.a_favor > 0 ? `dejó ${simbolo} ${d.a_favor.toFixed(2)} a favor` : null].filter(Boolean).join(" · ");
+    filas.push([fechaVE(d.fecha), d.documento, d.concepto, "", d.sucursal || "", fechaCorta(d.vence), d.cargo, null, d.saldo, estado]);
+    for (const m of d.movimientos) {
+      filas.push([fechaVE(m.fecha), "", `   ${m.concepto}`, m.referencia || "", "", "", null, m.monto, null, ""]);
+    }
+  }
+  filas.push([]);
+  filas.push(["", "", "TOTALES", "", "", "", resumen.total_cargos, resumen.total_abonos, resumen.saldo_pendiente, ""]);
+  if (resumen.truncado) filas.push(["", "", "Se muestran los documentos más recientes hasta el límite de la exportación."]);
+
+  const hoja1 = XLSX.utils.aoa_to_sheet([...cabecera, titulos, ...filas]);
+  formatoMonto(hoja1, [1], 0);                       // montos del resumen de la cabecera
+  formatoMonto(hoja1, [6, 7, 8], cabecera.length);   // cargo, abono y saldo
+  hoja1["!cols"] = [12, 16, 44, 16, 18, 12, 16, 16, 22, 34].map(wch => ({ wch }));
+
+  // Hoja 2: lo pendiente, de lo que vence primero a lo último
+  const pendientes = documentos.filter(d => d.saldo > 0.005)
+    .sort((a, b) => String(a.vence || "").localeCompare(String(b.vence || "")));
+  const hoja2 = XLSX.utils.aoa_to_sheet([
+    ["Documento", "Fecha", "Vence", "Días vencida", `Total (${simbolo})`, `Abonado (${simbolo})`, `Saldo (${simbolo})`, "Sucursal"],
+    ...pendientes.map(d => [d.documento, fechaVE(d.fecha), fechaCorta(d.vence), d.dias_vencida || 0, d.cargo, d.abonado, d.saldo, d.sucursal || ""]),
+    [],
+    ["TOTAL", "", "", "", null, null, resumen.saldo_pendiente, ""],
+  ]);
+  formatoMonto(hoja2, [4, 5, 6], 1);
+  hoja2["!cols"] = [16, 12, 12, 12, 14, 14, 14, 18].map(wch => ({ wch }));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, hoja1, "Estado de cuenta");
+  XLSX.utils.book_append_sheet(wb, hoja2, "Pendientes");
+  const nombre = String(contacto.nombre || "contacto").replace(/[^A-Za-z0-9ÁÉÍÓÚÑáéíóúñ]+/g, "_").slice(0, 40);
+  download(wb, `Estado_de_cuenta_${nombre}_${new Date().toISOString().slice(0, 10)}`);
+}

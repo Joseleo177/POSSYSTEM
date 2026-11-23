@@ -23,8 +23,9 @@ import CuentasPorCobrarTab from "../components/Contabilidad/CuentasPorCobrarTab"
 import ConciliacionTab from "../components/Contabilidad/conciliacion/ConciliacionTab";
 import PagosReportadosTab from "../components/Contabilidad/PagosReportadosTab";
 import CasheaTab from "../components/Contabilidad/CasheaTab";
+import CrucesTab from "../components/Contabilidad/CrucesTab";
 
-const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Cashea", "Por Pagar", "Pagos", "Pagos reportados", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
+const SUB_PAGES = ["Estado de Cuenta", "Ingresos", "Egresos", "Facturas", "Notas de Crédito", "Cotizaciones", "Por Cobrar", "Cashea", "Por Pagar", "Cruces", "Pagos", "Pagos reportados", "Conciliación", "Series", "Diarios", "Tipos de pago", "Bancos"];
 
 export default function ContabilidadPage() {
  const {
@@ -88,6 +89,9 @@ export default function ContabilidadPage() {
  // Lo que debe Cashea por las ventas financiadas: con la opción encendida (Configuración → Punto
  // de venta) y a quien ve la contabilidad.
  const canCashea      = settings?.pos_cashea === "true" && can("accounting.view");
+ // Cruces de cuentas con proveedores: quien puede cruzar, o quien ve la contabilidad o las compras
+ // (mismo permiso que GET /api/cruces).
+ const canCruces      = can("customers.cross") || can("accounting.view") || can("purchases.view");
 
  useEffect(() => {
  if (!canConfig) return;
@@ -126,10 +130,11 @@ export default function ContabilidadPage() {
    { label: "Ventas",      items: ["Facturas", "Notas de Crédito", "Cotizaciones"] },
    // Lo que nos deben y lo que se debe. Cada una responde al permiso de lo que lee: Por
    // Cobrar a ver ventas (o contabilidad), Por Pagar a ver compras.
-   ...((canReceivables || canPayables || canCashea) ? [{ label: "Cuentas", items: [
+   ...((canReceivables || canPayables || canCashea || canCruces) ? [{ label: "Cuentas", items: [
      ...(canReceivables ? ["Por Cobrar"] : []),
      ...(canCashea      ? ["Cashea"]     : []),
      ...(canPayables    ? ["Por Pagar"]  : []),
+     ...(canCruces      ? ["Cruces"]     : []),
    ] }] : []),
    // Con permiso para confirmar pagos del catálogo, "Pagos" se abre en los registrados y los
    // reportados por clientes; sin él, sigue siendo una sola pantalla.
@@ -206,6 +211,8 @@ export default function ContabilidadPage() {
  return <CasheaTab notify={notify} />;
  case "Por Pagar":
  return <CuentasPorPagarTab notify={notify} fmtPrice={fmtPrice} />;
+ case "Cruces":
+ return <CrucesTab notify={notify} />;
  case "Pagos":
  return (
  <PagosTab

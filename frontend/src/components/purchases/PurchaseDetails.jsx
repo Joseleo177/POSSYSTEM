@@ -890,7 +890,7 @@ export default function PurchaseDetails({ state }) {
                         </span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="text-[13px] font-semibold text-content dark:text-white truncate">{toNameCase(p.journal_name) || "—"}</span>
+                            <span className="text-[13px] font-semibold text-content dark:text-white truncate">{p.payment_method === "cruce" ? "Cruce de cuentas" : toNameCase(p.journal_name) || "—"}</span>
                             {p.batch_id && <span className="text-[11px] font-medium text-content-subtle px-1.5 py-0.5 bg-surface-3 dark:bg-white/[0.06] rounded-md shrink-0" title="Un solo pago que cubrió varias compras">Conjunto</span>}
                           </div>
                           <p className="text-[12px] text-content-subtle tabular-nums truncate">
@@ -1007,7 +1007,7 @@ function PayDetailModal({ payment: pd, activeCurrencies, baseCurrency, onClose, 
       <div className="rounded-xl bg-surface-2 dark:bg-white/[0.03] border border-border/60 dark:border-white/[0.06] px-4 py-3.5">
         <p className="flex items-center gap-1.5 text-[12px] text-content-subtle">
           <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: pd.journal_color || "#94a3b8" }} />
-          <span className="truncate">{toNameCase(pd.journal_name) || "Sin caja"}</span>
+          <span className="truncate">{pd.payment_method === "cruce" ? "Cruce de cuentas" : toNameCase(pd.journal_name) || "Sin caja"}</span>
         </p>
         <Money
           value={isBase ? `Ref. ${amountBase.toFixed(2)}` : `${sym} ${(amountBase * rate).toFixed(2)}`}

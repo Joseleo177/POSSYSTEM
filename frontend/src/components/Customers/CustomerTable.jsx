@@ -9,6 +9,8 @@ import { ledgerRow, stopRow, RowIcon } from "../ui/Ledger";
 // no puedan divergir al tocar una sola.
 
 const TYPE_LABEL = { cliente: "Cliente", proveedor: "Proveedor", ambos: "Cliente y proveedor" };
+// Mismo RIF como cliente y como proveedor (cruce de cuentas): un solo contacto en la lista.
+const tipoDe = (c) => (c.pareja_id ? "ambos" : c.type);
 const typeLabel = (t) => TYPE_LABEL[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : "");
 
 // Iniciales del contacto: dan a cada fila un ancla visual sin depender de una foto.
@@ -19,17 +21,25 @@ const Avatar = ({ name, supplier }) => (
     </span>
 );
 
+const debeDe = (c) => parseFloat(c.total_debt || 0) + parseFloat(c.pareja_debt || 0);
+
 function Balance({ c, fmtPrice }) {
     const debt   = parseFloat(c.total_debt || 0);
+    const otra   = parseFloat(c.pareja_debt || 0);
     const credit = parseFloat(c.credit_balance || 0);
+    // La fila del cliente-proveedor es la ficha de proveedor; `pareja_debt` es lo de la otra.
+    const lineas = [
+        debt > 0 && { monto: c.total_debt, label: c.type === "proveedor" ? "por pagar" : "por cobrar" },
+        otra > 0 && { monto: c.pareja_debt, label: c.type === "proveedor" ? "por cobrar" : "por pagar" },
+    ].filter(Boolean);
     return (
         <div className="flex flex-col gap-0.5">
-            {debt > 0 ? (
-                <div className="flex items-baseline gap-2">
-                    <span className="text-[14px] font-semibold text-red-600 dark:text-red-400 tabular-nums whitespace-nowrap">{fmtPrice(c.total_debt)}</span>
-                    <span className="text-[12px] text-content-subtle">{c.type === "proveedor" ? "por pagar" : "por cobrar"}</span>
+            {lineas.length ? lineas.map(l => (
+                <div key={l.label} className="flex items-baseline gap-2">
+                    <span className="text-[14px] font-semibold text-red-600 dark:text-red-400 tabular-nums whitespace-nowrap">{fmtPrice(l.monto)}</span>
+                    <span className="text-[12px] text-content-subtle">{l.label}</span>
                 </div>
-            ) : (
+            )) : (
                 // Al día es lo normal: gris con un check, sin pastilla verde.
                 <StatusMark status="x" map={{ x: { label: "Al día", tone: "success", quiet: "check" } }} />
             )}
@@ -88,7 +98,7 @@ export default function CustomerTable({
                             </tr>
                         ) : customers.map(c => (
                             // La fila abre el detalle (antes, un ojo aparte en cada fila).
-                            <tr key={c.id} {...ledgerRow(() => onDetail(c), parseFloat(c.total_debt || 0) > 0 ? "#ef4444" : undefined)}>
+                            <tr key={c.id} {...ledgerRow(() => onDetail(c), debeDe(c) > 0 ? "#ef4444" : undefined)}>
                                 <td className="pl-4 max-w-0 w-[40%]">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <Avatar name={c.name} supplier={c.type === "proveedor"} />
@@ -102,7 +112,7 @@ export default function CustomerTable({
                                     <span className="text-[13px] font-medium text-content-subtle tabular-nums">{c.rif || "Sin RIF"}</span>
                                 </td>
                                 <td>
-                                    <span className="text-[12px] font-medium text-content-subtle">{typeLabel(c.type)}</span>
+                                    <span className="text-[12px] font-medium text-content-subtle">{typeLabel(tipoDe(c))}</span>
                                 </td>
                                 <td><Balance c={c} fmtPrice={fmtPrice} /></td>
                                 <td className="pr-4 whitespace-nowrap cursor-default" onClick={stopRow}>
@@ -132,7 +142,7 @@ export default function CustomerTable({
                                     {/* El RIF es el dato con el que se identifica al contacto al facturar,
                                         y en la tabla vivía en una columna que el teléfono nunca mostraba. */}
                                     <div className="text-[12px] text-content-subtle tabular-nums mt-0.5">
-                                        {[typeLabel(c.type), c.rif || "Sin RIF", toNameCase(c.city)].filter(Boolean).join(" · ")}
+                                        {[typeLabel(tipoDe(c)), c.rif || "Sin RIF", toNameCase(c.city)].filter(Boolean).join(" · ")}
                                     </div>
                                 </div>
                             </div>

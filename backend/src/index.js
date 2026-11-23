@@ -174,6 +174,7 @@ app.use("/api/benefit-tags", require("./routes/benefitTags"));          // auth 
 app.use("/api/product-attributes", require("./routes/productAttributes"));   // auth dentro
 app.use("/api/huellas", require("./routes/huellas"));             // auth dentro; "¿cambió algo?" de la caja
 app.use("/api/asistente", require("./routes/asistente"));         // auth+permit dentro; módulo en el servicio
+app.use("/api/cruces", require("./routes/cruces"));               // cruce de cuentas con proveedores; auth+permit dentro
 
 app.use("/api/events", require("./routes/events"));             // SSE stream
 

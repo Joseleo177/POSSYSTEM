@@ -34,12 +34,51 @@ async function warehouseFragments(req, wid = null) {
   return { whS: `AND s.warehouse_id IN (${list})`, whP: `AND p.warehouse_id IN (${list})` };
 }
 
-async function getAll({ search, type, debtors, limit = 100, offset = 0, warehouse_id }, req) {
+// Cliente y proveedor a la vez (cruce de cuentas, services/cruces): el mismo RIF con una ficha de
+// cada tipo. Por dentro son dos cuentas —lo que él compra y lo que se le compra—, pero en
+// Contactos se ve UN contacto. Estas piezas encuentran la otra ficha y su deuda.
+const PAREJA_SQL = `(SELECT t.id FROM customers t
+   WHERE t.company_id = "Customer"."company_id" AND t.type <> "Customer"."type" AND t.rif = "Customer"."rif" LIMIT 1)`;
+const deudaParejaSql = (whS, whP) => `(
+  CASE WHEN "Customer"."type" = 'proveedor' THEN (
+    SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
+      FROM sales s JOIN customers t ON t.id = s.customer_id
+     WHERE t.company_id = "Customer"."company_id" AND t.type = 'cliente' AND t.rif = "Customer"."rif"
+       AND s.status IN ('borrador','pendiente','parcial') ${whS}
+  ) ELSE (
+    SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
+      FROM purchases p JOIN customers t ON t.id = p.supplier_id
+     WHERE t.company_id = "Customer"."company_id" AND t.type = 'proveedor' AND t.rif = "Customer"."rif"
+       AND p.payment_status IN ('pendiente','parcial') ${whP}
+  ) END
+)`;
+
+// La otra ficha de un contacto (mismo RIF, el otro tipo), o null.
+async function gemelo(customer, transaction) {
+  if (!customer?.rif) return null;
+  return Customer.findOne({
+    where: { rif: customer.rif, type: { [Sequelize.Op.ne]: customer.type }, company_id: customer.company_id },
+    transaction,
+  });
+}
+
+// `agrupar`: solo la lista de Contactos. Muestra al cliente-proveedor en una sola fila (la de
+// proveedor, con la deuda de los dos lados). La caja, el modo sin conexión y los buscadores
+// NO lo mandan: necesitan cada ficha por separado.
+async function getAll({ search, type, debtors, limit = 100, offset = 0, warehouse_id, agrupar }, req) {
   const company_id  = req.employee?.company_id ?? null;
   const { whS, whP } = await warehouseFragments(req, warehouse_id);
+  const conPareja = agrupar === true || agrupar === "true" || agrupar === "1";
   const where = {};
   if (company_id) where.company_id = company_id;
   if (type && ["cliente", "proveedor"].includes(type)) where.type = type;
+  if (conPareja && !where.type) {
+    where[Sequelize.Op.and] = [
+      ...(where[Sequelize.Op.and] || []),
+      Sequelize.literal(`NOT ("Customer"."type" = 'cliente' AND EXISTS (
+        SELECT 1 FROM customers t WHERE t.company_id = "Customer"."company_id" AND t.type = 'proveedor' AND t.rif = "Customer"."rif"))`),
+    ];
+  }
   if (search) {
     where[Sequelize.Op.or] = [
       { name:     { [Sequelize.Op.iLike]: `%${search}%` } },
@@ -57,7 +96,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
   if (debtors === 'true') {
     where[Sequelize.Op.and] = [
       ...(where[Sequelize.Op.and] || []),
-      Sequelize.literal(`(
+      Sequelize.literal(`((
         CASE WHEN "Customer"."type" = 'proveedor' THEN (
           SELECT COALESCE(SUM(p.total - COALESCE((SELECT SUM(pp.amount) FROM purchase_payments pp WHERE pp.purchase_id = p.id), 0)), 0)
           FROM purchases p WHERE p.supplier_id = "Customer"."id" AND p.payment_status IN ('pendiente','parcial') ${whP}
@@ -65,7 +104,7 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
           SELECT COALESCE(SUM(s.total - s.forgiven_amount - COALESCE((SELECT SUM(py.amount) FROM payments py WHERE py.sale_id = s.id), 0)), 0)
           FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
         ) END
-      ) > 0.01`),
+      ) > 0.01${conPareja && !where.type ? ` OR ${deudaParejaSql(whS, whP)} > 0.01` : ""})`),
     ];
   }
 
@@ -96,6 +135,10 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
             FROM sales s WHERE s.customer_id = "Customer"."id" AND s.status IN ('borrador','pendiente','parcial') ${whS}
           ) END
         )`), "total_debt"],
+        ...(conPareja ? [
+          [Sequelize.literal(PAREJA_SQL), "pareja_id"],
+          [Sequelize.literal(deudaParejaSql(whS, whP)), "pareja_debt"],
+        ] : []),
       ]
     },
     // Sin JOIN a sales: todas las cifras salen de las subconsultas de arriba. El join no
@@ -111,6 +154,10 @@ async function getAll({ search, type, debtors, limit = 100, offset = 0, warehous
     c.total_purchases = parseInt(c.total_purchases || 0);
     c.total_spent     = parseFloat(c.total_spent   || 0);
     c.total_debt      = parseFloat(c.total_debt    || 0);
+    if (conPareja) {
+      c.pareja_id   = c.pareja_id || null;
+      c.pareja_debt = c.pareja_id ? parseFloat(c.pareja_debt || 0) : 0;
+    }
   });
 
   return { data: customers, total: Array.isArray(count) ? count.length : count };
@@ -164,6 +211,10 @@ async function getOne(id, req, { warehouse_id } = {}) {
   customer.total_purchases = parseInt(customer.total_purchases || 0);
   customer.total_spent     = parseFloat(customer.total_spent   || 0);
   customer.total_debt      = parseFloat(customer.total_debt    || 0);
+  // Cliente y proveedor a la vez: la ficha ofrece pasar a la otra cuenta del mismo contacto.
+  const otra = await gemelo(customer);
+  customer.pareja_id   = otra?.id ?? null;
+  customer.pareja_type = otra?.type ?? null;
   // Con sucursal, lo que de verdad se puede aplicar ahí (compartido + lo propio de esa
   // sucursal), no el total global: mostrar el total completo dejaría creer que hay más
   // crédito disponible del que esta caja puede usar. Sin sucursal (una pantalla que mira la
@@ -398,7 +449,17 @@ async function updateCustomer(id, body) {
     await assertSector(payload);
     const customer = await Customer.findByPk(id);
     if (!customer) { const e = new Error("Registro no encontrado"); e.status = 404; throw e; }
-    await customer.update(payload);
+    // Cliente y proveedor a la vez: los datos de contacto son de la persona, no de una de sus
+    // cuentas. Se cambian en las dos fichas, o el RIF dejaría de unirlas.
+    const otra = await gemelo(customer);
+    await sequelize.transaction(async (transaction) => {
+      await customer.update(payload, { transaction });
+      if (otra) {
+        await otra.update({
+          name: payload.name, rif: payload.rif, phone: payload.phone, email: payload.email, address: payload.address,
+        }, { transaction });
+      }
+    });
     return { data: customer };
   } catch (err) {
     wrapUniqueError(err);
@@ -409,14 +470,22 @@ async function deleteCustomer(id) {
   const customer = await Customer.findByPk(id);
   if (!customer) { const e = new Error("Registro no encontrado"); e.status = 404; throw e; }
 
-  const saleCount     = await Sale.count({ where: { customer_id: id } });
+  // Cliente y proveedor a la vez: en Contactos es UN contacto, así que se eliminan sus dos
+  // fichas, y solo si ninguna tiene movimientos.
+  const otra = await gemelo(customer);
+  const ids = [customer.id, ...(otra ? [otra.id] : [])];
+
+  const saleCount     = await Sale.count({ where: { customer_id: ids } });
   if (saleCount > 0)  { const e = new Error("No se puede eliminar: tiene ventas asociadas");  e.status = 400; throw e; }
 
-  const purchaseCount = await Purchase.count({ where: { supplier_id: id } });
+  const purchaseCount = await Purchase.count({ where: { supplier_id: ids } });
   if (purchaseCount > 0) { const e = new Error("No se puede eliminar: tiene compras asociadas"); e.status = 400; throw e; }
 
-  await customer.destroy();
-  return { message: "Registro eliminado exitosamente" };
+  await sequelize.transaction(async (transaction) => {
+    if (otra) await otra.destroy({ transaction });
+    await customer.destroy({ transaction });
+  });
+  return { message: otra ? "Contacto eliminado (sus fichas de cliente y proveedor)" : "Registro eliminado exitosamente" };
 }
 
 async function adjustCredit(id, amount, req) {

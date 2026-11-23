@@ -56,7 +56,9 @@ const eventos = (filtro) => `
            p.amount - CASE WHEN p.change_journal_id IS NOT NULL THEN COALESCE(p.change_given, 0) ELSE 0 END,
            NULL, NULL, NULL
       FROM payments p
-     WHERE p.sale_id IN (SELECT id FROM v) AND p.payment_journal_id IS NOT NULL AND p.amount > 0
+     -- El cruce de cuentas (services/cruces) no pasa por caja pero SÍ cobra la factura: la
+     -- tienda recibió el valor en mercancía. Comisiona igual que un cobro (decisión 23-11-2026).
+     WHERE p.sale_id IN (SELECT id FROM v) AND (p.payment_journal_id IS NOT NULL OR p.payment_method = 'cruce') AND p.amount > 0
     UNION ALL
     SELECT r.sale_id, r.created_at, 2, r.id, 'devolucion', -r.total, 0, NULL, NULL, NULL
       FROM returns r

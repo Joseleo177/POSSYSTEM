@@ -17,6 +17,8 @@ module.exports = async function removeBatchPayment(batchId, req) {
   if (!clave) {
     throw Object.assign(new Error("Lote no indicado"), { status: 400, isOperational: true });
   }
+  const { esDeCruce, ERROR_PAGO_DE_CRUCE } = require("../cruces");
+  if (esDeCruce(clave)) throw Object.assign(new Error(ERROR_PAGO_DE_CRUCE), { status: 400, isOperational: true });
 
   const t = await sequelize.transaction();
   try {

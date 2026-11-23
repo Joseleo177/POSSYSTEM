@@ -14,6 +14,8 @@ const customerValidations = [
 router.get("/",               auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getAll);
 router.get("/:id",            auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getOne);
 router.get("/:id/purchases",  auth, permit("customers.view", "sales.create", "purchases.view"), ctrl.getPurchases);
+// Estado de cuenta completo (Excel de la ficha): ver services/customers/estadoCuenta.js.
+router.get("/:id/statement",  auth, permit("customers.view", "purchases.view"), ctrl.statement);
 router.post("/",              auth, permit("customers.create"), customerValidations, ctrl.create);
 router.put("/:id",            auth, permit("customers.edit"), customerValidations, ctrl.update);
 router.patch("/:id/credit",          auth, permit("customers.credit"),              ctrl.adjustCredit);

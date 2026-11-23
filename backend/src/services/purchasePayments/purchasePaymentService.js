@@ -297,6 +297,8 @@ async function removePayment(paymentId, req) {
   try {
     const payment = await PurchasePayment.findByPk(paymentId, { transaction: t, lock: true });
     if (!payment) { const e = new Error("Pago no encontrado"); e.status = 404; throw e; }
+    const { esDeCruce, ERROR_PAGO_DE_CRUCE } = require("../cruces");
+    if (esDeCruce(payment.batch_id)) { const e = new Error(ERROR_PAGO_DE_CRUCE); e.status = 400; e.isOperational = true; throw e; }
 
     // Un pago conjunto se deshace entero: del banco salió UNA transferencia y su egreso cubre
     // a todas las compras del lote. Quitar solo una parte dejaría ese egreso por un monto que

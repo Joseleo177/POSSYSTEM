@@ -64,6 +64,10 @@ const MODULES = [
       // Cargar lo que el cliente debía antes del sistema (services/customers/priorDebt.js): crea
       // deuda sin mercancía detrás, así que no va en ningún LEGACY_MAP. Solo el admin de entrada.
       { key: 'prior_debt', label: 'Cargar deudas anteriores' },
+      // Cruzar lo que se le debe a un proveedor con lo que él le debe a la tienda (services/
+      // cruces): salda deuda de los dos lados sin mover caja. Permiso aparte, fuera de todo
+      // LEGACY_MAP: solo el admin de entrada (decisión del usuario, 23-11-2026).
+      { key: 'cross', label: 'Cruzar cuentas con proveedores' },
     ],
   },
   {

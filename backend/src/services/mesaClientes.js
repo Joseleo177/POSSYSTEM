@@ -47,6 +47,7 @@ async function clientePorDoc(cid, normalized, transaction) {
   const [c] = await sequelize.query(`
     SELECT id, name FROM customers
      WHERE company_id = :cid AND regexp_replace(upper(rif), '[^A-Z0-9]', '', 'g') = :n
+     ORDER BY (type = 'cliente') DESC, id   -- con ficha de cliente y de proveedor, en la mesa es el cliente
      LIMIT 1`,
     { replacements: { cid, n: normalized }, type: Sequelize.QueryTypes.SELECT, transaction });
   return c || null;

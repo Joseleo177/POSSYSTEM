@@ -434,6 +434,8 @@ export const api = {
     getAll:       (params={}, opts={}) => request("/customers?" + new URLSearchParams(params), opts),
     getOne:       (id, params={}) => request(`/customers/${id}?` + new URLSearchParams(params)),
     getPurchases: (id, params = {}) => request(`/customers/${id}/purchases?` + new URLSearchParams(params)),
+    // Estado de cuenta completo: cada documento con sus abonos (Excel de la ficha).
+    statement:    (id) => request(`/customers/${id}/statement`, { timeout: 30_000 }),
     create:       (body)      => request("/customers",       { method: "POST", body: JSON.stringify(body) }),
     update:       (id, body)   => request(`/customers/${id}`, { method: "PUT",  body: JSON.stringify(body) }),
     adjustCredit: (id, amount) => request(`/customers/${id}/credit`, { method: "PATCH", body: JSON.stringify({ amount }) }),
@@ -868,6 +870,15 @@ export const api = {
     leerCompra:    (imagenes) => request("/asistente/leer-compra", { method: "POST", body: JSON.stringify({ imagenes }), timeout: 130_000 }),
     // Lo que la tienda confirmó (descripción del proveedor → producto) para la próxima factura.
     compraAlias:   (lineas)   => request("/asistente/compra-alias", { method: "POST", body: JSON.stringify({ lineas }) }),
+  },
+  // Cruce de cuentas con proveedores (services/cruces en el backend): el mismo RIF con ficha de
+  // proveedor y de cliente; el cruce salda las dos deudas sin mover caja.
+  cruces: {
+    listar:     (params = {}) => request("/cruces?" + new URLSearchParams(params)),
+    estado:     (contactoId) => request(`/cruces/contacto/${contactoId}`),
+    comoCliente: (contactoId) => request(`/cruces/contacto/${contactoId}/como-cliente`, { method: "POST" }),
+    cruzar:     (body)       => request("/cruces", { method: "POST", body: JSON.stringify(body) }),
+    anular:     (id)         => request(`/cruces/${id}/anular`, { method: "POST" }),
   },
   // Propinas (extra por empresa, ver services/tips en el backend). El personal es el mismo de
   // Comisiones (tabla sellers), con su propia ruta y permisos.

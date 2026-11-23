@@ -153,7 +153,8 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
              p.amount - ${vueltoSql} AS monto, p.amount AS bruto, ${vueltoSql} AS vuelto
         FROM payments p
         JOIN v ON v.id = p.sale_id
-       WHERE p.payment_journal_id IS NOT NULL AND p.amount > 0
+       -- El cruce de cuentas salda sin caja pero es un cobro (en mercancía): cuenta, como el saldo a favor.
+       WHERE (p.payment_journal_id IS NOT NULL OR p.payment_method = 'cruce') AND p.amount > 0
       UNION ALL
       SELECT id, created_at, 0, 0, 'credito', credit_applied, 0, 0
         FROM v WHERE credit_applied > 0
@@ -226,7 +227,7 @@ async function marginsReport({ date_from, date_to, limit, warehouse_id, basis, c
         WHERE s.status IN (${DISPATCHED_SQL}) AND s.is_prior_debt IS NOT TRUE ${tcS} ${whS}
           AND s.id IN (
             SELECT p.sale_id FROM payments p
-             WHERE p.payment_journal_id IS NOT NULL AND p.amount > 0 ${tcP} ${dateClause(df, dt, 'p', hours)}
+             WHERE (p.payment_journal_id IS NOT NULL OR p.payment_method = 'cruce') AND p.amount > 0 ${tcP} ${dateClause(df, dt, 'p', hours)}
             UNION
             SELECT s2.id FROM sales s2
              WHERE s2.credit_applied > 0 ${tcS2} ${dateClause(df, dt, 's2', hours)}

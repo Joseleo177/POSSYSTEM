@@ -217,7 +217,7 @@ export default function PurchaseDetailModal({ purchaseId, onClose, onChanged }) 
                       <div className="min-w-0">
                         <p className="text-[13px] font-medium text-content dark:text-white flex items-center gap-1.5 min-w-0">
                           <span className="w-1.5 h-1.5 rounded-full shrink-0 bg-content-subtle/40" style={p.journal_color ? { backgroundColor: p.journal_color } : undefined} />
-                          <span className="truncate">{toNameCase(p.journal_name) || "Sin caja"}</span>
+                          <span className="truncate">{p.payment_method === "cruce" ? "Cruce de cuentas" : toNameCase(p.journal_name) || "Sin caja"}</span>
                         </p>
                         <p className="text-[12px] text-content-subtle tabular-nums truncate">
                           {fmtDateShort(p.reference_date || p.created_at)}

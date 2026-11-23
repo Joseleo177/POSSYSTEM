@@ -612,6 +612,17 @@ async function deletePurchase(id, req) {
     // Borrar una orden recibida devuelve stock: solo sobre almacenes propios.
     await assertWarehouseAccess(req, purchase.warehouse_id, { optional: true });
 
+    // Pagada (en parte) con un cruce de cuentas: borrarla dejaría las ventas del otro lado
+    // saldadas sin respaldo. Se anula primero el cruce (ver services/cruces).
+    const [deCruce] = await sequelize.query(
+      `SELECT batch_id FROM purchase_payments WHERE purchase_id = :id AND batch_id LIKE 'cruce:%' LIMIT 1`,
+      { replacements: { id: purchase.id }, type: sequelize.QueryTypes.SELECT, transaction }
+    );
+    if (deCruce) {
+      const e = new Error(`Esta compra está pagada con un cruce de cuentas (#${deCruce.batch_id.slice(6)}). Anula primero el cruce desde la ficha del proveedor.`);
+      e.status = 400; e.isOperational = true; throw e;
+    }
+
     // Se devuelve lo que REALMENTE entró, no la orden entera: una orden en 'parcial' tiene
     // líneas que nunca movieron inventario, y descontarlas dejaría el stock en negativo por
     // mercancía que jamás llegó. Por eso el disparador es `received_units`, no el estado.
