@@ -67,6 +67,45 @@ function limpiar(valor, clave = "") {
 }
 
 const primeros = (lista, n) => (Array.isArray(lista) ? lista.slice(0, n) : []);
+const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+// ── Facturas abiertas (por cobrar y por pagar) ────────────────────────────────
+// "¿Qué facturas tienen más de 60 días?" se pregunta por días desde que se EMITIÓ, no por días
+// de atraso (que dependen del plazo de crédito). Se dan las dos cosas.
+const diaCaracas = (v) => new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date(v));
+const diasDesde = (v) => Math.round((Date.parse(hoy()) - Date.parse(diaCaracas(v))) / 864e5);
+
+function filtrarFacturas(lista, args, nombreDe) {
+  let r = Array.isArray(lista) ? lista : [];
+  const min = parseInt(args.antiguedad_min_dias, 10);
+  if (min > 0) r = r.filter(f => diasDesde(f.created_at) > min);
+  if (args.solo_vencidas) r = r.filter(f => f.days_overdue > 0);
+  const palabras = sinAcento(args.cliente || "").split(/\s+/).filter(Boolean);
+  if (palabras.length) r = r.filter(f => { const n = sinAcento(nombreDe(f)); return palabras.every(p => n.includes(p)); });
+  return r;
+}
+
+function porAntiguedad(lista) {
+  const tramos = [["0 a 30 días", 0, 30], ["31 a 60 días", 31, 60], ["61 a 90 días", 61, 90], ["más de 90 días", 91, Infinity]];
+  return tramos.map(([tramo, desde, hasta]) => {
+    const fs = (lista || []).filter(f => { const d = diasDesde(f.created_at); return d >= desde && d <= hasta; });
+    return { tramo, facturas: fs.length, monto: r2(fs.reduce((t, f) => t + f.balance, 0)) };
+  });
+}
+
+const MAX_FACTURAS = 80;
+function listaFacturas(fs, extra) {
+  const orden = [...fs].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  return {
+    facturas_encontradas: fs.length,
+    saldo_de_estas: r2(fs.reduce((t, f) => t + f.balance, 0)),
+    facturas: orden.slice(0, MAX_FACTURAS).map(f => ({
+      factura: f.invoice_number, ...extra(f), fecha: diaCaracas(f.created_at), dias_desde_emision: diasDesde(f.created_at),
+      vence: f.due_date, dias_de_atraso: f.days_overdue > 0 ? f.days_overdue : 0, total: f.total, saldo: f.balance, sucursal: f.warehouse_name,
+    })),
+    ...(fs.length > MAX_FACTURAS ? { nota: `Son ${fs.length}; aquí van las ${MAX_FACTURAS} más viejas.` } : {}),
+  };
+}
 
 // Sucursal pedida por el modelo, validada contra las que el usuario puede ver. Los reportes
 // también la validan; esto solo da un mensaje más claro.
@@ -83,7 +122,7 @@ async function sucursal(req, args) {
 const PARAM_RANGO = {
   desde: { type: "string", description: "Fecha inicial YYYY-MM-DD. Si no se indica, hoy." },
   hasta: { type: "string", description: "Fecha final YYYY-MM-DD (incluida). Si no se indica, igual a 'desde'." },
-  sucursal_id: { type: "integer", description: "Id de una sucursal de la lista del contexto. Omitir para todas las que el usuario ve." },
+  sucursal_id: { type: "integer", description: "Id de una sucursal del contexto: la de trabajo u otra a la que el usuario tiene acceso. Omitir para la(s) de trabajo." },
 };
 
 const HERRAMIENTAS = [
@@ -198,16 +237,35 @@ const HERRAMIENTAS = [
   },
   {
     nombre: "cuentas_por_cobrar",
-    descripcion: "Lo que los clientes deben hoy: saldo total, facturas abiertas, antigüedad de la deuda (0-30, 31-60, más de 60 días) y los clientes que más deben.",
-    parametros: { sucursal_id: PARAM_RANGO.sucursal_id },
+    descripcion: "Lo que los clientes deben hoy, igual que Contabilidad, Cuentas por cobrar: saldo total, vencido, por vencer, antigüedad (por días desde que se emitió y por días de atraso) y los clientes que más deben. detalle='clientes' trae TODOS los deudores (hasta 150) para dar la lista completa. detalle='facturas' trae las facturas abiertas una por una (número, cliente, fecha, días desde que se emitió, vencimiento, días de atraso, saldo), y se puede filtrar por antigüedad mínima, solo vencidas o un cliente.",
+    parametros: {
+      detalle: { type: "string", enum: ["resumen", "clientes", "facturas"], description: "resumen (por defecto), clientes (lista completa de deudores) o facturas (una por una)." },
+      antiguedad_min_dias: { type: "integer", description: "Solo facturas emitidas hace MÁS de N días (por ejemplo 60 para 'más de 60 días')." },
+      solo_vencidas: { type: "boolean", description: "Solo facturas que ya pasaron su fecha de vencimiento." },
+      cliente: { type: "string", description: "Nombre o parte del nombre de un cliente para ver solo lo suyo." },
+      sucursal_id: PARAM_RANGO.sucursal_id,
+    },
     permisos: ["reports.view"],
     async ejecutar(req, args) {
-      const r = await reportes.receivablesReport({ ...(await buildTenantContext(req)), warehouse_id: await sucursal(req, args) });
+      const { getReceivables } = require("../sales/receivables");
+      const { data } = await getReceivables({ warehouse_id: await sucursal(req, args) }, req);
+      const facturas = filtrarFacturas(data.invoices, args, f => f.customer_name);
+      const detalle = args.detalle || (args.antiguedad_min_dias || args.solo_vencidas || args.cliente ? "facturas" : "resumen");
+      const clientes = data.customers.map(c => ({
+        cliente: c.customer_name, saldo: c.balance, vencido: c.overdue_balance, facturas: c.invoice_count,
+        dias_de_atraso_maximo: c.max_days_overdue > 0 ? c.max_days_overdue : 0, proximo_vencimiento: c.next_due_date,
+      }));
       return {
-        resumen: r.summary,
-        antiguedad: r.aging,
-        clientes_que_mas_deben: primeros(r.by_customer, 15),
-        clientes_con_deuda: Array.isArray(r.by_customer) ? r.by_customer.length : 0,
+        resumen: {
+          saldo_total: data.summary.total_balance, vencido: data.summary.overdue_balance, facturas_vencidas: data.summary.overdue_count,
+          por_vencer_pronto: data.summary.due_soon_balance, facturas_abiertas: data.summary.invoice_count, clientes_con_deuda: data.summary.customer_count,
+        },
+        antiguedad_desde_emision: porAntiguedad(data.invoices),
+        atraso: Object.values(data.aging).map(a => ({ tramo: a.label, facturas: a.count, monto: a.amount })),
+        ...(detalle === "clientes"
+          ? { deudores: clientes.slice(0, 150), nota: clientes.length > 150 ? `Son ${clientes.length}; aquí van los 150 que más deben.` : undefined }
+          : { clientes_que_mas_deben: clientes.slice(0, 15) }),
+        ...(detalle === "facturas" ? listaFacturas(facturas, f => ({ cliente: f.customer_name })) : {}),
       };
     },
   },
@@ -328,7 +386,7 @@ HERRAMIENTAS.push(
   },
   {
     nombre: "buscar_cliente",
-    descripcion: "Busca clientes por nombre o RIF/cédula y devuelve lo que deben, su saldo a favor, cuántas compras llevan, la última compra y sus facturas abiertas.",
+    descripcion: "Busca clientes por nombre o RIF/cédula y devuelve lo que deben, su saldo a favor, cuántas compras llevan, la última compra y sus facturas abiertas con los productos de cada una.",
     parametros: { buscar: { type: "string", description: "Nombre (o parte) o documento del cliente." } },
     requeridos: ["buscar"],
     permisos: ["customers.view", "sales.create"],
@@ -354,13 +412,26 @@ HERRAMIENTAS.push(
         if (!r?.data) continue;
         const j = r.data.toJSON ? r.data.toJSON() : r.data;
         const abiertas = await sequelize.query(
-          `SELECT s.invoice_number AS factura, s.created_at AS fecha, s.total::float AS total, s.status AS estado,
+          `SELECT s.id, s.invoice_number AS factura, s.created_at AS fecha, s.total::float AS total, s.status AS estado,
                   (s.total - COALESCE(s.forgiven_amount, 0) - COALESCE((SELECT SUM(amount) FROM payments WHERE sale_id = s.id), 0))::float AS saldo
              FROM sales s
             WHERE s.company_id = :cid AND s.customer_id = :id AND s.status IN ('borrador', 'pendiente', 'parcial') ${enSucursales(ids, "s.warehouse_id")}
             ORDER BY s.created_at LIMIT 10`,
           { replacements: { cid: req.company_id, id: j.id }, type: QT.SELECT }
         );
+        // Lo que se llevó en cada factura abierta: "¿y qué se llevó ese día?" es la pregunta que sigue.
+        if (abiertas.length) {
+          const items = await sequelize.query(
+            `SELECT sale_id, name AS producto, quantity::float AS cantidad, subtotal::float AS subtotal
+               FROM sale_items WHERE sale_id IN (:ids) ORDER BY sale_id, id`,
+            { replacements: { ids: abiertas.map(a => a.id) }, type: QT.SELECT }
+          );
+          for (const a of abiertas) {
+            const suyos = items.filter(i => i.sale_id === a.id);
+            a.productos = suyos.slice(0, 12).map(({ sale_id, ...i }) => i);   // eslint-disable-line no-unused-vars
+            if (suyos.length > 12) a.mas_productos = suyos.length - 12;
+          }
+        }
         clientes.push({
           cliente: j.name, deuda_total: parseFloat(j.total_debt || 0), saldo_a_favor: parseFloat(j.credit_available ?? j.credit_balance ?? 0),
           compras: parseInt(j.total_purchases || 0, 10), total_comprado: parseFloat(j.total_spent || 0), ultima_compra: j.last_purchase_at || null,
@@ -439,15 +510,32 @@ HERRAMIENTAS.push(
   },
   {
     nombre: "cuentas_por_pagar",
-    descripcion: "Lo que la tienda les debe a sus proveedores hoy: cada proveedor con saldo pendiente y el total.",
-    parametros: {},
+    descripcion: "Lo que la tienda les debe a sus proveedores hoy, igual que Contabilidad, Cuentas por pagar: total, vencido, por vencer, cada proveedor con su saldo. detalle='facturas' trae las compras pendientes una por una (orden, proveedor, fecha, días desde la compra, vencimiento, días de atraso, total, pagado, saldo), filtrable por antigüedad, solo vencidas o un proveedor.",
+    parametros: {
+      detalle: { type: "string", enum: ["resumen", "facturas"], description: "resumen (por defecto) o facturas (una por una)." },
+      antiguedad_min_dias: { type: "integer", description: "Solo compras de hace MÁS de N días." },
+      solo_vencidas: { type: "boolean", description: "Solo las que ya pasaron su vencimiento." },
+      proveedor: { type: "string", description: "Nombre o parte del nombre de un proveedor." },
+      sucursal_id: PARAM_RANGO.sucursal_id,
+    },
     permisos: ["purchases.view", "purchases.pay"],
-    async ejecutar(req) {
-      const { getAll } = require("../customers/customerService");
-      const { data } = await getAll({ type: "proveedor", debtors: "true", limit: 30 }, req);
-      const lista = (data || []).map(c => (c.toJSON ? c.toJSON() : c)).map(c => ({ proveedor: c.name, debe: c.total_debt }))
-        .filter(p => p.debe > 0).sort((a, b) => b.debe - a.debe);
-      return { proveedores_con_saldo: lista.length, total: Math.round(lista.reduce((t, p) => t + p.debe, 0) * 100) / 100, proveedores: lista.slice(0, 15) };
+    async ejecutar(req, args) {
+      const { getPayables } = require("../purchases/payablesService");
+      const { data } = await getPayables({ warehouse_id: await sucursal(req, args) }, req);
+      const facturas = filtrarFacturas(data.invoices, { ...args, cliente: args.proveedor }, f => f.supplier_name);
+      const detalle = args.detalle || (args.antiguedad_min_dias || args.solo_vencidas || args.proveedor ? "facturas" : "resumen");
+      return {
+        resumen: {
+          total_que_debes: data.summary.total_balance, vencido: data.summary.overdue_balance, compras_vencidas: data.summary.overdue_count,
+          por_vencer_pronto: data.summary.due_soon_balance, compras_pendientes: data.summary.invoice_count, proveedores_con_saldo: data.summary.supplier_count,
+        },
+        antiguedad_desde_compra: porAntiguedad(data.invoices),
+        proveedores: data.suppliers.slice(0, 50).map(s => ({
+          proveedor: s.supplier_name, saldo: s.balance, vencido: s.overdue_balance, compras: s.invoice_count,
+          dias_de_atraso_maximo: s.max_days_overdue > 0 ? s.max_days_overdue : 0, proximo_vencimiento: s.next_due_date,
+        })),
+        ...(detalle === "facturas" ? listaFacturas(facturas, f => ({ orden: `#${f.id}`, proveedor: f.supplier_name, pagado: f.amount_paid })) : {}),
+      };
     },
   },
   {
@@ -727,14 +815,33 @@ function disponibles(req, flags = {}) {
   }));
 }
 
+// El mismo req sin la sucursal de trabajo marcada en la barra (X-Sucursales): ve todas las
+// sucursales a las que el usuario TIENE ACCESO. Las cachés de scopeWarehouseIds se anulan en la
+// copia para que no hereden el recorte del original.
+function sinFiltroDeSucursal(req) {
+  const headers = { ...(req.headers || {}) };
+  delete headers["x-sucursales"];
+  return Object.assign(Object.create(req), { headers, _scopeWarehouseIds: undefined, _scopeWarehouseIdsAll: undefined });
+}
+
 async function ejecutar(req, nombre, argsTexto, flags = {}) {
   const h = HERRAMIENTAS.find(x => x.nombre === nombre);
   if (!h || (h.modulo && !flags[h.modulo])) return { error: "Esa consulta no existe." };
   if (!puede(req, h)) return { error: "El usuario no tiene permiso para esta consulta. Dile que se lo pida al administrador de la tienda." };
   let args = {};
   try { args = argsTexto ? JSON.parse(argsTexto) : {}; } catch { return { error: "Argumentos inválidos." }; }
+  // Preguntar por otra sucursal que no es la de trabajo: si el usuario tiene acceso a ella, se
+  // consulta (en el chat se pregunta por "Barquisimeto" sin cambiar la barra de arriba). Si no
+  // tiene acceso, sigue el recorte normal y la consulta responde que no puede.
+  let reqUso = req;
+  const pedida = parseInt(args?.sucursal_id, 10);
+  if (pedida) {
+    const libre = sinFiltroDeSucursal(req);
+    const accesibles = await scopeWarehouseIds(libre, { includeDeposits: true });
+    if (accesibles === null || accesibles.includes(pedida)) reqUso = libre;
+  }
   try {
-    return limpiar(await h.ejecutar(req, args || {}));
+    return limpiar(await h.ejecutar(reqUso, args || {}));
   } catch (err) {
     if (err.isOperational) return { error: err.message };
     console.error(`Asistente: herramienta ${nombre}`, err);
@@ -742,4 +849,4 @@ async function ejecutar(req, nombre, argsTexto, flags = {}) {
   }
 }
 
-module.exports = { disponibles, ejecutar, hoy, limpiar };
+module.exports = { disponibles, ejecutar, hoy, limpiar, sinFiltroDeSucursal };

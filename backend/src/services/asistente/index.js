@@ -31,6 +31,7 @@ const REGLAS = `Te llamas Asta y eres la asistente con IA de NXUS, un sistema de
 Qué haces:
 1. Explicas cómo hacer cosas en el sistema con lo que dice el MANUAL (la parte común y los módulos de esta tienda). Da los pasos concretos, con los nombres de botones y pantallas del manual. Si algo no está en el manual, dilo con franqueza y ofrece lo más cercano que sí sabes; NUNCA inventes botones, menús ni pasos. Para lo que no sepas: "escríbele a soporte de NXUS".
 2. Respondes con los datos reales de la tienda usando las consultas (herramientas). Consulta siempre antes de responder sobre cifras; si hace falta, usa varias consultas. Si no tienes una consulta para eso o el usuario no tiene permiso, dilo y sugiere a quién pedírselo.
+   NUNCA digas que una consulta no trae un dato sin haberla llamado: revisa sus parámetros. La lista completa de deudores es cuentas_por_cobrar con detalle "clientes"; las facturas una por una o "las de más de 60 días", cuentas_por_cobrar con detalle "facturas" (y antiguedad_min_dias); lo que se llevó un cliente en una factura, buscar_factura con su número (o buscar_cliente, que trae los productos de sus facturas abiertas); a quién le debe la tienda factura por factura, cuentas_por_pagar con detalle "facturas". Si piden "todo" o "la lista completa", dala completa en una tabla.
 3. Asesoras el negocio. Si te piden ideas, recomendaciones o "qué hago", NO te niegues: consulta los datos que tengas (más vendidos, márgenes, por agotarse, ventas por día y hora, cuentas por cobrar) y da 2 o 3 recomendaciones concretas, cada una con el dato que la respalda. Ejemplos: qué reponer primero, qué producto empujar porque deja buen margen y se vende, qué promocionar en las horas flojas, a quién cobrarle primero, qué revisar porque deja poco margen o no tiene costo cargado. Termina con un "Mi sugerencia" breve. Aclara que la decisión es del dueño cuando sea una inversión importante.
 4. Al responder sobre datos, agrega una observación útil si la ves (algo que sube, algo que preocupa, algo que falta), en una línea.
 
@@ -101,23 +102,39 @@ async function estado(companyId) {
   return { activo: e.activo, plan: e.plan, limite: e.limite, usadas, restantes: Math.max(0, e.limite - usadas), costo_usd };
 }
 
+// Sucursales en el contexto. Hay dos cosas distintas y Asta las confundía (El Gran Terminal,
+// 20-11): la sucursal DE TRABAJO que el usuario eligió al entrar o en la barra de arriba
+// (X-Sucursales), y todas a las que TIENE ACCESO. Un admin que trabaja en Bobare no "carece de
+// permiso" para Barquisimeto: solo no la tiene marcada. Las consultas pueden mirar cualquiera de
+// las accesibles con sucursal_id (ver ejecutar en herramientas.js).
 async function contexto(req, empresa) {
-  const ids = await scopeWarehouseIds(req, { includeDeposits: true });
+  const trabajo = await scopeWarehouseIds(req, { includeDeposits: true });
+  const acceso = await scopeWarehouseIds(herramientas.sinFiltroDeSucursal(req), { includeDeposits: true });
   const sucursales = await sequelize.query(
     `SELECT id, name, sells FROM warehouses
-      WHERE company_id = :cid AND active IS NOT FALSE ${Array.isArray(ids) ? (ids.length ? `AND id IN (${ids.join(",")})` : "AND FALSE") : ""}
+      WHERE company_id = :cid AND active IS NOT FALSE ${Array.isArray(acceso) ? (acceso.length ? `AND id IN (${acceso.join(",")})` : "AND FALSE") : ""}
       ORDER BY name`,
     { replacements: { cid: req.company_id }, type: Sequelize.QueryTypes.SELECT }
   );
   const esAdmin = hasPermission(req.employee?.permissions, "admin");
-  const lineas = sucursales.map(s => `- id ${s.id}: ${s.name}${s.sells === false ? " (depósito)" : ""}`).join("\n") || "- (ninguna asignada)";
+  const linea = (s) => `- id ${s.id}: ${s.name}${s.sells === false ? " (depósito)" : ""}`;
+  const deTrabajo = sucursales.filter(s => !Array.isArray(trabajo) || trabajo.includes(s.id));
+  const otras = sucursales.filter(s => Array.isArray(trabajo) && !trabajo.includes(s.id));
+  const bloque = otras.length
+    ? `Sucursal de trabajo (la que eligió al entrar o en la barra de arriba). Sin sucursal_id, las consultas miran solo esta:
+${deTrabajo.map(linea).join("\n") || "- (ninguna)"}
+Otras sucursales a las que TAMBIÉN tiene acceso (no es falta de permiso, solo no es la de trabajo). Si pregunta por una de ellas, consúltala pasando su sucursal_id:
+${otras.map(linea).join("\n")}
+Para trabajar en otra sucursal en las pantallas (vender, cobrar, ver sus reportes), se toca el nombre de la sucursal en la barra de arriba y se elige.`
+    : `Sucursales que este usuario puede ver:
+${sucursales.map(linea).join("\n") || "- (ninguna asignada)"}
+Si el usuario no nombra una sucursal, consulta todas las suyas (sin sucursal_id).`;
   return `===== CONTEXTO =====
 Fecha de hoy: ${herramientas.hoy()} (zona horaria de Caracas).
 Tienda: ${empresa.nombre}.
 Usuario: ${req.employee?.full_name || req.employee?.username || "usuario"}${esAdmin ? " (administrador)" : ""}.
-Sucursales que este usuario puede ver:
-${lineas}
-Si el usuario no nombra una sucursal, consulta todas las suyas (sin sucursal_id).`;
+${bloque}
+Si pregunta por una sucursal que no aparece aquí, su usuario no tiene acceso a ella: que se lo pida al administrador de la tienda.`;
 }
 
 function historialLimpio(historial) {
