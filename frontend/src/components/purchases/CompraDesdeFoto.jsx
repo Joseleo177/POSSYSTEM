@@ -728,7 +728,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                                                                 <span className="relative">
                                                                     <input value={vendible ? margen : ""} onChange={e => cambiar(l.n, { margen: limpiarNum(e.target.value) })}
                                                                         inputMode="decimal" autoComplete="off" disabled={!l.producto || !vendible}
-                                                                        placeholder={!vendible ? "No se vende" : "Sin cambio"}
+                                                                        placeholder={!l.producto ? "" : !vendible ? "No se vende" : "Sin cambio"}
                                                                         className="input h-10 pr-8 text-right text-[13px] font-semibold tabular-nums disabled:opacity-40 placeholder:font-normal" />
                                                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
                                                                 </span>
