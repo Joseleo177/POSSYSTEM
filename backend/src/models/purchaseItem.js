@@ -15,7 +15,7 @@ module.exports = (sequelize, DataTypes) => {
     package_size: { type: DataTypes.DECIMAL(10, 3), allowNull: false, defaultValue: 1 },
     package_price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     unit_cost: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
-    profit_margin: { type: DataTypes.DECIMAL(5, 2), allowNull: false, defaultValue: 0 },
+    profit_margin: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
     sale_price: { type: DataTypes.DECIMAL(14, 5), allowNull: false },
     total_units: { type: DataTypes.DECIMAL(10, 3), allowNull: false },
     // Unidades de esta línea que YA entraron al inventario. Acumulativo: recibir de nuevo

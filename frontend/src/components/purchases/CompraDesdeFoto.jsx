@@ -17,7 +17,7 @@ import Check from "../ui/Check";
 import ProductModal from "../ProductModal";
 import { Robot } from "../asistente/Asistente";
 import { PKG_UNITS } from "../../constants/pkg";
-import { calcPurchaseItem, toNameCase } from "../../helpers";
+import { calcMargin, calcPurchaseItem, toNameCase } from "../../helpers";
 import { useFactorIva } from "../../hooks/useFactorIva";
 import { monedaLocal } from "../../helpers/currency";
 import { unidadCorta } from "../warehouses/movementMeta";
@@ -128,6 +128,7 @@ function lineaInicial(l) {
         costo: l.costo_empaque ? String(Math.round(l.costo_empaque * 10000) / 10000) : "",
         total_papel: l.total,
         revisar: !!l.revisar,
+        margen: null,      // null = el del producto (margenDefecto); "" = no tocar el precio de venta
     };
 }
 
@@ -208,6 +209,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
     const [categorias, setCategorias] = useState([]);
     const [guardandoNuevo, setGuardandoNuevo] = useState(false);
     const [verDudas, setVerDudas] = useState(false);
+    const [margenTodas, setMargenTodas] = useState("");
     const pedido = useRef(0);
     const inputCamara = useRef(null);
     const inputGaleria = useRef(null);
@@ -215,7 +217,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
     useEffect(() => {
         if (!open) return;
         setPaso("fotos"); setFotos([]); setError(""); setDoc(null); setLineas([]); setTasa("");
-        setBuscando(null); setCreando(null); setVerDudas(false);
+        setBuscando(null); setCreando(null); setVerDudas(false); setMargenTodas("");
     }, [open]);
 
     // Reloj y frases mientras lee: tarda de 10 a 60 segundos y sin señales parece colgado.
@@ -264,6 +266,22 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
     const cerrar = () => { pedido.current++; onClose(); };
 
     const cambiar = (n, cambios) => setLineas(prev => prev.map(l => (l.n === n ? { ...l, ...cambios } : l)));
+
+    // Margen con que entra cada línea. El que tenga guardado el producto; si no tiene, el que
+    // hoy deja su precio sobre su último costo, para que el precio siga la misma proporción con
+    // el costo nuevo. El 30 fijo de antes le subía el precio a quien vendía con otro margen
+    // (pasó el 24-11: una clienta vio sus productos al 30 %). Solo sin precio ni costo, 30.
+    const margenDefecto = (p) => {
+        if (!p || p.sellable === false) return "";
+        if (p.profit_margin != null) return String(p.profit_margin);
+        const m = calcMargin(p.price, p.cost_price, factorIva(p));
+        return m != null && m >= 0 ? String(m) : "30";
+    };
+    const margenDe = (l) => (l.producto?.sellable === false ? "" : (l.margen ?? margenDefecto(l.producto)));
+    const aplicarMargenTodas = () => {
+        if (String(margenTodas).trim() === "") return;
+        setLineas(prev => prev.map(l => (l.producto?.sellable === false ? l : { ...l, margen: margenTodas })));
+    };
     const asignar = (n, p) => {
         setLineas(prev => prev.map(l => {
             if (l.n !== n) return l;
@@ -275,7 +293,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                 price: p.price != null ? parseFloat(p.price) : null, iva_tipo: p.iva_tipo, piece_mode: p.piece_mode || null,
             };
             const tamano = !num(l.tamano) && String(prod.package_unit || "").toUpperCase() === l.unidad && prod.package_size ? String(prod.package_size) : l.tamano;
-            return { ...l, producto: prod, como: "manual", tamano };
+            return { ...l, producto: prod, como: "manual", tamano, margen: null };
         }));
         setBuscando(null);
     };
@@ -334,7 +352,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                 package_size: String(num(l.tamano)),
                 package_qty: String(qty),
                 package_price: String(costoBase),
-                profit_margin: p.sellable === false ? "" : String(p.profit_margin ?? 30),
+                profit_margin: margenDe(l),
                 lot_number: "",
                 expiration_date: "",
             };
@@ -584,6 +602,27 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                             </div>
                         )}
 
+                        {/* Margen de todas las líneas de una vez */}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                            <div className="text-[13px] text-content dark:text-white sm:mr-auto">
+                                Margen de ganancia
+                                <span className="block text-[12px] text-content-subtle">Cada línea trae el de su producto. Puedes cambiarlo en la línea o ponerlo a todas.</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="relative w-28">
+                                    <input value={margenTodas} onChange={e => setMargenTodas(limpiarNum(e.target.value))}
+                                        onKeyDown={e => { if (e.key === "Enter") aplicarMargenTodas(); }}
+                                        inputMode="decimal" autoComplete="off" placeholder="30" aria-label="Margen para todas las líneas"
+                                        className="input h-10 pr-8 text-right text-[13px] font-semibold tabular-nums" />
+                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                                </span>
+                                <button type="button" onClick={aplicarMargenTodas} disabled={String(margenTodas).trim() === ""}
+                                    className="btn-outline h-10 px-4 rounded-lg text-[13px] font-medium whitespace-nowrap disabled:opacity-40 disabled:pointer-events-none">
+                                    Poner a todas
+                                </button>
+                            </div>
+                        </div>
+
                         {/* Líneas */}
                         <div className="rounded-2xl border border-border/60 dark:border-white/[0.06] divide-y divide-border/60 dark:divide-white/[0.06]">
                             {lineas.map(l => {
@@ -591,6 +630,12 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                                 const unidades = num(l.qty) * num(l.tamano);
                                 const ok = lista(l);
                                 const repetido = l.producto && yaEnOrden.has(l.producto.id);
+                                const vendible = l.producto?.sellable !== false;
+                                const margen = margenDe(l);
+                                const costoRef = num(l.costo) > 0 && num(l.tamano) > 0 && (!enBs || tasaNum > 0)
+                                    ? num(l.costo) / num(l.tamano) / (enBs ? tasaNum : 1) : 0;
+                                const precioVenta = l.producto && vendible && costoRef > 0 && String(margen).trim() !== ""
+                                    ? costoRef * (1 + num(margen) / 100) * factorIva(l.producto) : null;
                                 return (
                                     <div key={l.n} className={`px-4 py-3 ${!l.incluir ? "opacity-55" : ""} ${l.incluir && !ok ? "border-l-[3px] border-l-amber-500" : ""}`}>
                                         <div className="flex items-start gap-3">
@@ -649,7 +694,7 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                                                         </div>
 
                                                         {/* Cómo viene y a cuánto */}
-                                                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                                                        <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2.5">
                                                             <label className="flex flex-col gap-1">
                                                                 <span className="text-[12px] text-content-subtle">Cantidad</span>
                                                                 <input value={l.qty} onChange={e => cambiar(l.n, { qty: limpiarNum(e.target.value) })} inputMode="decimal" autoComplete="off"
@@ -678,11 +723,27 @@ export default function CompraDesdeFoto({ open, onClose, state, notify }) {
                                                                         className="input h-10 pl-11 text-right text-[13px] font-semibold tabular-nums" />
                                                                 </span>
                                                             </label>
+                                                            <label className="flex flex-col gap-1">
+                                                                <span className="text-[12px] text-content-subtle truncate">Margen</span>
+                                                                <span className="relative">
+                                                                    <input value={vendible ? margen : ""} onChange={e => cambiar(l.n, { margen: limpiarNum(e.target.value) })}
+                                                                        inputMode="decimal" autoComplete="off" disabled={!l.producto || !vendible}
+                                                                        placeholder={!vendible ? "No se vende" : "Sin cambio"}
+                                                                        className="input h-10 pr-8 text-right text-[13px] font-semibold tabular-nums disabled:opacity-40 placeholder:font-normal" />
+                                                                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-content-subtle pointer-events-none">%</span>
+                                                                </span>
+                                                            </label>
                                                         </div>
 
                                                         <div className="mt-1.5 text-[12px] text-content-subtle tabular-nums">
                                                             {unidades > 0 && l.producto
-                                                                ? <>Entran {Number(unidades.toFixed(3))} {unidadCorta(l.producto.unit, unidades)}{num(l.costo) > 0 && num(l.tamano) > 0 && (!enBs || tasaNum > 0) ? ` · Ref. ${fmt2(num(l.costo) / num(l.tamano) / (enBs ? tasaNum : 1))} c/u` : ""}</>
+                                                                ? <>
+                                                                    Entran {Number(unidades.toFixed(3))} {unidadCorta(l.producto.unit, unidades)}
+                                                                    {costoRef > 0 ? ` · Ref. ${fmt2(costoRef)} c/u` : ""}
+                                                                    {precioVenta != null
+                                                                        ? <> · <span className="text-content dark:text-white font-medium">se vende a Ref. {fmt2(precioVenta)}</span></>
+                                                                        : vendible && costoRef > 0 ? " · mantiene su precio de venta" : ""}
+                                                                </>
                                                                 : !l.producto ? "Elige el producto para ver cuánto entra al inventario." : null}
                                                         </div>
                                                         {l.revisar && (

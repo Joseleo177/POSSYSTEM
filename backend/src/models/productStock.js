@@ -47,7 +47,7 @@ module.exports = (sequelize, DataTypes) => {
     // devuelve un porcentaje ligeramente distinto del que se escribió (5% → 4,83%) y parecía
     // que el sistema lo cambiaba solo. NULL = hereda el del producto, o se despeja.
     profit_margin: {
-      type: DataTypes.DECIMAL(5, 2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true
     },
     // Precio al mayor y "al mayor desde" de esta sucursal. NULL = hereda del producto.

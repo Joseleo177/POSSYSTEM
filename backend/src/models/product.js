@@ -17,7 +17,7 @@ module.exports = (sequelize, DataTypes) => {
     company_id: { type: DataTypes.INTEGER, allowNull: true },
     image_filename: { type: DataTypes.STRING(255) },
     cost_price: { type: DataTypes.DECIMAL(14, 4) },
-    profit_margin: { type: DataTypes.DECIMAL(5, 2) },
+    profit_margin: { type: DataTypes.DECIMAL(10, 2) },
     package_size: { type: DataTypes.DECIMAL(10, 3) },
     package_unit: { type: DataTypes.STRING(50) },
     bulk_price: { type: DataTypes.DECIMAL(14, 5) },
